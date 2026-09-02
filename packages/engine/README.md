@@ -23,7 +23,10 @@ npm install ./mud-ecs-engine-0.4.0.tgz   # 版本号随 package.json
 import { World, trait, Name } from '@mud/ecs-engine';
 
 // 定义组件（ECS 的 C）
-const Health = trait('health', { current: 100, max: 100 });
+// 注意：trait 第二参是"默认值工厂"（每次创建返回新实例）。
+// 想传固定数据形状时用工厂返回它，不要直接传对象（对象会被当作共享默认值，
+// 导致所有实体的该组件互相引用同一数据）。
+const Health = trait('health', () => ({ current: 100, max: 100 }));
 
 // 创建世界与实体
 const world = new World({ tickInterval: 500 });

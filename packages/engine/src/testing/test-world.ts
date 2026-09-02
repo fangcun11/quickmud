@@ -31,7 +31,9 @@ export class ManualClock {
  * 两处各写一份签名曾导致 commands 在工厂侧丢失（类型未兑现运行时能力）。
  */
 export interface TestWorldConfig {
-  systems?: SystemDefinition[];
+  // 与 World.register 同款收敛点：系统是"任一具体载荷"的定义，而非仅 unknown
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  systems?: Array<SystemDefinition<unknown> | SystemDefinition<any>>;
   commands?: AnyCommand[];
   entities?: Array<{ id?: string; components?: Record<string, unknown> }>;
   clock?: ManualClock;

@@ -74,9 +74,11 @@ const Health = trait('health', () => ({ current: 100, max: 100 }));
 const Healed = defineEvent('healed')<{ target: string; amount: number }>();
 
 // ── 系统：订阅事件，修改状态，产出输出 ─────────────────
-const HealSystem = defineSystem({
+// 要点：① 显式声明载荷泛型 defineSystem<载荷>；② 订阅用事件定义 Healed
+// 而非 token 字符串——这样 handle 里 event.data 带类型，无需断言。
+const HealSystem = defineSystem<{ target: string; amount: number }>({
   name: 'heal',
-  on: [Healed.token],          // 订阅事件 token
+  on: [Healed],
   priority: 10,                // 数字越小越先执行
   handle(event, ctx) {
     const hp = ctx.getComponent(event.data.target, Health);
@@ -161,17 +163,24 @@ const Attacked = defineEvent('attacked')<{ attacker: string; target: string }>()
 
 - **过去时态命名**：`Healed`、`Attacked`、`ItemTaken`。事件是"已发生的事实"，不是"请你做某事"的请求——这决定了谁是事件的发出者。
 - 事件沿命令→系统、系统→系统传播（系统内 `ctx.emit` 也能发新事件，形成事件链）。
-- 订阅用 `on: [Attacked.token]`。token 就是事件名字符串，类型安全由 `defineEvent` 的泛型保证。
+- **订阅的两种写法（类型分叉，务必分清）**：
+  - `on: [Attacked]`（推荐）——传**事件定义**，配合 `defineSystem<载荷>({...})`
+    显式声明泛型，`handle` 里 `event.data` 就是载荷类型，无需断言
+  - `on: [Attacked.token]`——传 **token 字符串**，运行时等价，但引擎无法从字符串
+    反推载荷类型，`event.data` 是 `unknown`，需要手动断言
+  - 订阅 token 且想要类型时，显式写 `defineSystem<{ attacker: string; target: string }>`，
+    但与其手写两遍，不如直接传事件定义。
 
 ### 4.4 系统（defineSystem）：唯一动状态的手
 
 ```ts
-const CombatSystem = defineSystem({
+const CombatSystem = defineSystem<{ attacker: string; target: string }>({
   name: 'combat',
-  on: [Attacked.token],
+  on: [Attacked],            // 传事件定义：event.data 直接带类型
   priority: 10,
   handle(event, ctx) {
-    // ctx.getComponent  / ctx.emit  / ctx.output.narrative(...)
+    // event.data.attacker / event.data.target —— 有类型，无需断言
+    // ctx.getComponent / ctx.emit / ctx.output.narrative(...)
   },
 });
 world.register(CombatSystem);
@@ -236,7 +245,9 @@ world.output.count;                 // 条数
 ```ts
 import { SavePort, FsBackend } from '@mud/ecs-engine';
 
-const save = new SavePort(new FsBackend(), '0.1.0'); // 第二个参数=当前引擎/游戏版本
+const save = new SavePort(new FsBackend(), '0.1.0'); // 第二个参数 = 内容架构版本
+// ↑ 由**游戏方**管理（与 @mud/ecs-engine 的 package.json 版本解耦）；
+//   它决定迁移链终点，save() 会把它写入快照的 engineVersion 字段。
 
 // 存：快照是纯 JSON（engineVersion/tickCount/entities），FsBackend 自动建目录
 await save.save('./saves/slot1.json', world.createSnapshot());
@@ -259,16 +270,25 @@ save.registerMigrations({
   to: '0.2.0', // 必填：迁移后版本，load 据此推进版本号
   migrate: (snap) => ({
     ...snap,
-    entities: snap.entities.map(e =>
+    entities: snap.entities.map((e) => {
       // 快照里组件按确定性 ID（Health.id）键控，不是名字
-      e.components[Health.id] ? { ...e, components: { ...e.components, [Health.id]: { ...e.components[Health.id], max: 150 } } } : e
-    ),
+      const health = e.components[Health.id];
+      if (!health || typeof health !== 'object') return e;
+      return {
+        ...e,
+        components: {
+          ...e.components,
+          [Health.id]: { ...(health as { max?: number }), max: 150 },
+        },
+      };
+    }),
   }),
 });
 // load 时：0.1.0 的存档自动跑完迁移链变成 0.2.0 的形状
 ```
 
-存档兼容性是文字游戏的命根子，建议**每次改组件结构都写一条迁移**，版本号跟 `package.json`。
+存档兼容性是文字游戏的命根子，建议**每次改组件结构都写一条迁移**，并维护好
+内容架构版本号（迁移链的终点）。
 
 浏览器环境用 `LocalStorageBackend` 替换 `FsBackend` 即可，`SavePort` 的 API 完全一致。
 
@@ -279,7 +299,7 @@ save.registerMigrations({
 引擎自带测试工具，**不必启动游戏循环**：
 
 ```ts
-import { createTestWorld, ManualClock } from '@mud/ecs-engine';
+import { createTestWorld } from '@mud/ecs-engine';
 import { expect, it } from 'vitest';
 
 it('休息回血不超过上限', () => {
@@ -298,8 +318,10 @@ it('休息回血不超过上限', () => {
 要点：
 
 - `w.runChain()` 同步跑完整个事件链，**没有隐藏的异步**，断言可以紧跟其后。
-- `createTestWorld` 接受 `entities`（夹具数据）和 `clock: new ManualClock()`——时间由你拨动，测试永远确定性。
+- `createTestWorld` 接受 `systems`（注册的系统）与 `entities`（夹具数据）。
+  想测基于世界时钟的行为（every 周期/延时事件）就别走 runChain——直接 `w.world.tick()`。
 - 测命令就直接 `await w.world.execute('rest 30', p)`，断言 `w.world.output`。
+- 测试工具的完整形态见 §8 速查表；`record/replay`（录像）也是测试好帮手。
 
 ---
 
@@ -310,6 +332,9 @@ it('休息回血不超过上限', () => {
 | 命令执行了，什么都没输出 | 命令返回了 null，事件链上也没有系统产出 narrative | 检查系统是否 `ctx.output.narrative(...)`；输出要自己从 `world.output` 取 |
 | `world.execute()` 返回了"我不明白你的意思" | 动词没注册，或大小写/全半角不一致 | 动词统一小写注册；`execute` 内部会 lowercase，但全角空格不行 |
 | `defineEvent` 编译报错 | 漏了结尾的 `()`：柯里化是 `defineEvent('x')<T>()` | 补上 `()` |
+| 系统里 `event.data` 是 `unknown`，编辑器全红 | `on` 用了 token 字符串（`on: [Healed.token]`），TS 无法从字符串反推载荷 | `on: [Healed]` 传事件定义 + `defineSystem<载荷>({...})`（见 §4.3） |
+| `trait('x', {...})` 运行时炸 / `create` 不是函数 | trait 第二参是"默认值工厂"，不是数据对象 | 传工厂：`trait('x', () => ({...}))` |
+| 创建出来的实体组件互相"串数据" | 组件默认值工厂返回了同一个共享对象 | 工厂每次 `return` 新对象字面量 |
 | args 拿到 `null` 却当 string 用 | `entity` 类型的词可能缺省 | 判空后再用；需要实体用 `world.findEntity(name)` |
 | 两个命令的动词报"命令动词冲突" | verbs/abbrev 撞了 | 这是故意的。改名，或复用同一命令 |
 | 改了组件结构，旧存档读出来是乱的 | 没写迁移 | 见 §5 的 `registerMigrations` |
@@ -340,7 +365,7 @@ it('休息回血不超过上限', () => {
 | | `FsBackend` / `LocalStorageBackend` | Node / 浏览器 |
 | 测试 | `createTestWorld({ systems?, entities?, clock? })` | 测试世界 |
 | | `w.emit(token, data)` / `w.runChain()` / `w.getLog()` | 驱动与断言 |
-| | `ManualClock` / `w.clock.advance(ms)` | 手动时钟 |
+| | `ManualClock`（可选注入） | 时钟参考对象；**不驱动世界时间**——测基于时钟的行为请直接 `w.world.tick()` |
 
 **0.2 已实现**（写作时"尚未实现"的清单，现已全部落地）：定时系统（every + ctx.after）、逐系统错误策略（onError 三模式）、开发者命令（/tp /heal /dev-help）。另有录像重放（record/verifyReplay）与世界分叉（world.fork）两项确定性新能力——细节见 `packages/engine/README.md` 的 0.2 速览与 `CHANGELOG.md`。
 
@@ -361,4 +386,6 @@ it('休息回血不超过上限', () => {
 ### 附：本文档示例的验证方式
 
 `docs/examples/` 下每个 `.mts` 文件对应正文一个可运行示例，
-`node scripts/verify-doc-examples.mjs` 会逐一执行并断言输出，保证文档不腐烂。
+`node docs/examples/verify-doc-examples.mjs` 会**先做 strict tsc 类型检查、
+再逐一运行断言输出**（类型与运行双验证），保证文档既不腐也不"骗编译"。
+正文直接粘贴示例代码即可在你的项目 strict 模式下编译。

@@ -1,13 +1,13 @@
-// 文档 §6「写测试」示例——与正文代码一致，由 verify-doc-examples.mjs 实测
+// 文档 §6「写测试」示例——与正文代码一致，由 verify-doc-examples.mjs 实测（含 tsc 类型检查）
 import assert from 'node:assert';
-import { createTestWorld, ManualClock, trait, defineEvent, defineSystem } from '@mud/ecs-engine';
+import { createTestWorld, trait, defineEvent, defineSystem } from '@mud/ecs-engine';
 
 const Health = trait('health', () => ({ current: 100, max: 100 }));
 const Healed = defineEvent('healed')<{ target: string; amount: number }>();
 
-const HealSystem = defineSystem({
+const HealSystem = defineSystem<{ target: string; amount: number }>({
   name: 'heal',
-  on: [Healed.token],
+  on: [Healed],
   priority: 10,
   handle(event, ctx) {
     const hp = ctx.getComponent(event.data.target, Health);
@@ -16,9 +16,9 @@ const HealSystem = defineSystem({
   },
 });
 
-// ManualClock 保证确定性：不启动游戏循环、不依赖真实时间
-const clock = new ManualClock();
-const w = createTestWorld({ systems: [HealSystem], clock });
+// 确定性：不启动游戏循环、不依赖真实时间——
+// w.emit + w.runChain() 同步驱动事件链，断言可直接跟在后面
+const w = createTestWorld({ systems: [HealSystem] });
 const p = w.entities.create();
 w.entities.addComponent(p, Health, { current: 90, max: 100 });
 

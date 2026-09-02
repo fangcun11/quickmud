@@ -1,4 +1,4 @@
-// 文档 §3「五分钟最小可运行示例」——与正文代码完全一致，由 verify-doc-examples.mjs 实测
+// 文档 §3「五分钟最小可运行示例」——与正文代码一致，由 verify-doc-examples.mjs 实测（含 tsc 类型检查）
 import {
   World, trait, defineEvent, defineSystem, defineCommand, Name,
 } from '@mud/ecs-engine';
@@ -7,9 +7,11 @@ const Health = trait('health', () => ({ current: 100, max: 100 }));
 
 const Healed = defineEvent('healed')<{ target: string; amount: number }>();
 
-const HealSystem = defineSystem({
+// 订阅用事件定义 on: [Healed] 而非 token 字符串，并显式声明载荷泛型——
+// handle 里的 event.data 即 { target, amount }，无需断言
+const HealSystem = defineSystem<{ target: string; amount: number }>({
   name: 'heal',
-  on: [Healed.token],
+  on: [Healed],
   priority: 10,
   handle(event, ctx) {
     const hp = ctx.getComponent(event.data.target, Health);

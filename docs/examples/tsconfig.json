@@ -9,7 +9,9 @@
     "paths": {
       "@mud/ecs-engine": ["../../packages/engine/src/index.ts"],
       "@mud/ecs-engine/testing": ["../../packages/engine/src/testing.ts"]
-    }
+    },
+    "types": ["node"],
+    "typeRoots": ["../../packages/engine/node_modules/@types"]
   },
   "include": ["*.mts", "*.test.ts"]
 }
