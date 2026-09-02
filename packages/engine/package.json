@@ -1,0 +1,49 @@
+{
+  "name": "@mud/ecs-engine",
+  "version": "0.2.0",
+  "description": "MUD文字游戏引擎核心 - 事件驱动、ECS架构的确定性游戏模拟",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "predev": "node scripts/write-version.mjs",
+    "build": "node scripts/write-version.mjs && node_modules/.bin/tsc && node scripts/build.js",
+    "prepack": "npm run build",
+    "test": "node scripts/write-version.mjs && node_modules/.bin/vitest run",
+    "test:watch": "node scripts/write-version.mjs && node_modules/.bin/vitest",
+    "lint": "node_modules/.bin/eslint src --ext .ts",
+    "typecheck": "node scripts/write-version.mjs && node_modules/.bin/tsc --noEmit",
+    "test:contract": "node scripts/contract-test.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1",
+    "esbuild": "^0.19.12",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

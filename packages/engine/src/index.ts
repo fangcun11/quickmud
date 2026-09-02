@@ -1,0 +1,39 @@
+// 核心
+export { EntityManager } from './core/entity';
+export { World } from './core/world';
+export { trait, relation, deterministicId } from './core/trait';
+export { blueprint, spawnBlueprint } from './core/blueprint';
+export type { EntityBlueprint, BlueprintComponent, BlueprintPatch, SpawnOptions } from './core/blueprint';
+export { Name } from './core/name';
+export { ENGINE_VERSION } from './version';
+export type { Entity, EntityId, ComponentDefinition, ComponentId, EventToken } from './core/types';
+
+// 事件
+export { defineEvent } from './events/define-event';
+export { EventPump } from './events/event-pump';
+export type { EventDefinition, EventHandler, EventPayload, EventContext, TypedEmit } from './events/types';
+
+// 系统
+export { defineSystem } from './systems/define-system';
+export type { SystemDefinition, SystemContext } from './systems/types';
+
+// 命令
+export { defineCommand } from './commands/define-command';
+export { createDeveloperCommands } from './commands/developer';
+export type { CommandDefinition, CommandContext, ArgumentDefinition, AnyCommand, ParsedArgs, ParsedArgValue } from './commands/types';
+
+// 输出
+export { OutputCollector, s, seg } from './output/output-collector';
+export { renderAnsi, renderSemanticHtml, renderPlainText } from './output/render';
+export type { AnsiRenderOptions } from './output/render';
+export type { OutputMessage, OutputPort, Segment, OutputKind, SemanticColor, SegmentTag } from './output/types';
+
+// 持久化
+export { SavePort, FsBackend, LocalStorageBackend } from './persistence/save-port';
+export type { SnapshotData, SnapshotMigration, SaveBackend } from './persistence/types';
+
+// 测试工具
+export { createTestWorld, TestWorld, ManualClock } from './testing/index';
+export { record, replay, verifyReplay, WorldRecorder, firstDiff } from './debug/recorder';
+export { TICK_TOKEN } from './core/world';
+export type { Recording, RecordedOp, ReplayResult } from './debug/recorder';

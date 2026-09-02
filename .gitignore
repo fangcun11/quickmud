@@ -1,0 +1,23 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+*.tsbuildinfo
+
+# 版本号生成文件（由 scripts/write-version.mjs 从 package.json 生成）
+packages/engine/src/version.generated.ts
+
+# 打包产物
+*.tgz
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
+pnpm-debug.log*

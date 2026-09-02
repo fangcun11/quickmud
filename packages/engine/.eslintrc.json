@@ -1,0 +1,39 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "env": { "es2022": true, "node": true },
+  "parserOptions": { "sourceType": "module" },
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+        "message": "确定性约束：禁止 Math.random()。需要随机请走显式注入的种子 RNG（参考 src/determinism.test.ts 的 mulberry32）。"
+      },
+      {
+        "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+        "message": "确定性约束：禁止 Date.now()。时间请走显式注入的时钟（如 EventPump 的 now 配置）。"
+      },
+      {
+        "selector": "NewExpression[callee.name='Date']",
+        "message": "确定性约束：禁止 new Date()。时间请走显式注入的时钟。"
+      },
+      {
+        "selector": "CallExpression[callee.object.name='performance'][callee.property.name='now']",
+        "message": "确定性约束：禁止 performance.now()，时间请走显式注入的时钟。"
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      { "paths": [
+        { "name": "crypto", "message": "确定性约束：禁止 crypto 随机源。" },
+        { "name": "node:crypto", "message": "确定性约束：禁止 crypto 随机源。" },
+        { "name": "nanoid", "message": "确定性约束：ID 请用确定性生成器（见 core/entity.ts）。" }
+      ]}
+    ],
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }]
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "scripts/"]
+}

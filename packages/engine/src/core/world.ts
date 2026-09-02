@@ -1,0 +1,504 @@
+import { EntityManager } from './entity';
+import { spawnBlueprint } from './blueprint';
+import type { EntityBlueprint, SpawnOptions } from './blueprint';
+import { Name } from './name';
+import { EventPump } from '../events/event-pump';
+import { OutputCollector } from '../output/output-collector';
+import { ENGINE_VERSION } from '../version';
+import type { EntityId, ComponentDefinition, EventToken } from './types';
+import type { SystemDefinition, SystemContext } from '../systems/types';
+import type { SystemErrorRecord } from '../events/event-pump';
+
+/** every 系统收到的合成 tick 事件 token */
+export const TICK_TOKEN = 'engine:tick' as const;
+import type { AnyCommand, CommandContext } from '../commands/types';
+import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
+import type { SnapshotData } from '../persistence/types';
+import type { Segment } from '../output/types';
+
+/** 任意泛型参数的系统定义（register 运行时入口用；唯一豁免点） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySystemDefinition = SystemDefinition<unknown> | SystemDefinition<any>;
+
+/**
+ * 世界配置
+ */
+export interface WorldConfig {
+  /** tick 间隔（毫秒） */
+  tickInterval?: number;
+  /** 单条命令最大事件数 */
+  maxEventsPerCommand?: number;
+}
+
+/**
+ * 游戏世界 - 引擎的核心入口
+ *
+ * 职责：
+ * 1. 管理实体和组件
+ * 2. 协调事件泵、系统、命令
+ * 3. 提供状态快照和回滚
+ * 4. 驱动游戏循环
+ */
+export class World {
+  readonly entities: EntityManager;
+  readonly eventPump: EventPump;
+  readonly output: OutputCollector;
+  private systems: SystemDefinition[] = [];
+  private commands: Map<string, AnyCommand> = new Map();
+  private verbMap: Map<string, string> = new Map();
+  private tickCount = 0;
+  /** 世界时间（毫秒），仅由 tick() 推进 —— 确定性时钟 */
+  private timeMs = 0;
+  private tickInterval: number;
+  /** every 系统的 skip/degrade 错误写入泵日志（复用同一份记录） */
+  private systemErrorSink: SystemErrorRecord[] = [];
+  private tickTimer?: ReturnType<typeof setInterval>;
+
+  constructor(config?: WorldConfig) {
+    this.entities = new EntityManager();
+    this.eventPump = new EventPump({
+      maxEventsPerCommand: config?.maxEventsPerCommand,
+    });
+    this.output = new OutputCollector();
+    this.tickInterval = config?.tickInterval ?? 500;
+  }
+
+  /**
+   * 获取系统错误日志（skip/degrade 策略下累积）
+   */
+  getSystemErrors(): SystemErrorRecord[] {
+    return [...this.eventPump.getSystemErrors(), ...this.systemErrorSink];
+  }
+
+  /**
+   * 清空系统错误日志
+   */
+  clearSystemErrors(): void {
+    this.eventPump.clearSystemErrors();
+    this.systemErrorSink = [];
+  }
+
+  /** 构建系统上下文（事件系统与 every 定时系统共用） */
+  private makeSystemContext(): SystemContext {
+    return {
+      emit: this.makeEmit(),
+      getEntity: (id: EntityId) => this.entities.get(id),
+      getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) =>
+        this.entities.getComponent(id, component),
+      output: {
+        narrative: (textOrSegments: string | Segment[]) => {
+          if (typeof textOrSegments === 'string') {
+            this.output.narrative([{ text: textOrSegments }]);
+          } else {
+            this.output.narrative(textOrSegments);
+          }
+        },
+        error: (text: string) => this.output.error(text),
+        status: (data: unknown) => this.output.status(data),
+      },
+      after: (delayMs, definitionOrToken, data) => {
+        const token = typeof definitionOrToken === 'string' ? definitionOrToken : definitionOrToken.token;
+        this.eventPump.schedule(token, data, delayMs, this.timeMs);
+      },
+    };
+  }
+
+  /** 类型化事件发射器（EventDefinition 或 token 皆可） */
+  private makeEmit(): TypedEmit {
+    const emit = (definitionOrToken: EventDefinition<unknown> | EventToken, data: unknown): void => {
+      const token = typeof definitionOrToken === 'string' ? definitionOrToken : definitionOrToken.token;
+      this.eventPump.emit(token, data);
+    };
+    return emit as TypedEmit;
+  }
+
+  /**
+   * 注册系统
+   */
+  register(...systems: AnySystemDefinition[]): void {
+    for (const system of systems) {
+      this.systems.push(system);
+
+      // 订阅事件（on 元素可能为 EventDefinition 或 token，运行时统一归一化）
+      if (system.on) {
+        for (const entry of system.on) {
+          const token = typeof entry === 'string' ? entry : entry.token;
+          this.eventPump.on(token, (payload: EventPayload<unknown>) => {
+            // 唯一的类型收敛点：泛型 T 在注册循环中已擦除，
+            // 类型安全由 defineSystem<T> 在定义侧保证
+            (system.handle as (p: EventPayload<unknown>, c: SystemContext) => void | Promise<void>)(
+              payload,
+              this.makeSystemContext()
+            );
+          }, system.priority ?? 0, system.onError);
+        }
+      }
+    }
+
+    // 批量排序（稳定排序：优先级相同则保持注册顺序）
+    this.systems.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+  }
+
+  /**
+   * 注册命令
+   *
+   * 动词/缩写冲突会显式抛错（否则后注册者静默覆盖前者，
+   * 内容包与插件组合场景极易踩中）。
+   * 重复注册同一命令（同 primaryVerb）幂等，不报错。
+   */
+  registerCommands(...commands: AnyCommand[]): void {
+    for (const command of commands) {
+      const primaryVerb = command.verbs[0]!.toLowerCase();
+
+      // 冲突检测：主动词槽位
+      const existing = this.commands.get(primaryVerb);
+      if (existing && existing !== command) {
+        throw new Error(
+          `命令动词冲突："${primaryVerb}" 已被注册。冲突方：${existing.verbs.join('/')} 与 ${command.verbs.join('/')}`
+        );
+      }
+      this.commands.set(primaryVerb, command);
+
+      // 冲突检测：动词映射（verbs + abbrevs 全覆盖）
+      const verbsAndAbbrevs = [...command.verbs, ...(command.abbrev ?? [])];
+      for (const verb of verbsAndAbbrevs) {
+        const v = verb.toLowerCase();
+        const owner = this.verbMap.get(v);
+        if (owner !== undefined && owner !== primaryVerb) {
+          throw new Error(
+            `命令动词冲突："${v}" 已被注册给 "${owner}"。冲突方：${command.verbs.join('/')}`
+          );
+        }
+        this.verbMap.set(v, primaryVerb);
+      }
+    }
+  }
+
+  /**
+   * 分叉出一个沙盒世界（D2）
+   *
+   * 状态：基于当前快照深拷贝（含延时事件、世界时间），与主世界零共享。
+   * 行为：复用主世界已注册的系统/命令定义（定义为无 World 闭包的纯声明，
+   * 注册只是向新世界的泵接线，安全且确定性等价）。
+   * every 系统的时相由 worldTime 派生（见 tick 注释），随快照一并继承，
+   * 因此分叉世界与主世界的后续 tick 行为逐帧等价。
+   *
+   * 典型用途：NPC AI 决策试跑、技能预演、UI 预览"如果走这条路会怎样"。
+   *
+   * 已知限制：不做写时复制（COW），fork 是 O(状态规模) 的快照拷贝；
+   * 大世界高频 fork 场景留待后续版本引入 COW。
+   */
+  fork(): World {
+    const forked = new World({
+      tickInterval: this.tickInterval,
+      maxEventsPerCommand: this.eventPump.getMaxEventsPerCommand(),
+    });
+    if (this.systems.length > 0) {
+      forked.register(...this.systems);
+    }
+    if (this.commands.size > 0) {
+      forked.registerCommands(...new Set(this.commands.values()));
+    }
+    forked.rollbackWorld(this.createSnapshot());
+    return forked;
+  }
+
+  /**
+   * 执行玩家输入
+   *
+   * 返回 Promise：命令的 handle 允许为异步函数，
+   * 其返回的反馈文本必须等待后才能交付调用方。
+   */
+  async execute(input: string, playerId: EntityId): Promise<string | null> {
+    // 重置事件计数
+    this.eventPump.resetEventCount();
+    this.output.clear();
+
+    // 解析输入
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+
+
+    // 解析动词
+    const parts = trimmed.split(/\s+/);
+    const verb = (parts[0] ?? '').toLowerCase();
+    const normalizedVerb = this.verbMap.get(verb);
+
+    if (!normalizedVerb) {
+      return '我不明白你的意思。';
+    }
+
+    const command = this.commands.get(normalizedVerb);
+    if (!command) {
+      return '命令未找到。';
+    }
+
+    // 简单参数解析
+    // parseArgs 是动态键控实现，无法在编译期逐键推导；
+    // 类型正确性由 ParsedArgValue 与 parseArgs 行为的契约注释保证（见 commands/types.ts），
+    // 此处是引擎内部唯一的收敛点。
+    const args = this.parseArgs(command, parts.slice(1)) as CommandContext['args'];
+
+    // 执行命令
+    const context: CommandContext = {
+      raw: trimmed,
+      args,
+      player: playerId,
+      world: {
+        emit: this.makeEmit(),
+        getEntity: (id: EntityId) => this.entities.get(id),
+        getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) =>
+          this.entities.getComponent(id, component),
+        findEntity: (name: string) => this.findEntityByName(name),
+      },
+    };
+
+    const result = await command.handle(context);
+
+    // 如果命令返回字符串，直接输出
+    if (typeof result === 'string') {
+      return result;
+    }
+
+    // 返回 null，输出由事件链产出
+    return null;
+  }
+
+  /**
+   * 解析命令参数
+   */
+  private parseArgs(command: AnyCommand, parts: string[]): Record<string, unknown> {
+    const args: Record<string, unknown> = {};
+
+    if (!command.args) return args;
+
+    const argKeys = Object.keys(command.args);
+    let partIndex = 0;
+
+    for (const key of argKeys) {
+      const def = command.args[key];
+      if (!def) continue;
+
+      switch (def.type) {
+        case 'rest':
+          args[key] = parts.slice(partIndex).join(' ');
+          partIndex = parts.length;
+          break;
+        case 'word':
+          args[key] = parts[partIndex] ?? '';
+          partIndex++;
+          break;
+        case 'direction':
+          args[key] = parts[partIndex] ?? '';
+          partIndex++;
+          break;
+        case 'entity':
+        case 'optional_entity':
+          args[key] = parts[partIndex] ?? null;
+          partIndex++;
+          break;
+      }
+    }
+
+    return args;
+  }
+
+  /**
+   * 按名称查找实体
+   *
+   * 契约：实体名称存储于引擎内置的 Name 组件（{ text, aliases }）。
+   * 按**优先级分级**匹配，同级内按实体创建顺序取首个命中：
+   *
+   * 1. 主名精确相等        —— `剑` 命中 `{ text: '剑' }`
+   * 2. 别名精确相等        —— `小二` 命中 `{ aliases: ['小二'] }`
+   * 3. 主名子串包含        —— `生锈` 命中 `{ text: '生锈的剑' }`
+   * 4. 别名子串包含        —— `sword` 命中 `{ aliases: ['rusty-sword'] }`
+   * 5. 输入反包含别名      —— `生锈的剑` 命中 `{ aliases: ['剑'] }`（最宽松，兜底）
+   *
+   * 分级的意义：单遍扫描时，先注册的长名会用子串抢走后注册的精确同名实体
+   * （`剑` 命中 `生锈的剑`），玩家输入的精确名字反而找不到东西。
+   */
+  private findEntityByName(name: string): EntityId | undefined {
+    const entities = this.entities.getAll();
+    // 索引 = 优先级层级，值 = 该层首个命中
+    const hits: (EntityId | undefined)[] = [undefined, undefined, undefined, undefined, undefined];
+
+    const take = (level: number, id: EntityId): void => {
+      if (hits[level] === undefined) hits[level] = id;
+    };
+
+    for (const entity of entities) {
+      const nameComp = entity.components.get(Name.id) as
+        | { text?: string; aliases?: string[] }
+        | undefined;
+      if (!nameComp) continue;
+
+      const text = nameComp.text;
+      const aliases = nameComp.aliases ?? [];
+
+      if (text === name) {
+        // 最高优先级，可以立即返回
+        return entity.id;
+      }
+      if (aliases.includes(name)) {
+        take(1, entity.id);
+        continue;
+      }
+      if (text && text.includes(name)) {
+        take(2, entity.id);
+        continue;
+      }
+      if (aliases.some((a) => a.includes(name))) {
+        take(3, entity.id);
+        continue;
+      }
+      if (aliases.some((a) => name.includes(a))) {
+        take(4, entity.id);
+      }
+    }
+
+    return hits.find((id) => id !== undefined);
+  }
+
+
+  /**
+   * 生成世界快照
+   */
+  createSnapshot(): SnapshotData {
+    // 深拷贝：快照必须是时间点的冻结视图，
+    // 否则后续组件突变（如数组 push）会反向污染"过去"的快照
+    const entities = this.entities.getAll().map(entity => ({
+      id: entity.id,
+      components: structuredClone(Object.fromEntries(entity.components)),
+    }));
+
+    return {
+      engineVersion: ENGINE_VERSION,
+      tickCount: this.tickCount,
+      registry: {},
+      entities,
+      worldTime: this.timeMs,
+      scheduler: { pendingEvents: this.eventPump.getScheduled() },
+    };
+  }
+
+  /**
+   * 回滚到快照
+   *
+   * 恢复内容：实体（含原始ID）与组件数据、tick 计数；
+   * 同时清空事件队列（队列是命令内的瞬态状态，快照不含它）。
+   * 注意：系统/命令注册表不受回滚影响。
+   */
+  rollbackWorld(snapshot: SnapshotData): void {
+    // 清空当前状态
+    this.entities.clear();
+    this.eventPump.clearQueue();
+
+    // 恢复实体：按快照重建原始 ID，并逐个恢复组件数据
+    for (const entityData of snapshot.entities) {
+      this.entities.createWithId(entityData.id);
+      for (const componentId of Object.keys(entityData.components)) {
+        this.entities.restoreComponent(entityData.id, componentId, entityData.components[componentId]);
+      }
+    }
+
+    this.tickCount = snapshot.tickCount;
+    this.timeMs = snapshot.worldTime ?? 0;
+    this.eventPump.restoreScheduled(snapshot.scheduler?.pendingEvents ?? []);
+  }
+
+  /**
+   * 启动游戏循环
+   */
+  start(): void {
+    this.tickTimer = setInterval(() => {
+      this.tick();
+    }, this.tickInterval);
+  }
+
+  /**
+   * 停止游戏循环
+   */
+  stop(): void {
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = undefined;
+    }
+  }
+
+  /**
+   * 按名称查找实体（Name 主名精确/子串匹配，别名精确匹配）
+   */
+  findEntity(name: string): EntityId | undefined {
+    return this.findEntityByName(name);
+  }
+
+  /**
+   * 从蓝图生成实体（0.3 B0）：确定性的 addComponent 序列
+   */
+  spawn(bp: EntityBlueprint, opts?: SpawnOptions): EntityId {
+    return spawnBlueprint(this, bp, opts);
+  }
+
+  /**
+   * 执行一个 tick：
+   * 1. 推进世界时间
+   * 2. 触发所有到期延时事件（ctx.after 调度的）
+   * 3. 触发所有跨过 every 网格点的周期系统
+   *
+   * every 的时相**完全由世界时间派生**（固定网格 `k * every`，
+   * 由跨过该点的第一个 tick 承接），不保存"上次触发时间"这类
+   * 游离状态。这样快照 / 回滚 / fork / 录像重放天然一致——
+   * timeMs 已在快照里，时相就在快照里。
+   *
+   * 副作用：触发间隔是 drift-free 的（长期平均严格等于 every），
+   * 而非"自上次触发起至少 every"（后者会随 tickInterval 累积漂移）。
+   */
+  tick(): void {
+    this.tickCount++;
+    const prevTime = this.timeMs;
+    this.timeMs += this.tickInterval;
+    this.eventPump.fireDue(this.timeMs);
+
+    for (const system of this.systems) {
+      if (!system.every || system.every <= 0) continue;
+      // 本 tick 是否跨过了一个 every 网格点
+      if (Math.floor(this.timeMs / system.every) <= Math.floor(prevTime / system.every)) {
+        continue;
+      }
+      try {
+        (system.handle as (p: EventPayload<unknown>, c: SystemContext) => void)(
+          { token: TICK_TOKEN, data: { time: this.timeMs }, timestamp: this.timeMs },
+          this.makeSystemContext(),
+        );
+      } catch (error) {
+        this.handleSystemError(system, error);
+      }
+    }
+  }
+
+  /** every 系统错误处理（走与事件系统一致的 onError 策略） */
+  private handleSystemError(system: AnySystemDefinition, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    if ((system.onError ?? 'propagate') === 'propagate') {
+      throw new Error(`Event handler error: ${message}`);
+    }
+    this.systemErrorSink.push({ token: TICK_TOKEN, message, policy: system.onError! });
+    // degrade 对 every 系统同样生效：从后续 tick 中摘除
+    if (system.onError === 'degrade') {
+      this.systems = this.systems.filter((s) => s !== system);
+    }
+  }
+
+  /** 当前世界时间（毫秒） */
+  get currentTime(): number {
+    return this.timeMs;
+  }
+
+  /**
+   * 获取当前 tick 数
+   */
+  getTickCount(): number {
+    return this.tickCount;
+  }
+}

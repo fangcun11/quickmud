@@ -1,0 +1,16 @@
+{
+  "name": "mud-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MUD文字游戏引擎 - 单机、事件驱动、ECS的文字MUD游戏引擎库",
+  "scripts": {
+    "dev": "pnpm --filter demo-adventure dev",
+    "build": "pnpm --filter @mud/ecs-engine build",
+    "test": "pnpm --filter @mud/ecs-engine test",
+    "test:contract": "pnpm --filter @mud/ecs-engine test:contract"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@8.15.4"
+}
