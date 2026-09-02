@@ -26,7 +26,7 @@ export type { CommandDefinition, CommandContext, ArgumentDefinition, AnyCommand,
 export { OutputCollector, s, seg } from './output/output-collector';
 export { renderAnsi, renderSemanticHtml, renderPlainText } from './output/render';
 export type { AnsiRenderOptions } from './output/render';
-export type { OutputMessage, OutputPort, Segment, OutputKind, SemanticColor, SegmentTag } from './output/types';
+export type { OutputMessage, Segment, OutputKind, SemanticColor, SegmentTag } from './output/types';
 
 // 持久化
 export { SavePort, FsBackend, LocalStorageBackend } from './persistence/save-port';

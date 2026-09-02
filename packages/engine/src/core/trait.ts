@@ -16,26 +16,39 @@ export function deterministicId(name: string): ComponentId {
   return (`c${(hash >>> 0).toString(36)}`.slice(0, 10)) as ComponentId;
 }
 
+/** 深拷贝：默认值是共享模板/工厂产物，create() 必须返回独立实例 */
+function deepClone<T>(value: T): T {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 /**
  * 创建组件定义
+ *
+ * 默认值两种形态（运行时归一为"每次 create 返回深拷贝新实例"，互不共享）：
+ * - 工厂：`trait('health', () => ({ current: 100, max: 100 }))`
+ * - 对象模板：`trait('health', { current: 100, max: 100 })`（同义，更简洁）
+ *
+ * 早年 README 曾示范对象形态但实现只认工厂（create 变成数据对象、共享引用）；
+ * 0.5 起对象模板正式受支持，两者行为一致。
+ *
  * @param name - 组件名称（用于生成确定性 ID）
- * @param defaults - 默认值工厂函数
- * @returns 组件定义对象
+ * @param defaults - 默认数据对象或返回默认数据的工厂
  */
 export function trait<T extends Record<string, unknown>>(
   name: string,
-  defaults?: () => T
+  defaults?: T | (() => T),
 ): ComponentDefinition<T> {
   const id = deterministicId(name);
-  
+  const base: T | undefined =
+    typeof defaults === 'function' ? (defaults as () => T)() : defaults;
+
   return {
     id,
     name,
-    create: defaults ?? (() => ({} as T)),
-    validate: (data): data is T => {
-      // 基础类型检查
-      return typeof data === 'object' && data !== null && !Array.isArray(data);
-    }
+    create: () => (base === undefined ? ({} as T) : deepClone(base)),
   };
 }
 
@@ -49,18 +62,10 @@ export function relation(name: string): ComponentDefinition<{
   type: string;
 }> {
   const id = deterministicId(name);
-  
+
   return {
     id,
     name,
     create: () => ({ target: '', type: name }),
-    validate: (data): data is { target: string; type: string } => {
-      return (
-        typeof data === 'object' &&
-        data !== null &&
-        'target' in data &&
-        'type' in data
-      );
-    }
   };
 }

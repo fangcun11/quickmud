@@ -422,3 +422,41 @@ describe('FsBackend', () => {
     expect(loaded.engineVersion).toBe('9.9.9');
   });
 });
+
+describe('B1/B3 v0.5 API 形态', () => {
+  it('B1: trait 对象模板形态——create 是函数且每次返回独立实例', () => {
+    const Hp = trait('hp-b1', { current: 10, max: 20 });
+    const a = Hp.create();
+    const b = Hp.create();
+    expect(typeof Hp.create).toBe('function');
+    expect(a).not.toBe(b); // 每次独立实例，互不共享
+    expect(a).toEqual({ current: 10, max: 20 });
+  });
+
+  it('B1: 工厂与对象模板行为一致（每次独立深拷贝）', () => {
+    const ObjForm = trait('hp-obj', { list: ['a'] });
+    const factory = trait('hp-fn', () => ({ list: ['a'] as string[] }));
+    const o1 = ObjForm.create();
+    const f1 = factory.create();
+    o1.list.push('x');
+    f1.list.push('x');
+    expect(ObjForm.create().list).toEqual(['a']); // 模板不被污染
+    expect(factory.create().list).toEqual(['a']);
+  });
+
+  it('B3: register/registerCommands 支持数组参数（自动展开）', async () => {
+    const w = createTestWorld();
+    const SysA = defineSystem({ name: 'a', on: ['ev-a'] as string[], handle: () => {} });
+    const SysB = defineSystem({ name: 'b', on: ['ev-b'] as string[], handle: () => {} });
+    // 数组参数不炸、不静默吞
+    expect(() => w.world.register(SysA, [SysB])).not.toThrow();
+
+    const CmdX = defineCommand({ verbs: ['x'], handle: () => 'X' });
+    const CmdY = defineCommand({ verbs: ['y'], handle: () => 'Y' });
+    expect(() => w.world.registerCommands(CmdX, [CmdY])).not.toThrow();
+
+    const p = w.entities.create();
+    expect(await w.world.execute('x', p)).toBe('X');
+    expect(await w.world.execute('y', p)).toBe('Y');
+  });
+});

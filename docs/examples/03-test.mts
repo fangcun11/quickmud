@@ -1,6 +1,8 @@
 // 文档 §6「写测试」示例——与正文代码一致，由 verify-doc-examples.mjs 实测（含 tsc 类型检查）
+// 测试全家桶走 @mud/ecs-engine/testing 子路径；核心构件（trait/事件/系统）走主入口。
 import assert from 'node:assert';
-import { createTestWorld, trait, defineEvent, defineSystem } from '@mud/ecs-engine';
+import { trait, defineEvent, defineSystem } from '@mud/ecs-engine';
+import { createTestWorld } from '@mud/ecs-engine/testing';
 
 const Health = trait('health', () => ({ current: 100, max: 100 }));
 const Healed = defineEvent('healed')<{ target: string; amount: number }>();

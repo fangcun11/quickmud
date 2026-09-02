@@ -18,8 +18,6 @@ export interface SnapshotData {
   entities: SnapshotEntity[];
   /** 调度器状态 */
   scheduler: SchedulerSnapshot;
-  /** 任务进度 */
-  quests?: Record<string, QuestSnapshot>;
 }
 
 /**
@@ -44,15 +42,6 @@ export interface PendingEvent {
   token: string;
   data: unknown;
   triggerAt: number;
-}
-
-/**
- * 任务快照
- */
-export interface QuestSnapshot {
-  id: string;
-  stage: number;
-  completedConditions: string[];
 }
 
 /**

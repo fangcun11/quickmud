@@ -5,5 +5,4 @@ export type {
   SaveBackend,
   SnapshotEntity,
   SchedulerSnapshot,
-  QuestSnapshot,
 } from './types';

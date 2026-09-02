@@ -130,7 +130,7 @@ const Position = trait('position', () => ({ roomId: 'town_square' }));
 const Locked  = trait('locked');   // 无数据组件（标记用），如"门已上锁"
 ```
 
-- `trait(name, defaults)`：`name` 用于生成**确定性 ID**（同名组件永远同 ID，存档不会漂移）；`defaults` 是默认值工厂。
+- `trait(name, defaults)`：`name` 用于生成**确定性 ID**（同名组件永远同 ID，存档不会漂移）；`defaults` 可传**对象模板或工厂**（等价——每次 `create()` 返回独立深拷贝）。工厂适合默认值含函数/计算时；纯数据用对象模板更简洁。
 - 组件是**纯数据**，不放方法。行为写在系统里。
 - 读取/写入：
 
@@ -299,7 +299,7 @@ save.registerMigrations({
 引擎自带测试工具，**不必启动游戏循环**：
 
 ```ts
-import { createTestWorld } from '@mud/ecs-engine';
+import { createTestWorld } from '@mud/ecs-engine/testing';
 import { expect, it } from 'vitest';
 
 it('休息回血不超过上限', () => {
@@ -333,7 +333,7 @@ it('休息回血不超过上限', () => {
 | `world.execute()` 返回了"我不明白你的意思" | 动词没注册，或大小写/全半角不一致 | 动词统一小写注册；`execute` 内部会 lowercase，但全角空格不行 |
 | `defineEvent` 编译报错 | 漏了结尾的 `()`：柯里化是 `defineEvent('x')<T>()` | 补上 `()` |
 | 系统里 `event.data` 是 `unknown`，编辑器全红 | `on` 用了 token 字符串（`on: [Healed.token]`），TS 无法从字符串反推载荷 | `on: [Healed]` 传事件定义 + `defineSystem<载荷>({...})`（见 §4.3） |
-| `trait('x', {...})` 运行时炸 / `create` 不是函数 | trait 第二参是"默认值工厂"，不是数据对象 | 传工厂：`trait('x', () => ({...}))` |
+| `trait('x', {...})` 早期写法曾坏 | 0.4 及更早只认工厂形态，传对象会让 create 变数据对象 | v0.5 起对象模板正式支持；工厂/对象二选一即可 |
 | 创建出来的实体组件互相"串数据" | 组件默认值工厂返回了同一个共享对象 | 工厂每次 `return` 新对象字面量 |
 | args 拿到 `null` 却当 string 用 | `entity` 类型的词可能缺省 | 判空后再用；需要实体用 `world.findEntity(name)` |
 | 两个命令的动词报"命令动词冲突" | verbs/abbrev 撞了 | 这是故意的。改名，或复用同一命令 |

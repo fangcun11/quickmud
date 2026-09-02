@@ -23,10 +23,13 @@ export interface Entity {
 
 /**
  * 组件定义 - 描述组件的结构和行为
+ *
+ * 注：曾声明 `validate(data)` 校验钩子，但引擎从未调用（emit/挂载不校验），
+ * 属"类型承诺 > 运行时现实"，已删除——校验交给各组件数据的消费方。
  */
 export interface ComponentDefinition<T = unknown> {
   id: ComponentId;
   name: string;
+  /** 默认数据工厂/模板的产物副本（每次调用返回独立实例） */
   create: () => T;
-  validate?: (data: unknown) => data is T;
 }

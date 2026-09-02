@@ -133,8 +133,12 @@ export class World {
 
   /**
    * 注册系统
+   *
+   * 参数可为单个系统、多个系统或系统的数组（自动展开）：
+   * world.register(sysA, [sysB, sysC]);
    */
-  register(...systems: AnySystemDefinition[]): void {
+  register(...inputs: Array<AnySystemDefinition | AnySystemDefinition[]>): void {
+    const systems = inputs.flat();
     for (const system of systems) {
       this.systems.push(system);
 
@@ -164,8 +168,11 @@ export class World {
    * 动词/缩写冲突会显式抛错（否则后注册者静默覆盖前者，
    * 内容包与插件组合场景极易踩中）。
    * 重复注册同一命令（同 primaryVerb）幂等，不报错。
+   * 参数可为单个命令、多个命令或命令数组（自动展开）：
+   * world.registerCommands(cmdA, [cmdB, cmdC]);
    */
-  registerCommands(...commands: AnyCommand[]): void {
+  registerCommands(...inputs: Array<AnyCommand | AnyCommand[]>): void {
+    const commands = inputs.flat();
     for (const command of commands) {
       const primaryVerb = command.verbs[0]!.toLowerCase();
 

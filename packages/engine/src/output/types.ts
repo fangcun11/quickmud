@@ -42,21 +42,6 @@ export interface OutputMessage {
 }
 
 /**
- * 输出端口 - 引擎与渲染器的接口
+ * （原 OutputPort 接口为孤儿——无运行时消费者，仅类型声明，已删除。
+ *  引擎的输出的实际形态是 OutputCollector + OutputMessage，见 output-collector.ts）
  */
-export interface OutputPort {
-  /** 发送叙事文本 */
-  narrative(segments: Segment[]): void;
-  /** 发送系统消息 */
-  system(segments: Segment[]): void;
-  /** 发送错误消息 */
-  error(text: string): void;
-  /** 发送对话 */
-  dialogue(segments: Segment[]): void;
-  /** 发送标题 */
-  title(text: string): void;
-  /** 发送提示 */
-  prompt(text: string): void;
-  /** 发送状态 */
-  status(data: unknown): void;
-}

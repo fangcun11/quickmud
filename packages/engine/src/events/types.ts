@@ -14,11 +14,16 @@ export interface TypedEmit {
 
 /**
  * 事件定义 - 描述事件的结构和行为
+ *
+ * schema 字段只是**载荷类型的类型锚点**：帮助 TS 关联 EventDefinition<T> 的
+ * 载荷类型（emit/defineSystem 的类型推导）。引擎**不做运行时校验**——
+ * 不要指望 emit 时调用 validate。version 保留作为未来事件迁移的扩展点。
  */
 export interface EventDefinition<T = void> {
   token: EventToken;
   name: string;
   version: number;
+  /** 类型锚点（引擎不执行运行时校验；缺省即可） */
   schema?: {
     validate: (data: unknown) => data is T;
   };

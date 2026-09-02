@@ -2,7 +2,12 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
-## [Unreleased]（v0.5 开发中）
+## [0.5.0] - 2026-09-02
+
+主题：**会"活"的世界 + API 形态修正**（`@mud/ecs-engine` 0.5.0 / `@mud/prefabs` 0.3.0）。
+含 breaking：C 批死承诺删除（`ComponentDefinition.validate` / `EventDefinition.schema`
+运行时承诺 / `SnapshotData.quests`/`QuestSnapshot` / `OutputPort` 接口）。
+0.4.x 期间的全量审查修复（R 批）并入本版一并发布。
 
 ### 新增
 
@@ -15,6 +20,17 @@
   按世界时间确定性地沿房间 Exits 轮换，不引入随机——同世界同时间同位置）
 - **look 活物列表**：DescriptionSystem 列出同房有身体的实体（查看者自己除外）
 - demo：广场野狗（巡逻 + 可击杀）；酒保买酒改用 `ctx.spawn` 现酿（删预置 ale hack）
+
+### 变更（API 形态修正，含 breaking）
+
+- **`trait` 支持对象模板**：`trait('x', {数据})` 与工厂等价——每次 `create()`
+  返回独立深拷贝（修复早年 README 对象形态让 create 变数据对象/共享引用的陷阱）
+- **`register`/`registerCommands` 支持数组参数**（自动展开，忘展开不再静默炸）
+- **测试工具统一入口**：`@mud/ecs-engine/testing` 聚合测试全家桶（含录像重放
+  record/replay），文档统一走子路径；主入口兼容导出
+- **死承诺清理（breaking）**：`ComponentDefinition.validate`、`EventDefinition.schema`
+  的运行时承诺、`SnapshotData.quests`/`QuestSnapshot`、孤儿 `OutputPort` 接口——
+  全部删除；`schema` 保留为纯类型锚点（引擎不做运行时校验，文档注明）
 
 ### 修复
 
