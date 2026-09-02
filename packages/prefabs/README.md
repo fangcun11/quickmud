@@ -73,6 +73,9 @@ await world.execute('drop 金币', player);  // → 放回当前房间
 "某容器里有什么" = 查询拥有 `Located` 且 `at == 容器` 的实体。
 玩家背包 = `at == 玩家`；房间地面 = `at == 房间`。不需要独立的 Inventory 组件。
 
+**已知边界**：删除容器实体（房间/箱子）前请先转移或删除其中的物品——
+引擎不级联清理 `Located.at` 悬挂引用（容器被删后其物品对任何活容器不可见）。
+
 > Name 组件是引擎的查找契约（`findEntityByName`），请从 `@mud/ecs-engine` 导入。
 > 引擎开发者命令 `/tp /heal` 按 `position/health` 命名约定工作；`/give` 已随
 > Inventory 退役迁出（0.3-C breaking）。
