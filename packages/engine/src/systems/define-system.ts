@@ -1,5 +1,5 @@
 import type { EventToken } from '../core/types';
-import type { SystemContext, SystemDefinition } from './types';
+import type { SystemContext, SystemDefinition, SystemErrorPolicy } from './types';
 import type { EventDefinition } from '../events/types';
 
 /** on 列表元素：事件定义（类型贯通，推荐）或 token 字符串 */
@@ -32,6 +32,10 @@ export function defineSystem<T>(definition: {
   name?: string;
   on?: OnInput<T>[];
   priority?: number;
+  /** 周期触发间隔（毫秒）；设置后由 World.tick 驱动（payload.data.time 为世界时间） */
+  every?: number;
+  /** 错误策略，默认 'propagate' */
+  onError?: SystemErrorPolicy;
   handle: (
     event: { token: EventToken; data: T; timestamp: number },
     context: SystemContext

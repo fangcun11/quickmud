@@ -133,6 +133,21 @@ const items = ctx.findByComponent(Located)
   .filter((id) => ctx.getComponent(id, Located)?.at === playerId);
 ```
 
+## 0.5 系统内造物与销毁
+
+`SystemContext` 另注入 **`spawn(bp, opts)`** 与 **`destroy(entityId)`**（系统是唯一
+改状态的手，命令仍只 emit）：
+
+```ts
+// 掉落/产出/刷怪：从蓝图现造一个实体（确定性：同蓝图 ⇒ 同组件）
+const drop = ctx.spawn(CoinBp, { patch: { located: { at: roomId } } });
+
+// 死亡清场等
+ctx.destroy(target);
+```
+
+> 注：destroy 不级联清理其他实体的引用（如 Located 指向被删容器会悬挂）。
+
 ## 双模块格式
 
 | 入口 | import (ESM) | require (CJS) |

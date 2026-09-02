@@ -19,6 +19,8 @@ import {
   MovementSystem,
   DescriptionSystem,
   ItemSystem,
+  CombatSystem,
+  NpcWanderSystem,
   Health,
   Position,
   Description,
@@ -26,6 +28,7 @@ import {
   Portable,
   Weapon,
   Located,
+  Wander,
   GoCommand,
   createDirectionCommand,
   LookCommand,
@@ -33,6 +36,7 @@ import {
   ScoreCommand,
   TakeCommand,
   DropCommand,
+  AttackCommand,
 } from '@mud/prefabs';
 import { HelpCommand } from '../commands/help';
 import { BarkeepDialogue } from './dialogue';
@@ -49,11 +53,13 @@ export function bootstrap(): BootstrapResult {
     maxEventsPerCommand: 1000,
   });
 
-  // 注册系统（prefabs 移动/描述/物品 + 引擎对话 + demo 效果）
+  // 注册系统（prefabs 移动/描述/物品/战斗/巡逻 + 引擎对话 + demo 效果）
   world.register(
     MovementSystem,
     DescriptionSystem,
     ItemSystem,
+    CombatSystem,
+    NpcWanderSystem,
     DialogueSystem,
     BarkeepEffectsSystem,
   );
@@ -68,6 +74,7 @@ export function bootstrap(): BootstrapResult {
     ScoreCommand,
     TakeCommand,
     DropCommand,
+    AttackCommand,
     HelpCommand,
     createDirectionCommand('north', ['north', 'n', '北']),
     createDirectionCommand('south', ['south', 's', '南']),
@@ -129,12 +136,14 @@ export function bootstrap(): BootstrapResult {
   world.entities.addComponent(gold, Portable);
   world.entities.addComponent(gold, Located, { at: 'town_square' });
 
-  // 吧台上的麦酒：对话效果系统（BarkeepEffectsSystem）会把它递给买酒的玩家
-  const ale = world.entities.createWithId('ale');
-  world.entities.addComponent(ale, Name, { text: '麦酒', aliases: ['一杯麦酒'] });
-  world.entities.addComponent(ale, Description, { text: '一杯冒着细腻泡沫的麦酒。' });
-  world.entities.addComponent(ale, Portable);
-  world.entities.addComponent(ale, Located, { at: 'tavern' });
+  // 广场游荡的野狗：带 Wander + Position + Health，由 NpcWanderSystem 驱动巡逻，
+  // 玩家可以攻击它（CombatSystem）。demo REPL 每 500ms tick → 每 3 秒跳一次房。
+  const dog = world.entities.createWithId('dog');
+  world.entities.addComponent(dog, Name, { text: '野狗', aliases: ['狗', 'dog'] });
+  world.entities.addComponent(dog, Description, { text: '一条瘦骨嶙峋的野狗，正警惕地盯着你。' });
+  world.entities.addComponent(dog, Position, { roomId: 'town_square' });
+  world.entities.addComponent(dog, Health, { current: 20, max: 20 });
+  world.entities.addComponent(dog, Wander);
 
   // 创建 NPC（0.3-B 对话）：酒馆的酒保
   // 注：NPC 不带 Position / Located —— 实体与容器的归属可视作"常驻"，容器模型

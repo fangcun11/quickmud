@@ -1,6 +1,7 @@
 import type { EventToken, Entity, EntityId, ComponentDefinition } from '../core/types';
 import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
 import type { Segment } from '../output/types';
+import type { EntityBlueprint, SpawnOptions } from '../core/blueprint';
 
 /**
  * 系统定义 - 游戏逻辑的组织单元
@@ -44,6 +45,13 @@ export interface SystemContext {
   getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) => T | undefined;
   /** 按组件查询实体（容器查询等场景；返回拥有该组件的实体 id，创建序） */
   findByComponent: <T>(component: ComponentDefinition<T>) => EntityId[];
+  /**
+   * 从蓝图创建实体（系统内造物：掉落、对话产出、刷怪）。
+   * 命令仍应只 emit 事件——这是系统的特权（唯一改状态的手）。
+   */
+  spawn: (bp: EntityBlueprint, opts?: SpawnOptions) => EntityId;
+  /** 销毁实体（死亡清场等）。注意：不级联清理其他实体的引用 */
+  destroy: (id: EntityId) => boolean;
   /** 输出消息 */
   output: {
     narrative: (textOrSegments: string | Segment[]) => void;

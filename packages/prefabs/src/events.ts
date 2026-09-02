@@ -28,3 +28,16 @@ export const ItemDropped = defineEvent('item_dropped')<{
   player: EntityId;
   item: EntityId;
 }>();
+
+/** 攻击事件：{ attacker, target }（CombatSystem 结算伤害；目标须与攻击者同房间且有 Health） */
+export const Attack = defineEvent('attack')<{
+  attacker: EntityId;
+  target: EntityId;
+}>();
+
+/** 死亡事件：{ entity, killer?, roomId }（目标 HP 归零时 emit，供掉落/任务等效果系统订阅） */
+export const Died = defineEvent('died')<{
+  entity: EntityId;
+  killer?: EntityId;
+  roomId?: string;
+}>();

@@ -10,7 +10,7 @@
  */
 import { Name } from '@mud/ecs-engine';
 import type { ComponentDefinition, EntityId } from '@mud/ecs-engine';
-import { Located } from './traits.js';
+import { Located, Position } from './traits.js';
 
 /** 只读查询接口（系统/命令上下文均满足） */
 export interface WorldQuery {
@@ -51,9 +51,30 @@ export function resolveInContainer(
   container: EntityId,
   name: string,
 ): EntityId | undefined {
+  return bestRanked(q, itemsInContainer(q, container), name);
+}
+
+/** 房间内"有身体"的实体（Position.roomId == room；含玩家/NPC/敌怪） */
+export function occupantsIn(q: WorldQuery, room: EntityId): EntityId[] {
+  return q
+    .findByComponent(Position)
+    .filter((id) => q.getComponent(id, Position)?.roomId === room);
+}
+
+/** 在房间内按名称解析有名字的实体（attack 等目标定位用） */
+export function resolveOccupantIn(
+  q: WorldQuery,
+  room: EntityId,
+  name: string,
+): EntityId | undefined {
+  return bestRanked(q, occupantsIn(q, room), name);
+}
+
+/** 在一组候选里选名称匹配层级最高者（同级取创建序靠前） */
+function bestRanked(q: WorldQuery, ids: EntityId[], name: string): EntityId | undefined {
   let best: EntityId | undefined;
   let bestRank = -1;
-  for (const id of itemsInContainer(q, container)) {
+  for (const id of ids) {
     const rank = matchRank(q, id, name);
     if (rank > bestRank) {
       best = id;

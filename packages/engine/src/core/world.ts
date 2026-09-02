@@ -95,6 +95,8 @@ export class World {
         this.entities.getComponent(id, component),
       findByComponent: <T>(component: ComponentDefinition<T>) =>
         this.entities.findByComponent(component),
+      spawn: (bp, opts) => this.spawn(bp, opts),
+      destroy: (id) => this.entities.delete(id),
       output: {
         narrative: (textOrSegments: string | Segment[]) => {
           if (typeof textOrSegments === 'string') {

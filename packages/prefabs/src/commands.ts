@@ -5,9 +5,9 @@
  */
 import { defineCommand } from '@mud/ecs-engine';
 import type { AnyCommand } from '@mud/ecs-engine';
-import { Moved, Look, ItemTaken, ItemDropped } from './events.js';
+import { Moved, Look, ItemTaken, ItemDropped, Attack } from './events.js';
 import { Position, Health } from './traits.js';
-import { itemsInContainer, resolveInContainer, displayName } from './queries.js';
+import { itemsInContainer, resolveInContainer, resolveOccupantIn, displayName } from './queries.js';
 
 /** 移动命令：go/move/walk/走 <方向>，支持 n/s/e/w/北 等归一 */
 export const GoCommand = defineCommand({
@@ -128,5 +128,24 @@ export const ScoreCommand = defineCommand({
       lines.push(`位置：${pos.roomId}`);
     }
     return lines.join('\n') || '没有状态信息。';
+  },
+});
+
+/** 攻击命令：attack/kill/攻击/打 <目标>（目标须与自己同房间） */
+export const AttackCommand = defineCommand({
+  verbs: ['attack', 'kill', '攻击', '打'],
+  args: { target: { type: 'entity' } },
+  handle({ args, player, world }) {
+    if (!args.target) return '攻击谁？';
+
+    const pos = world.getComponent(player, Position);
+    if (!pos) return '你不在任何地方。';
+
+    // 房间作用域解析（与 take/drop 同理由：全局 findEntity 会跨房间错选）
+    const target = resolveOccupantIn(world, pos.roomId, args.target);
+    if (!target) return `这里没有「${args.target}」。`;
+
+    world.emit(Attack, { attacker: player, target });
+    return null;
   },
 });

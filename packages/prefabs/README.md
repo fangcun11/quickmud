@@ -82,12 +82,39 @@ await world.execute('drop 金币', player);  // → 放回当前房间
 
 ## 模块组成
 
-- `src/traits.ts`：组件定义（Health/Position/Located/Description/Exits/Portable/Weapon）
-- `src/events.ts`：`Moved`、`Look`、`ItemTaken`、`ItemDropped`
-- `src/systems.ts`：`MovementSystem`、`DescriptionSystem`（含房间物品列表）、
-  `ItemSystem`（take/drop 校验与转移）
+- `src/traits.ts`：组件定义（Health/Position/Located/Description/Exits/Portable/Weapon/Wander）
+- `src/events.ts`：`Moved`、`Look`、`ItemTaken`、`ItemDropped`、`Attack`、`Died`
+- `src/systems.ts`：`MovementSystem`、`DescriptionSystem`（含房间物品与活物列表）、
+  `ItemSystem`（take/drop）、`CombatSystem`（伤害结算 + 死亡销毁 + `Died` 钩子）、
+  `NpcWanderSystem`（`Wander` + `Position` 实体按 every 时钟确定性巡逻）
 - `src/commands.ts`：`GoCommand`、`createDirectionCommand`、`LookCommand`、
-  `TakeCommand`、`DropCommand`、`InventoryCommand`、`ScoreCommand`
+  `TakeCommand`、`DropCommand`、`InventoryCommand`、`ScoreCommand`、`AttackCommand`
+- `src/queries.ts`：容器/房间解析工具（`itemsInContainer`/`occupantsIn`/`resolveInContainer`/`resolveOccupantIn`）
+
+## 战斗与巡逻（v0.5）
+
+```ts
+import { CombatSystem, NpcWanderSystem, AttackCommand, Wander } from '@mud/prefabs';
+
+world.register(CombatSystem, NpcWanderSystem);   // 战斗 + 巡逻
+world.registerCommands(AttackCommand);
+
+// 一只会巡逻、可被攻击的敌人
+const mob = world.entities.createWithId('mob');
+world.entities.addComponent(mob, Name, { text: '野狗' });
+world.entities.addComponent(mob, Position, { roomId: 'town' }); // 有身体 → 在房间
+world.entities.addComponent(mob, Health, { current: 20, max: 20 });
+world.entities.addComponent(mob, Wander);        // 巡逻标记
+
+await world.execute('attack 野狗', player);      // 造成 Weapon.damage（默认 10）
+// HP 归零：输出 → emit Died（掉落/任务钩子）→ 目标实体被销毁
+```
+
+- **攻击规则**：目标须与自己同房间且有 Health；伤害取攻击者 `Weapon.damage`（>0）否则 10
+- **巡逻确定性**：不引入随机——下一跳由世界时间决定（`floor(time/3000) % 出口数`），
+  同世界同时间 ⇒ 同位置，录像/分叉/读档天然一致
+- `Died` 事件含 `{ entity, killer?, roomId }`，供掉落、任务等效果系统订阅
+- look 会列出房间里的活物（有 `Position` 的同房实体，不含查看者自己）
 
 ## 开发
 

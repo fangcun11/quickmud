@@ -2,7 +2,25 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
-## [Unreleased]
+## [Unreleased]（v0.5 开发中）
+
+### 新增
+
+- **系统内造物与销毁（engine）**：`SystemContext` 注入 `spawn(bp, opts)` /
+  `destroy(entityId)`——战斗掉落、对话产出、NPC 刷怪不再依赖预置实体 hack
+- **战斗与死亡（@mud/prefabs）**：`Attack`/`Died` 事件 + `CombatSystem`（同房间 +
+  Health 校验、`Weapon.damage` 结算、HP 归零 emit `Died` 后销毁目标）；
+  `attack/kill/攻击` 命令（房间作用域解析）；`Died` 为掉落/任务效果系统的钩子
+- **NPC 巡逻（@mud/prefabs）**：`Wander` trait + `NpcWanderSystem`（every 时钟驱动、
+  按世界时间确定性地沿房间 Exits 轮换，不引入随机——同世界同时间同位置）
+- **look 活物列表**：DescriptionSystem 列出同房有身体的实体（查看者自己除外）
+- demo：广场野狗（巡逻 + 可击杀）；酒保买酒改用 `ctx.spawn` 现酿（删预置 ale hack）
+
+### 修复
+
+- `defineSystem` 构造入参类型补 `every`/`onError`（此前只在返回的 SystemDefinition
+  上，`defineSystem({ every })` 在 strict 下编译不过——引擎测试因 tsconfig 排除
+  test 文件从未暴露，被 prefabs 巡逻系统编译逼出）
 
 ### 修复（跨 0.3/0.4 全量审查产出，2026-09-02）
 

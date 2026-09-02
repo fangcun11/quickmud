@@ -59,3 +59,6 @@ export const Portable = trait('portable', () => ({}));
 export const Weapon = trait('weapon', () => ({
   damage: 0,
 }));
+
+/** 巡逻标记组件：带它 + Position 的实体由 NpcWanderSystem 驱动漫游 */
+export const Wander = trait('wander', () => ({}));

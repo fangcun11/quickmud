@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createTestWorld, ManualClock } from './testing';
 import { ENGINE_VERSION } from './version';
 import { trait } from './core/trait';
+import { blueprint } from './core/blueprint';
 import { Name } from './core/name';
 import { defineEvent } from './events/define-event';
 import { defineSystem } from './systems/define-system';
@@ -320,6 +321,49 @@ describe('MUD Engine', () => {
     });
     expect(w.entities.has('hero')).toBe(true);
     expect(w.entities.getComponent('hero', Health)).toEqual({ current: 10, max: 10 });
+  });
+
+  /* ---------- V1 v0.5.0：系统内造物与销毁 ---------- */
+
+  it('V1: 系统上下文可 spawn 实体（蓝图造物，产出可被 findEntity 找到）', () => {
+    const GoblinBp = blueprint({
+      name: '哥布林',
+      components: [[Health, { current: 30, max: 30 }]],
+    });
+    let createdId = '';
+    const Maker = defineSystem({
+      name: 'maker',
+      on: ['make'] as string[],
+      handle(_event, ctx) {
+        createdId = ctx.spawn(GoblinBp, { id: 'gob-1' });
+      },
+    });
+    const w = createTestWorld({ systems: [Maker] });
+
+    w.emit('make' as never, {});
+    w.runChain();
+
+    expect(createdId).toBe('gob-1');
+    expect(w.entities.has('gob-1')).toBe(true);
+    expect(w.entities.getComponent('gob-1', Health)).toEqual({ current: 30, max: 30 });
+    expect(w.world.findEntity('哥布林')).toBe('gob-1');
+  });
+
+  it('V1: 系统上下文可 destroy 实体（销毁后不存在）', () => {
+    const Killer = defineSystem({
+      name: 'killer',
+      on: ['kill'] as string[],
+      handle(_event, ctx) {
+        ctx.destroy('victim');
+      },
+    });
+    const w = createTestWorld({ systems: [Killer] });
+    w.entities.createWithId('victim');
+    expect(w.entities.has('victim')).toBe(true);
+
+    w.emit('kill' as never, {});
+    w.runChain();
+    expect(w.entities.has('victim')).toBe(false);
   });
 });
 describe('FsBackend', () => {

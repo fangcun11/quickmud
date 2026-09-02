@@ -8,6 +8,8 @@ import {
   MovementSystem,
   DescriptionSystem,
   ItemSystem,
+  CombatSystem,
+  NpcWanderSystem,
 } from './systems.js';
 import {
   GoCommand,
@@ -17,6 +19,7 @@ import {
   ScoreCommand,
   TakeCommand,
   DropCommand,
+  AttackCommand,
 } from './commands.js';
 import {
   Health,
@@ -26,6 +29,7 @@ import {
   Portable,
   Weapon,
   Located,
+  Wander,
 } from './traits.js';
 
 /** 按 kind 提取消息纯文本 */
@@ -290,5 +294,123 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
     const bare = w.entities.createWithId('bare');
     expect(await w.execute('take 剑', bare)).toBe('你不在任何地方。');
     expect(await w.execute('drop 剑', bare)).toBe('你不在任何地方。');
+  });
+});
+
+describe('V2 战斗与死亡（v0.5）', () => {
+  /** 玩家 + 一只同房间野狗 */
+  function combatWorld() {
+    const w = new World({ tickInterval: 500 });
+    w.register(ItemSystem, CombatSystem);
+    w.registerCommands(TakeCommand, DropCommand, InventoryCommand, AttackCommand);
+
+    const player = w.entities.createWithId('player');
+    w.entities.addComponent(player, Position, { roomId: 'town' });
+    w.entities.addComponent(player, Name, { text: '勇者' });
+
+    const town = w.entities.createWithId('town');
+    w.entities.addComponent(town, Name, { text: '城镇' });
+    w.entities.addComponent(town, Exits, { north: 'cave' });
+
+    const cave = w.entities.createWithId('cave');
+    w.entities.addComponent(cave, Name, { text: '洞穴' });
+    w.entities.addComponent(cave, Exits, {});
+
+    const mob = w.entities.createWithId('mob');
+    w.entities.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
+    w.entities.addComponent(mob, Position, { roomId: 'town' });
+    w.entities.addComponent(mob, Health, { current: 20, max: 20 });
+    return { w, player, mob };
+  }
+
+  it('attack 造成伤害；HP 归零时目标被销毁并 emit Died', async () => {
+    const deaths: string[] = [];
+    const { w, player, mob } = combatWorld();
+    // Died 监听
+    w.register({ name: 'deathwatch', on: ['died'], handle: (e: { data: { entity: string } }) => deaths.push(e.data.entity) } as never);
+
+    await w.execute('attack 野狗', player);
+    expect(w.entities.getComponent(mob, Health)!.current).toBe(10);
+    expect(w.entities.has(mob)).toBe(true);
+    expect(deaths).toEqual([]);
+
+    await w.execute('attack 野狗', player);
+    expect(w.entities.has(mob)).toBe(false); // 已销毁
+    expect(deaths).toEqual(['mob']);
+    expect(textOf(w.output.getAll(), 'narrative')).toContain('「野狗」倒下了。');
+  });
+
+  it('attack 不在同房间的目标 → 命令层拒绝', async () => {
+    const { w, player } = combatWorld();
+    // 洞穴里放另一只野狗
+    const caveMob = w.entities.createWithId('cave-mob');
+    w.entities.addComponent(caveMob, Name, { text: '洞狼' });
+    w.entities.addComponent(caveMob, Position, { roomId: 'cave' });
+    w.entities.addComponent(caveMob, Health, { current: 10, max: 10 });
+
+    expect(await w.execute('attack 洞狼', player)).toBe('这里没有「洞狼」。');
+    expect(w.entities.getComponent(caveMob, Health)!.current).toBe(10);
+  });
+
+  it('attack 无 Health 的同房目标 → 系统反馈', async () => {
+    const { w, player } = combatWorld();
+    const stone = w.entities.createWithId('stone');
+    w.entities.addComponent(stone, Name, { text: '石像' });
+    w.entities.addComponent(stone, Position, { roomId: 'town' });
+
+    await w.execute('attack 石像', player);
+    expect(textOf(w.output.getAll(), 'error')).toContain('ta 身上没有可伤害的生命。');
+  });
+
+  it('录像重放：attack 序列确定性一致', async () => {
+    const world = combatWorld();
+    const rec = record(world.w);
+    await rec.execute('attack 野狗', world.player);
+    await rec.execute('attack 野狗', world.player);
+
+    const result = await verifyReplay(rec.stop(), () => combatWorld().w);
+    expect(result.ok).toBe(true);
+    expect(result.diff).toBeUndefined();
+  });
+});
+
+describe('V3 NPC 巡逻（v0.5）', () => {
+  it('Wander 实体沿出口确定性移动（世界时间驱动）', () => {
+    const w = new World({ tickInterval: 500 });
+    w.register(NpcWanderSystem);
+    const town = w.entities.createWithId('town');
+    w.entities.addComponent(town, Name, { text: '城镇' });
+    w.entities.addComponent(town, Exits, { north: 'cave' });
+    const cave = w.entities.createWithId('cave');
+    w.entities.addComponent(cave, Name, { text: '洞穴' });
+    w.entities.addComponent(cave, Exits, { south: 'town' });
+
+    const npc = w.entities.createWithId('wanderer');
+    w.entities.addComponent(npc, Name, { text: '流浪商人' });
+    w.entities.addComponent(npc, Position, { roomId: 'town' });
+    w.entities.addComponent(npc, Wander);
+
+    // every=3000，tick=500 → 第 6 个 tick（t=3000）跨过网格点触发
+    for (let i = 0; i < 6; i++) w.tick();
+    expect(w.entities.getComponent(npc, Position)!.roomId).toBe('cave');
+
+    // 再走一轮回到 town（确定性往返）
+    for (let i = 0; i < 6; i++) w.tick();
+    expect(w.entities.getComponent(npc, Position)!.roomId).toBe('town');
+  });
+
+  it('无 Exits 的房间中 Wander 实体原地停留', () => {
+    const w = new World({ tickInterval: 500 });
+    w.register(NpcWanderSystem);
+    const deadEnd = w.entities.createWithId('dead-end');
+    w.entities.addComponent(deadEnd, Name, { text: '死胡同' });
+    w.entities.addComponent(deadEnd, Exits, {});
+    const npc = w.entities.createWithId('trapped');
+    w.entities.addComponent(npc, Name, { text: '迷路的猫' });
+    w.entities.addComponent(npc, Position, { roomId: 'dead-end' });
+    w.entities.addComponent(npc, Wander);
+
+    for (let i = 0; i < 18; i++) w.tick(); // 3 个周期
+    expect(w.entities.getComponent(npc, Position)!.roomId).toBe('dead-end');
   });
 });

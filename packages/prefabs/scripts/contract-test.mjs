@@ -61,16 +61,16 @@ try {
     `
 import { World, Name } from '@mud/ecs-engine';
 import {
-  MovementSystem, DescriptionSystem, ItemSystem, Health, Position, Exits, Description,
+  MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, Health, Position, Exits, Description,
   Located, Portable, GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
-  TakeCommand, DropCommand, LookCommand,
+  TakeCommand, DropCommand, LookCommand, AttackCommand,
 } from '@mud/prefabs';
 
 const w = new World();
-w.register(MovementSystem, DescriptionSystem, ItemSystem);
+w.register(MovementSystem, DescriptionSystem, ItemSystem, CombatSystem);
 w.registerCommands(
   GoCommand, createDirectionCommand('north', ['north']), createDirectionCommand('south', ['south']),
-  InventoryCommand, ScoreCommand, TakeCommand, DropCommand, LookCommand,
+  InventoryCommand, ScoreCommand, TakeCommand, DropCommand, LookCommand, AttackCommand,
 );
 const p = w.entities.createWithId('player-1');
 w.entities.addComponent(p, Health, { current: 100, max: 100 });
@@ -106,6 +106,14 @@ w.output.clear();
 await w.execute('look', p);
 const lines2 = w.output.getAll().map(m => m.segments.map(s => s.text).join(''));
 if (!lines2.some(l => l.includes('生锈的剑'))) throw new Error('ESM look 物品列表契约失败');
+// v0.5 战斗：击杀同房间敌人（Health 归零后实体被销毁）
+const mob = w.entities.createWithId('mob');
+w.entities.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
+w.entities.addComponent(mob, Position, { roomId: 'town' });
+w.entities.addComponent(mob, Health, { current: 20, max: 20 });
+await w.execute('attack 野狗', p);
+await w.execute('attack 野狗', p);
+if (w.entities.has('mob')) throw new Error('ESM attack/死亡契约失败');
 console.log('ESM 契约 ✓');
 `,
   );
