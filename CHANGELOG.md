@@ -2,11 +2,13 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
-## [Unreleased]
+## [0.3.0] - 2026-09-02
+
+主题：**内容表达力 + 领域预制件**。路线图见 `docs/roadmap-0.3.md`。
 
 ### 新增
 
-- **新包 `@mud/prefabs`（领域预制件，0.3 toolkit）**
+- **新包 `@mud/prefabs`（领域预制件，0.3-D）**
   - 分层决策：引擎只留能力原语与对话机制，**领域常用件外置**——移动/房间、
     查看/描述、背包、状态从 demo 上移为正式库包，换游戏直接复用
   - `traits.ts`：Health / Position / Inventory / Description / Exits / Portable /
