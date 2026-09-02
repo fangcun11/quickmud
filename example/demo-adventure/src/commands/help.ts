@@ -17,6 +17,8 @@ export const HelpCommand = defineCommand({
       '  east  (e/东)    - 向东移动',
       '  west  (w/西)    - 向西移动',
       '  inventory (i/物品) - 查看背包',
+      '  take (拿) <物品>  - 拾取当前房间的物品',
+      '  drop (放下) <物品> - 放下背包中的物品',
       '  score (状态)    - 查看状态',
       '  talk/ask (说/对话) - 与 NPC 对话（如 talk 酒保；选项用 talk 酒保 1）',
       '  help (帮助)     - 显示帮助',

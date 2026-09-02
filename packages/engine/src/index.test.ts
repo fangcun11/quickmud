@@ -260,6 +260,46 @@ describe('MUD Engine', () => {
     expect(w.entities.getComponent(target, Health)!.current).toBe(30);
     expect(w.world.eventPump.queueLength).toBe(0);
   });
+
+  /* ---------- C-1 容器查询原语 ---------- */
+
+  it('C-1: 系统上下文 findByComponent 可查询拥有组件的实体', () => {
+    let found: string[] = [];
+    const Probe = defineSystem({
+      name: 'probe',
+      on: ['probe'] as string[],
+      handle(_event, ctx) {
+        found = ctx.findByComponent(Health);
+      },
+    });
+    const w = createTestWorld({ systems: [Probe] });
+    const a = w.entities.createWithId('a');
+    w.entities.addComponent(a, Health, { current: 10, max: 10 });
+    w.entities.createWithId('bare');
+    const c = w.entities.createWithId('c');
+    w.entities.addComponent(c, Health, { current: 20, max: 20 });
+
+    w.emit('probe' as never, {});
+    w.runChain();
+    expect(found).toEqual(['a', 'c']);
+  });
+
+  it('C-1: 命令上下文 findByComponent 可查询拥有组件的实体', async () => {
+    const ProbeCmd = defineCommand({
+      verbs: ['probe-c'],
+      handle({ world }) {
+        return world.findByComponent(Position).join(',');
+      },
+    });
+    const w = createTestWorld();
+    w.world.registerCommands(ProbeCmd);
+    const p = w.entities.createWithId('p');
+    w.entities.addComponent(p, Position, { roomId: 'hall' });
+    const r = w.entities.createWithId('room-x');
+    w.entities.addComponent(r, Position, { roomId: 'room-x' });
+
+    expect(await w.world.execute('probe-c', p)).toBe('p,room-x');
+  });
 });
 describe('FsBackend', () => {
   const backend = new FsBackend();

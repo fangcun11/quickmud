@@ -2,6 +2,29 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [Unreleased]
+
+### 新增
+
+- **实体物品容器模型（0.3-C，@mud/prefabs）**
+  - `Located { at }` trait：物品的**单源位置**（房间/玩家/箱子实体皆可为容器）；
+    玩家背包 = `Located.at == 玩家` 的实体集合
+  - `ItemTaken` / `ItemDropped` 事件 + `ItemSystem`：take/drop 校验（当前房间 +
+    Portable / 背包持有）与转移，全部组件态 → 快照/回滚/录像天然一致
+  - `take` / `drop` 命令（take/get/拿/拾取、drop/put/放下/丢弃）
+  - `DescriptionSystem` 增强：look 列出房间地上可拾取物
+  - demo 闭环：广场剑/金币可拾取放下、对话买酒（`DialogueChoiceMade` 效果系统）
+    把麦酒真实转入背包
+- **引擎查询原语**：`SystemContext` / `CommandContext.world` 注入
+  `findByComponent(component)`（按组件查实体），容器查询的基础
+
+### 变更（破坏性）
+
+- **`Inventory { items: string[] }` 退役**（@mud/prefabs）：由 Located 实体模型取代
+- **`/give` 从引擎开发者命令移除**：其 inventory.items 约定随组件退役；物品版
+  开发者能力归 prefabs。`createDeveloperCommands()` 现为 `/tp /heal /dev-help`
+  （0.3.0 未发布到 npm，实际影响为零）
+
 ## [0.3.0] - 2026-09-02
 
 主题：**内容表达力 + 领域预制件**。路线图见 `docs/roadmap-0.3.md`。

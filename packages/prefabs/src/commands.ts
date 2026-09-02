@@ -1,12 +1,12 @@
 /**
- * @mud/prefabs 命令（0.3 toolkit）—— 移动 / 查看 / 背包 / 状态的官方命令
+ * @mud/prefabs 命令（0.3 toolkit）—— 移动 / 查看 / 物品 / 状态的官方命令
  *
  * 命令只翻译输入并 emit 事件，状态改动由对应系统完成（三条铁律）。
  */
-import { defineCommand } from '@mud/ecs-engine';
+import { defineCommand, Name } from '@mud/ecs-engine';
 import type { AnyCommand } from '@mud/ecs-engine';
-import { Moved, Look } from './events.js';
-import { Position, Inventory, Health } from './traits.js';
+import { Moved, Look, ItemTaken, ItemDropped } from './events.js';
+import { Position, Located, Health } from './traits.js';
 
 /** 移动命令：go/move/walk/走 <方向>，支持 n/s/e/w/北 等归一 */
 export const GoCommand = defineCommand({
@@ -49,7 +49,7 @@ export function createDirectionCommand(direction: string, verbs: string[]): AnyC
   });
 }
 
-/** 查看命令：look/l/看 <目标?>（无目标时查看所在房间） */
+/** 查看命令：look/l/看 <目标?>（无目标时查看所在房间与地上物品） */
 export const LookCommand = defineCommand({
   verbs: ['look', 'l', '看', '观察'],
   args: {
@@ -61,15 +61,44 @@ export const LookCommand = defineCommand({
   },
 });
 
-/** 背包命令：inventory/i/物品 <查看持有物品> */
+/** 拾取命令：take/get/拿/拾取 <物品>（从当前房间拿进背包） */
+export const TakeCommand = defineCommand({
+  verbs: ['take', 'get', '拿', '拾取'],
+  args: { item: { type: 'entity' } },
+  handle({ args, player, world }) {
+    if (!args.item) return '拿什么？';
+    const itemId = world.findEntity(args.item);
+    if (!itemId) return `这里没有「${args.item}」。`;
+    world.emit(ItemTaken, { player, item: itemId });
+    return null;
+  },
+});
+
+/** 放下命令：drop/put/放下/丢 <物品>（从背包放到当前房间） */
+export const DropCommand = defineCommand({
+  verbs: ['drop', 'put', '放下', '丢弃'],
+  args: { item: { type: 'entity' } },
+  handle({ args, player, world }) {
+    if (!args.item) return '放下什么？';
+    const itemId = world.findEntity(args.item);
+    if (!itemId) return `你没有「${args.item}」。`;
+    world.emit(ItemDropped, { player, item: itemId });
+    return null;
+  },
+});
+
+/** 背包命令：inventory/i/物品 <列出 Located.at == 玩家的物品> */
 export const InventoryCommand = defineCommand({
   verbs: ['inventory', 'i', '物品', '背包'],
   handle({ player, world }) {
-    const inv = world.getComponent(player, Inventory);
-    if (!inv || inv.items.length === 0) {
+    const names = world
+      .findByComponent(Located)
+      .filter((id) => world.getComponent(id, Located)?.at === player)
+      .map((id) => world.getComponent(id, Name)?.text ?? id);
+    if (names.length === 0) {
       return '你的背包是空的。';
     }
-    return `你的背包里有：${inv.items.join('、')}`;
+    return `你的背包里有：${names.join('、')}`;
   },
 });
 

@@ -16,3 +16,15 @@ export const Look = defineEvent('look')<{
   entity: EntityId;
   target?: string;
 }>();
+
+/** 拾取事件：{ player, item }（ItemSystem 校验后把物品放入玩家容器） */
+export const ItemTaken = defineEvent('item_taken')<{
+  player: EntityId;
+  item: EntityId;
+}>();
+
+/** 放下事件：{ player, item }（ItemSystem 把背包物品放到玩家当前房间） */
+export const ItemDropped = defineEvent('item_dropped')<{
+  player: EntityId;
+  item: EntityId;
+}>();

@@ -18,21 +18,25 @@ import {
 import {
   MovementSystem,
   DescriptionSystem,
+  ItemSystem,
   Health,
   Position,
-  Inventory,
   Description,
   Exits,
   Portable,
   Weapon,
+  Located,
   GoCommand,
   createDirectionCommand,
   LookCommand,
   InventoryCommand,
   ScoreCommand,
+  TakeCommand,
+  DropCommand,
 } from '@mud/prefabs';
 import { HelpCommand } from '../commands/help';
 import { BarkeepDialogue } from './dialogue';
+import { BarkeepEffectsSystem } from './effects';
 
 export interface BootstrapResult {
   world: World;
@@ -45,8 +49,14 @@ export function bootstrap(): BootstrapResult {
     maxEventsPerCommand: 1000,
   });
 
-  // 注册系统（prefabs 的移动/描述 + 引擎的对话）
-  world.register(MovementSystem, DescriptionSystem, DialogueSystem);
+  // 注册系统（prefabs 移动/描述/物品 + 引擎对话 + demo 效果）
+  world.register(
+    MovementSystem,
+    DescriptionSystem,
+    ItemSystem,
+    DialogueSystem,
+    BarkeepEffectsSystem,
+  );
 
   // 注册命令：开发者命令 + 对话 + prefabs 通用命令 + 四方向 + demo help
   world.registerCommands(
@@ -56,6 +66,8 @@ export function bootstrap(): BootstrapResult {
     LookCommand,
     InventoryCommand,
     ScoreCommand,
+    TakeCommand,
+    DropCommand,
     HelpCommand,
     createDirectionCommand('north', ['north', 'n', '北']),
     createDirectionCommand('south', ['south', 's', '南']),
@@ -67,7 +79,6 @@ export function bootstrap(): BootstrapResult {
   const playerId = world.entities.create();
   world.entities.addComponent(playerId, Health, { current: 100, max: 100 });
   world.entities.addComponent(playerId, Position, { roomId: 'town_square' });
-  world.entities.addComponent(playerId, Inventory, { items: [] });
   world.entities.addComponent(playerId, Name, { text: '冒险者' });
 
   // 创建房间
@@ -99,31 +110,35 @@ export function bootstrap(): BootstrapResult {
     world.entities.addComponent(roomId, Exits, room.exits);
   }
 
-  // 创建物品
-  const items = [
-    {
-      name: { text: '金币', aliases: ['银子', 'coin'] },
-      desc: { text: '一枚闪闪发光的金币。' },
-    },
-    {
-      name: { text: '生锈的剑', aliases: ['剑', 'sword'] },
-      desc: { text: '一把生锈的旧剑，但仍然锋利。' },
-      weapon: { damage: 6 },
-    },
-  ];
+  // 创建物品实体（0.3-C 容器模型：Located 单源位置，物品真实存在于世界）
+  const sword = world.entities.createWithId('sword');
+  world.entities.addComponent(sword, Name, {
+    text: '生锈的剑',
+    aliases: ['剑', 'sword'],
+  });
+  world.entities.addComponent(sword, Description, {
+    text: '一把生锈的旧剑，但仍然锋利。',
+  });
+  world.entities.addComponent(sword, Portable);
+  world.entities.addComponent(sword, Weapon, { damage: 6 });
+  world.entities.addComponent(sword, Located, { at: 'town_square' });
 
-  for (const item of items) {
-    const itemId = world.entities.create();
-    world.entities.addComponent(itemId, Name, item.name);
-    world.entities.addComponent(itemId, Description, item.desc);
-    world.entities.addComponent(itemId, Portable);
-    if ('weapon' in item) {
-      world.entities.addComponent(itemId, Weapon, item.weapon);
-    }
-  }
+  const gold = world.entities.createWithId('gold');
+  world.entities.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
+  world.entities.addComponent(gold, Description, { text: '一枚闪闪发光的金币。' });
+  world.entities.addComponent(gold, Portable);
+  world.entities.addComponent(gold, Located, { at: 'town_square' });
+
+  // 吧台上的麦酒：对话效果系统（BarkeepEffectsSystem）会把它递给买酒的玩家
+  const ale = world.entities.createWithId('ale');
+  world.entities.addComponent(ale, Name, { text: '麦酒', aliases: ['一杯麦酒'] });
+  world.entities.addComponent(ale, Description, { text: '一杯冒着细腻泡沫的麦酒。' });
+  world.entities.addComponent(ale, Portable);
+  world.entities.addComponent(ale, Located, { at: 'tavern' });
 
   // 创建 NPC（0.3-B 对话）：酒馆的酒保
-  // 注：NPC 不带 Position —— 房间与其中实体的归属关系是 0.3-C 容器系统的范畴。
+  // 注：NPC 不带 Position / Located —— 实体与容器的归属可视作"常驻"，容器模型
+  // 主要用于物品流转，NPC 归属留待有移动 NPC 需求时再扩展。
   const barmanId = world.entities.createWithId('barman');
   world.entities.addComponent(barmanId, Name, {
     text: '酒保',

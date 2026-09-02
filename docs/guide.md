@@ -342,7 +342,11 @@ it('休息回血不超过上限', () => {
 | | `w.emit(token, data)` / `w.runChain()` / `w.getLog()` | 驱动与断言 |
 | | `ManualClock` / `w.clock.advance(ms)` | 手动时钟 |
 
-**0.2 已实现**（写作时"尚未实现"的清单，现已全部落地）：定时系统（every + ctx.after）、逐系统错误策略（onError 三模式）、开发者命令（/tp /give /heal /dev-help）。另有录像重放（record/verifyReplay）与世界分叉（world.fork）两项确定性新能力——细节见 `packages/engine/README.md` 的 0.2 速览与 `CHANGELOG.md`。
+**0.2 已实现**（写作时"尚未实现"的清单，现已全部落地）：定时系统（every + ctx.after）、逐系统错误策略（onError 三模式）、开发者命令（/tp /heal /dev-help）。另有录像重放（record/verifyReplay）与世界分叉（world.fork）两项确定性新能力——细节见 `packages/engine/README.md` 的 0.2 速览与 `CHANGELOG.md`。
+
+**0.3 之后**：对话与 NPC（0.3-B）、@mud/prefabs 领域预制件与实体物品容器模型
+（0.3-C：Located 单源位置，/give 随 Inventory 退役迁出）见 `packages/engine/README.md`
+与 `docs/roadmap-0.3.md`。
 
 ---
 

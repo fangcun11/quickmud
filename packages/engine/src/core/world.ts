@@ -85,6 +85,8 @@ export class World {
       getEntity: (id: EntityId) => this.entities.get(id),
       getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) =>
         this.entities.getComponent(id, component),
+      findByComponent: <T>(component: ComponentDefinition<T>) =>
+        this.entities.findByComponent(component),
       output: {
         narrative: (textOrSegments: string | Segment[]) => {
           if (typeof textOrSegments === 'string') {
@@ -256,6 +258,8 @@ export class World {
         getEntity: (id: EntityId) => this.entities.get(id),
         getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) =>
           this.entities.getComponent(id, component),
+        findByComponent: <T>(component: ComponentDefinition<T>) =>
+          this.entities.findByComponent(component),
         findEntity: (name: string) => this.findEntityByName(name),
       },
     };

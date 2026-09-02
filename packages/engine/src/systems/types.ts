@@ -42,6 +42,8 @@ export interface SystemContext {
   getEntity: (id: EntityId) => Entity | undefined;
   /** 类型化组件读取（按 trait 定义，返回带类型的数据或 undefined） */
   getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) => T | undefined;
+  /** 按组件查询实体（容器查询等场景；返回拥有该组件的实体 id，创建序） */
+  findByComponent: <T>(component: ComponentDefinition<T>) => EntityId[];
   /** 输出消息 */
   output: {
     narrative: (textOrSegments: string | Segment[]) => void;

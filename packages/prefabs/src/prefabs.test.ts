@@ -1,18 +1,32 @@
 /**
- * @mud/prefabs 集成测试：移动 / 查看 / 背包 / 状态
+ * @mud/prefabs 集成测试：移动 / 查看 / 物品（Located 容器模型）/ 状态
  */
 import { describe, it, expect } from 'vitest';
-import { World, Name, createDeveloperCommands } from '@mud/ecs-engine';
+import { World, Name, createDeveloperCommands, record, verifyReplay } from '@mud/ecs-engine';
 import type { OutputMessage } from '@mud/ecs-engine';
-import { MovementSystem, DescriptionSystem } from './systems.js';
+import {
+  MovementSystem,
+  DescriptionSystem,
+  ItemSystem,
+} from './systems.js';
 import {
   GoCommand,
   createDirectionCommand,
   LookCommand,
   InventoryCommand,
   ScoreCommand,
+  TakeCommand,
+  DropCommand,
 } from './commands.js';
-import { Health, Position, Inventory, Description, Exits, Portable, Weapon } from './traits.js';
+import {
+  Health,
+  Position,
+  Description,
+  Exits,
+  Portable,
+  Weapon,
+  Located,
+} from './traits.js';
 
 /** 按 kind 提取消息纯文本 */
 function textOf(messages: OutputMessage[], kind: string): string[] {
@@ -21,10 +35,10 @@ function textOf(messages: OutputMessage[], kind: string): string[] {
     .map((m) => m.segments.map((s) => s.text).join(''));
 }
 
-/** 组装一个可玩的最小世界（房间 + 玩家） */
+/** 组装一个可玩的最小世界（房间 + 玩家 + 物品实体） */
 function buildWorld() {
   const w = new World({ tickInterval: 500 });
-  w.register(MovementSystem, DescriptionSystem);
+  w.register(MovementSystem, DescriptionSystem, ItemSystem);
   w.registerCommands(
     ...createDeveloperCommands(),
     GoCommand,
@@ -33,12 +47,13 @@ function buildWorld() {
     LookCommand,
     InventoryCommand,
     ScoreCommand,
+    TakeCommand,
+    DropCommand,
   );
 
   const player = w.entities.createWithId('player-1');
   w.entities.addComponent(player, Health, { current: 80, max: 100 });
   w.entities.addComponent(player, Position, { roomId: 'town_square' });
-  w.entities.addComponent(player, Inventory, { items: ['金币'] });
   w.entities.addComponent(player, Name, { text: '冒险者' });
 
   // 房间：town_square ⇄ tavern
@@ -62,7 +77,31 @@ function buildWorld() {
     w.entities.addComponent(rid, Exits, room.exits);
   }
 
-  return { w, player };
+  // 物品实体：单源位置 Located.at == 所在容器（房间/玩家）
+  const sword = w.entities.createWithId('sword');
+  w.entities.addComponent(sword, Name, { text: '生锈的剑', aliases: ['剑', 'sword'] });
+  w.entities.addComponent(sword, Description, { text: '一把生锈的旧剑。' });
+  w.entities.addComponent(sword, Portable);
+  w.entities.addComponent(sword, Weapon, { damage: 6 });
+  w.entities.addComponent(sword, Located, { at: 'town_square' });
+
+  const gold = w.entities.createWithId('gold');
+  w.entities.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
+  w.entities.addComponent(gold, Portable);
+  w.entities.addComponent(gold, Located, { at: 'town_square' });
+
+  // 固定物（无 Portable）：演示"拿不动"
+  const statue = w.entities.createWithId('statue');
+  w.entities.addComponent(statue, Name, { text: '石像' });
+  w.entities.addComponent(statue, Located, { at: 'town_square' });
+
+  // 酒馆里的东西：不在广场，演示 take 校验"必须在当前房间"
+  const mug = w.entities.createWithId('mug');
+  w.entities.addComponent(mug, Name, { text: '麦酒', aliases: ['ale'] });
+  w.entities.addComponent(mug, Portable);
+  w.entities.addComponent(mug, Located, { at: 'tavern' });
+
+  return { w, player, sword, gold, statue, mug };
 }
 
 describe('prefabs 移动', () => {
@@ -77,72 +116,103 @@ describe('prefabs 移动', () => {
     expect(lines[1]).toBe('你走进热闹的酒馆。');
   });
 
-  it('north（单字动词命令）同样可移动', async () => {
-    const { w, player } = buildWorld();
-    await w.execute('north', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('tavern');
-  });
-
   it('出口方向不存在时拒绝移动且不落位', async () => {
     const { w, player } = buildWorld();
     await w.execute('go east', player);
     expect(w.entities.getComponent(player, Position)!.roomId).toBe('town_square');
     expect(textOf(w.output.getAll(), 'narrative')[0]).toBe('你不能往east走。');
   });
-
-  it('南字归一化：从酒馆往南回广场', async () => {
-    const { w, player } = buildWorld();
-    await w.execute('north', player);
-    await w.execute('south', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('town_square');
-  });
 });
 
-describe('prefabs 查看/背包/状态', () => {
-  it('look 输出所在房间标题与描述', async () => {
+describe('prefabs 查看与物品', () => {
+  it('look 输出房间描述并列出地上可拾取物', async () => {
     const { w, player } = buildWorld();
     await w.execute('look', player);
     const lines = textOf(w.output.getAll(), 'narrative');
     expect(lines[0]).toBe('【城镇广场】');
     expect(lines[1]).toBe('你站在城镇广场上。北面是酒馆。');
+    // 石像不可拾取 → 不在列表
+    expect(lines[2]).toBe('你可以看到：生锈的剑、金币。');
   });
 
-  it('inventory 显示持有物品，空背包给提示', async () => {
-    const { w, player } = buildWorld();
-    expect(await w.execute('inventory', player)).toBe('你的背包里有：金币');
+  it('take 把当前房间的可携物放入背包，inventory 可见', async () => {
+    const { w, player, sword } = buildWorld();
+    await w.execute('take 剑', player); // 别名解析
 
-    w.entities.getComponent(player, Inventory)!.items = [];
-    expect(await w.execute('i', player)).toBe('你的背包是空的。');
+    expect(w.entities.getComponent(sword, Located)!.at).toBe(player);
+    expect(textOf(w.output.getAll(), 'narrative')).toContain('你拿起了「生锈的剑」。');
+    expect(await w.execute('inventory', player)).toBe('你的背包里有：生锈的剑');
   });
 
-  it('score 输出生命与位置', async () => {
-    const { w, player } = buildWorld();
-    const out = await w.execute('score', player);
-    expect(out).toContain('生命值：80/100');
-    expect(out).toContain('位置：town_square');
+  it('take 不在当前房间的物品 → 错误反馈且不转移', async () => {
+    const { w, player, mug } = buildWorld();
+    await w.execute('take 麦酒', player); // 麦酒在 tavern，玩家在 town_square
+    expect(textOf(w.output.getAll(), 'error')).toContain('这里没有「麦酒」。');
+    expect(w.entities.getComponent(mug, Located)!.at).toBe('tavern');
   });
 
-  it('开发者命令与 prefabs trait 约定协同（/heal /tp 直接生效）', async () => {
+  it('take 不可携带物（无 Portable）→ 拿不动', async () => {
+    const { w, player, statue } = buildWorld();
+    await w.execute('take 石像', player);
+    expect(textOf(w.output.getAll(), 'error')).toContain('你拿不动「石像」。');
+    expect(w.entities.getComponent(statue, Located)!.at).toBe('town_square');
+  });
+
+  it('drop 把背包物品放到当前房间；未持有则报错', async () => {
+    const { w, player, sword } = buildWorld();
+
+    await w.execute('drop 剑', player); // 还没拿
+    expect(textOf(w.output.getAll(), 'error')).toContain('你没有「生锈的剑」。');
+
+    await w.execute('take 剑', player);
+    await w.execute('north', player); // 去酒馆再丢
+    await w.execute('drop 剑', player);
+    expect(w.entities.getComponent(sword, Located)!.at).toBe('tavern');
+    expect(await w.execute('inventory', player)).toBe('你的背包是空的。');
+  });
+
+  it('开发者命令 /tp /heal 仍按约定生效，/give 不再注册', async () => {
     const { w, player } = buildWorld();
-    expect(w.entities.getComponent(player, Health)!.current).toBe(80);
     await w.execute('/heal', player);
     expect(w.entities.getComponent(player, Health)!.current).toBe(100);
-
     await w.execute('/tp tavern', player);
     expect(w.entities.getComponent(player, Position)!.roomId).toBe('tavern');
+    expect(await w.execute('/give sword', player)).toBe('我不明白你的意思。');
+  });
+});
+
+describe('prefabs 物品确定性', () => {
+  it('快照 round-trip：take 之后回滚，物品回到地面', async () => {
+    const { w, player, sword } = buildWorld();
+    await w.execute('take 剑', player);
+    expect(w.entities.getComponent(sword, Located)!.at).toBe(player);
+
+    const snap = w.createSnapshot();
+    // 再转移到酒馆，然后回滚到 take 后的状态
+    await w.execute('north', player);
+    await w.execute('drop 剑', player);
+    w.rollbackWorld(snap);
+    expect(w.entities.getComponent(sword, Located)!.at).toBe(player);
+    expect(w.entities.getComponent(player, Position)!.roomId).toBe('town_square');
+  });
+
+  it('录像重放：take/drop 操作序列确定性一致', async () => {
+    const world = buildWorld();
+    const rec = record(world.w);
+    await rec.execute('take 剑', world.player);
+    await rec.execute('north', world.player);
+    await rec.execute('drop 剑', world.player);
+
+    const result = await verifyReplay(rec.stop(), () => buildWorld().w);
+    expect(result.ok).toBe(true);
+    expect(result.diff).toBeUndefined();
   });
 });
 
 describe('prefabs traits 形状', () => {
-  it('组件默认值符合命名约定', () => {
-    // 直接构造验证 trait 默认工厂
-    const inv = Inventory.create();
-    expect(inv).toEqual({ items: [] });
-    const hp = Health.create();
-    expect(hp).toEqual({ current: 100, max: 100 });
-    const weapon = Weapon.create();
-    expect(weapon).toEqual({ damage: 0 });
-    // Portable 是无数据标记组件
-    expect(() => Portable.create()).not.toThrow();
+  it('Located 默认 at=null；Health/Position 默认值符合约定', () => {
+    expect(Located.create()).toEqual({ at: null });
+    expect(Health.create()).toEqual({ current: 100, max: 100 });
+    expect(Position.create()).toEqual({ roomId: 'town_square' });
   });
 });

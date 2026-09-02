@@ -62,7 +62,8 @@ ctx.after(3000, Explosion, { room: 'hall' });
 // 系统错误策略：不炸主链路的容错
 defineSystem({ name: 'render', on: [Moved.token], onError: 'degrade', handle /* ... */ });
 
-// 开发者命令：/tp /give /heal /dev-help（按 position/inventory/health 约定）
+// 开发者命令：/tp /heal /dev-help（按 position/health 约定；/give 自 0.3-C 起
+// 随 Inventory 退役而迁出，物品版开发命令归 @mud/prefabs）
 world.registerCommands(...createDeveloperCommands());
 
 // 录像重放：确定性回归的调试利器
@@ -117,6 +118,17 @@ const feedback = await world.execute('talk 酒保', playerId);
 - **确定性**：对话状态全部在组件上，快照/回滚/fork/录像重放天然一致（demo 完整对话
   流程已进录像重放测试）
 - 无 `options`（或全部被门控）的节点说完自动结束；NPC 需挂 `Memory` 才支持记忆
+
+## 0.3-C 容器查询原语
+
+`SystemContext` 与 `CommandContext.world` 均注入 **`findByComponent(component)`**
+（按组件查实体）。@mud/prefabs 的实体物品模型（Located 容器/背包）正构建在此之上：
+
+```ts
+// 查"玩家背包里有什么" = 拥有 Located 且 at == 玩家 的实体
+const items = ctx.findByComponent(Located)
+  .filter((id) => ctx.getComponent(id, Located)?.at === playerId);
+```
 
 ## 双模块格式
 

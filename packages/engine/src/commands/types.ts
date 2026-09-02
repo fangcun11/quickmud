@@ -78,6 +78,8 @@ export interface CommandContext<
     emit: TypedEmit;
     getEntity: (id: EntityId) => Entity | undefined;
     getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) => T | undefined;
+    /** 按组件查询实体（容器查询等场景） */
+    findByComponent: <T>(component: ComponentDefinition<T>) => EntityId[];
     findEntity: (name: string) => EntityId | undefined;
   };
 }
