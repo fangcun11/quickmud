@@ -19,7 +19,23 @@ export class EntityManager {
   private idCounter = 0;
 
   /**
-   * 创建新实体（确定性 ID：计数器生成，避免 nanoid 等随机源破坏模拟确定性）
+   * 获取当前 ID 计数器（快照用——"下一个 create() 返回什么"必须可由快照决定，
+   * 否则 fork/回滚后的世界与主世界拥有不同的未来）
+   */
+  getIdCounter(): number {
+    return this.idCounter;
+  }
+
+  /**
+   * 恢复 ID 计数器（快照恢复用）。计数器只进不退；
+   * 传入小于当前值的数会被忽略，保证不会复用一个已分配过的 ID。
+   */
+  setIdCounter(counter: number): void {
+    this.idCounter = Math.max(this.idCounter, counter);
+  }
+
+  /**
+   * 创建实体（确定性 ID：计数器生成，避免 nanoid 等随机源破坏模拟确定性）
    * @returns 新实体的ID
    */
   create(): EntityId {

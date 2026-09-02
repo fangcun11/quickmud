@@ -114,8 +114,7 @@ describe('D2 世界分叉（fork）', () => {
     expect(times).toEqual([500, 500]);
   });
 
-  it('性能基线：1000 实体 fork < 100ms（无 COW 的已知限制）', () => {
-    const main = new World();
+  it('性能基线：1000 实体 fork < 100ms（无 COW 的已知限制）', () => {    const main = new World();
     for (let i = 0; i < 1000; i++) {
       const id = main.entities.createWithId(`e-${i}`);
       main.entities.addComponent(id, Health, { current: i % 100, max: 100 });
@@ -129,5 +128,84 @@ describe('D2 世界分叉（fork）', () => {
     const elapsed = performance.now() - start;
     expect(forked.entities.getAll()).toHaveLength(1000);
     expect(elapsed).toBeLessThan(100);
+  });
+
+  it('R1: fork 继承实体 ID 计数器（删除实体后下一次 create() 与主世界一致）', () => {
+    const main = new World();
+    const a = main.entities.create(); // e1
+    main.entities.create();           // e2
+    main.entities.delete(a);          // e1 删除
+    const snap = main.createSnapshot();
+
+    // 从同一快照恢复出的世界必须与主世界拥有相同的"未来"：
+    // 下一次 create() 都应是 e3（而非 fork 世界从 0 起算得 e1）
+    const loaded = new World();
+    loaded.rollbackWorld(snap);
+    expect(loaded.entities.create()).toBe('e3');
+
+    const forked = main.fork();
+    expect(forked.entities.create()).toBe(main.entities.create());
+  });
+
+  it('R1: fork 世界触发延时事件不污染主世界尚未触发的载荷（pending data 深拷贝）', () => {
+    const main = new World({ tickInterval: 100 });
+    const Boom = defineEvent('boom')<{ box: number[] }>();
+    main.register(
+      defineSystem({
+        name: 'mutate',
+        on: [Boom.token],
+        handle(event) {
+          // 触发方修改载荷（模拟真实系统消费 payload 副作用）
+          (event.data as { box: number[] }).box.push(999);
+        },
+      }),
+    );
+    main.register(
+      defineSystem({
+        name: 'scheduler',
+        on: ['schedule'] as string[],
+        handle(_e, ctx) {
+          ctx.after(300, Boom.token, { box: [1] });
+        },
+      }),
+    );
+    main.eventPump.emit('schedule' as never, {});
+
+    const forked = main.fork();
+    forked.tick();
+    forked.tick();
+    forked.tick(); // fork 世界 t=300 → Boom 触发 → handler 往载荷 push 999
+
+    // 主世界的 pending 载荷必须仍是 [1]（修复前与 fork 共享引用 → [1,999]）
+    const mainPending = main.eventPump.getScheduled();
+    expect(mainPending).toHaveLength(1);
+    expect(mainPending[0]!.data).toEqual({ box: [1] });
+    expect(forked.eventPump.getScheduled()).toHaveLength(0);
+  });
+
+  it('R1: degrade 隔离态随 fork 继承（已降级系统不在分叉世界复活）', () => {
+    const log: string[] = [];
+    const main = new World();
+    main.register(
+      defineSystem({
+        name: 'boom',
+        on: ['boom'] as string[],
+        onError: 'degrade',
+        handle() {
+          log.push('boom');
+          throw new Error('boom error');
+        },
+      }),
+    );
+
+    main.eventPump.emit('boom' as never, {});
+    expect(log).toEqual(['boom']); // 已 degrade
+
+    const forked = main.fork();
+    // 主世界再次触发：不执行（已禁用）
+    main.eventPump.emit('boom' as never, {});
+    // 分叉世界同样应保持禁用，不得复活
+    forked.eventPump.emit('boom' as never, {});
+    expect(log).toEqual(['boom']);
   });
 });

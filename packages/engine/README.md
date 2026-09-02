@@ -14,7 +14,7 @@ MUD 文字游戏引擎核心 —— 事件驱动、ECS 架构、确定性模拟�
 npm install @mud/ecs-engine
 # 或从源码打包安装
 cd packages/engine && pnpm pack
-npm install ./mud-ecs-engine-0.2.0.tgz
+npm install ./mud-ecs-engine-0.4.0.tgz   # 版本号随 package.json
 ```
 
 ## 快速上手（ESM）
@@ -36,7 +36,7 @@ world.entities.addComponent(player, Name, { text: '韩立' });
 // 注册命令与系统，处理玩家输入
 world.register(...systems);
 world.registerCommands(...commands);
-const feedback = await world.execute('look', playerId); // async：支持异步命令
+const feedback = await world.execute('look', player); // async：支持异步命令
 ```
 
 > 注意：`world.execute()` 返回 `Promise<string | null>`——命令的 handle 允许为异步函数。

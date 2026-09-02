@@ -82,7 +82,10 @@ export class TestWorld {
     // 创建测试实体
     if (config.entities) {
       for (const entityDef of config.entities) {
-        const id = this.world.entities.create();
+        // 固定 id 应被尊重（此前被静默丢弃、一律 create() 计数 id）
+        const id = entityDef.id
+          ? this.world.entities.createWithId(entityDef.id)
+          : this.world.entities.create();
         if (entityDef.components) {
           for (const [componentId, data] of Object.entries(entityDef.components)) {
             // 暂时直接存储组件数据
@@ -105,9 +108,11 @@ export class TestWorld {
 
   /**
    * 发射事件
+   *
+   * 构造器已包装 eventPump.emit 统一记录日志，这里直接转发即可——
+   * 不要再次 push，否则与命令路径（只记一次）语义不一致。
    */
   emit<T>(token: EventToken, data: T): void {
-    this._eventLog.push(token);
     this.world.eventPump.emit(token, data);
   }
 

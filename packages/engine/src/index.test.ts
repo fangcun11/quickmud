@@ -300,6 +300,27 @@ describe('MUD Engine', () => {
 
     expect(await w.world.execute('probe-c', p)).toBe('p,room-x');
   });
+
+  /* ---------- R2 审查修复 ---------- */
+
+  it('R2: TestWorld.emit 事件日志只记录一次（与命令路径一致）', () => {
+    const w = createTestWorld();
+    w.emit(Damage.token, { target: 'x', amount: 1 });
+    expect(w.getLog()).toEqual([Damage.token]);
+
+    w.clearLog();
+    w.emit(Damage.token, { target: 'x', amount: 1 });
+    w.runChain();
+    expect(w.getLog()).toEqual([Damage.token]);
+  });
+
+  it('R2: createTestWorld entities 夹具支持固定 id（不再被静默丢弃）', () => {
+    const w = createTestWorld({
+      entities: [{ id: 'hero', components: { [Health.id]: { current: 10, max: 10 } } }],
+    });
+    expect(w.entities.has('hero')).toBe(true);
+    expect(w.entities.getComponent('hero', Health)).toEqual({ current: 10, max: 10 });
+  });
 });
 describe('FsBackend', () => {
   const backend = new FsBackend();

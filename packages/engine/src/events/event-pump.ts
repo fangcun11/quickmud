@@ -278,6 +278,30 @@ export class EventPump {
   }
 
   /**
+   * 获取被 degrade 隔离的订阅（token + 其在订阅数组中的下标）
+   *
+   * fork 继承用：订阅按 priority 稳定排序且注册顺序在 fork 时复现，
+   * 因此"主世界被禁的下标"在重注册后的分叉世界指向同一订阅。
+   */
+  getDisabled(): Array<{ token: EventToken; index: number }> {
+    const out: Array<{ token: EventToken; index: number }> = [];
+    for (const [token, subs] of this.subscriptions) {
+      subs.forEach((sub, i) => {
+        if (sub.disabled) out.push({ token, index: i });
+      });
+    }
+    return out;
+  }
+
+  /** 恢复 degrade 隔离（fork 继承用）：按下标禁用对应订阅 */
+  restoreDisabled(disabled: Array<{ token: EventToken; index: number }>): void {
+    for (const { token, index } of disabled) {
+      const sub = this.subscriptions.get(token)?.[index];
+      if (sub) sub.disabled = true;
+    }
+  }
+
+  /**
    * 重置事件计数器（新命令开始时调用）
    */
   resetEventCount(): void {

@@ -3,10 +3,12 @@ import type { TypedEmit } from '../events/types';
 
 /**
  * 参数定义
+ *
+ * 注：曾声明 `filter?(entity)` 实体过滤字段，但 parseArgs 从不执行
+ * （类型承诺 > 运行时现实，已删除）。目标约束请在各命令/系统内自行实现。
  */
 export interface ArgumentDefinition {
   type: 'entity' | 'optional_entity' | 'direction' | 'word' | 'rest';
-  filter?: (entity: Entity) => boolean;
 }
 
 /**

@@ -61,13 +61,17 @@ try {
     `
 import { World, Name } from '@mud/ecs-engine';
 import {
-  MovementSystem, DescriptionSystem, Health, Position, Exits, Description,
-  GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
+  MovementSystem, DescriptionSystem, ItemSystem, Health, Position, Exits, Description,
+  Located, Portable, GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
+  TakeCommand, DropCommand, LookCommand,
 } from '@mud/prefabs';
 
 const w = new World();
-w.register(MovementSystem, DescriptionSystem);
-w.registerCommands(GoCommand, createDirectionCommand('north', ['north']), InventoryCommand, ScoreCommand);
+w.register(MovementSystem, DescriptionSystem, ItemSystem);
+w.registerCommands(
+  GoCommand, createDirectionCommand('north', ['north']), createDirectionCommand('south', ['south']),
+  InventoryCommand, ScoreCommand, TakeCommand, DropCommand, LookCommand,
+);
 const p = w.entities.createWithId('player-1');
 w.entities.addComponent(p, Health, { current: 100, max: 100 });
 w.entities.addComponent(p, Position, { roomId: 'town' });
@@ -77,11 +81,31 @@ w.entities.addComponent(town, Description, { text: '小镇广场。' });
 w.entities.addComponent(town, Exits, { north: 'tavern' });
 const tavern = w.entities.createWithId('tavern');
 w.entities.addComponent(tavern, Name, { text: '酒馆' });
-w.entities.addComponent(tavern, Exits, {});
+w.entities.addComponent(tavern, Exits, { south: 'town' });
+// 实体物品：地上有一把剑
+const sword = w.entities.createWithId('sword');
+w.entities.addComponent(sword, Name, { text: '生锈的剑', aliases: ['剑', 'sword'] });
+w.entities.addComponent(sword, Portable);
+w.entities.addComponent(sword, Located, { at: 'town' });
+
 await w.execute('north', p);
 if (w.entities.getComponent(p, Position)?.roomId !== 'tavern') throw new Error('ESM 移动契约失败');
 const lines = w.output.getAll().map(m => m.segments.map(s => s.text).join(''));
 if (!lines.some(l => l.includes('酒馆'))) throw new Error('ESM 描述契约失败');
+// 0.3-C 物品链路：返回城镇 → take → inventory → drop → look 房间物品可见
+await w.execute('south', p);
+if (w.entities.getComponent(p, Position)?.roomId !== 'town') throw new Error('ESM 返回失败');
+w.output.clear();
+await w.execute('take 剑', p);
+if (w.entities.getComponent(sword, Located)?.at !== p) throw new Error('ESM take 契约失败');
+const inv = await w.execute('inventory', p);
+if (!inv.includes('生锈的剑')) throw new Error('ESM inventory 契约失败: ' + inv);
+await w.execute('drop 剑', p);
+if (w.entities.getComponent(sword, Located)?.at !== 'town') throw new Error('ESM drop 契约失败');
+w.output.clear();
+await w.execute('look', p);
+const lines2 = w.output.getAll().map(m => m.segments.map(s => s.text).join(''));
+if (!lines2.some(l => l.includes('生锈的剑'))) throw new Error('ESM look 物品列表契约失败');
 console.log('ESM 契约 ✓');
 `,
   );

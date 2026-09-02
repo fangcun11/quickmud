@@ -3,10 +3,11 @@
  *
  * 命令只翻译输入并 emit 事件，状态改动由对应系统完成（三条铁律）。
  */
-import { defineCommand, Name } from '@mud/ecs-engine';
+import { defineCommand } from '@mud/ecs-engine';
 import type { AnyCommand } from '@mud/ecs-engine';
 import { Moved, Look, ItemTaken, ItemDropped } from './events.js';
-import { Position, Located, Health } from './traits.js';
+import { Position, Health } from './traits.js';
+import { itemsInContainer, resolveInContainer, displayName } from './queries.js';
 
 /** 移动命令：go/move/walk/走 <方向>，支持 n/s/e/w/北 等归一 */
 export const GoCommand = defineCommand({
@@ -67,8 +68,15 @@ export const TakeCommand = defineCommand({
   args: { item: { type: 'entity' } },
   handle({ args, player, world }) {
     if (!args.item) return '拿什么？';
-    const itemId = world.findEntity(args.item);
+
+    const pos = world.getComponent(player, Position);
+    if (!pos) return '你不在任何地方。';
+
+    // 作用域解析：只认当前房间地上的物品（全局 findEntity 会因跨容器
+    // 同名物品遮蔽而把眼前的东西解析到别的房间）
+    const itemId = resolveInContainer(world, pos.roomId, args.item);
     if (!itemId) return `这里没有「${args.item}」。`;
+
     world.emit(ItemTaken, { player, item: itemId });
     return null;
   },
@@ -80,8 +88,14 @@ export const DropCommand = defineCommand({
   args: { item: { type: 'entity' } },
   handle({ args, player, world }) {
     if (!args.item) return '放下什么？';
-    const itemId = world.findEntity(args.item);
+
+    const pos = world.getComponent(player, Position);
+    if (!pos) return '你不在任何地方。';
+
+    // 作用域解析：只认自己背包里的物品
+    const itemId = resolveInContainer(world, player, args.item);
     if (!itemId) return `你没有「${args.item}」。`;
+
     world.emit(ItemDropped, { player, item: itemId });
     return null;
   },
@@ -91,10 +105,7 @@ export const DropCommand = defineCommand({
 export const InventoryCommand = defineCommand({
   verbs: ['inventory', 'i', '物品', '背包'],
   handle({ player, world }) {
-    const names = world
-      .findByComponent(Located)
-      .filter((id) => world.getComponent(id, Located)?.at === player)
-      .map((id) => world.getComponent(id, Name)?.text ?? id);
+    const names = itemsInContainer(world, player).map((id) => displayName(world, id));
     if (names.length === 0) {
       return '你的背包是空的。';
     }

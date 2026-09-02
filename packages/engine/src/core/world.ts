@@ -20,6 +20,14 @@ import type { Segment } from '../output/types';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySystemDefinition = SystemDefinition<unknown> | SystemDefinition<any>;
 
+/** 深拷贝（快照冻结视图用：组件与延时事件载荷都必须与活世界切断引用） */
+function deepClone<T>(value: T): T {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 /**
  * 世界配置
  */
@@ -208,6 +216,8 @@ export class World {
     if (this.commands.size > 0) {
       forked.registerCommands(...new Set(this.commands.values()));
     }
+    // degrade 隔离态随 fork 继承：已降级系统不在分叉世界复活
+    forked.eventPump.restoreDisabled(this.eventPump.getDisabled());
     forked.rollbackWorld(this.createSnapshot());
     return forked;
   }
@@ -389,7 +399,15 @@ export class World {
       registry: {},
       entities,
       worldTime: this.timeMs,
-      scheduler: { pendingEvents: this.eventPump.getScheduled() },
+      idCounter: this.entities.getIdCounter(),
+      scheduler: {
+        // data 同样深拷贝：延时事件载荷若与活世界共享引用，
+        // fork 世界触发修改会隔空污染主世界尚未触发的载荷
+        pendingEvents: this.eventPump.getScheduled().map((e) => ({
+          ...e,
+          data: deepClone(e.data),
+        })),
+      },
     };
   }
 
@@ -415,6 +433,7 @@ export class World {
 
     this.tickCount = snapshot.tickCount;
     this.timeMs = snapshot.worldTime ?? 0;
+    this.entities.setIdCounter(snapshot.idCounter ?? 0);
     this.eventPump.restoreScheduled(snapshot.scheduler?.pendingEvents ?? []);
   }
 
@@ -467,6 +486,9 @@ export class World {
    */
   tick(): void {
     this.tickCount++;
+    // 事件预算按 tick 重置：预算约束的是"一个 tick 内的事件风暴"，
+    // 而非跨 tick 无限累计（纯 tick 长跑的世界不应因累计超限崩溃）
+    this.eventPump.resetEventCount();
     const prevTime = this.timeMs;
     this.timeMs += this.tickInterval;
     this.eventPump.fireDue(this.timeMs);

@@ -9,21 +9,14 @@ import type { ArgumentDefinition, CommandDefinition } from './types';
  *
  * @example
  * ```typescript
- * const GetCommand = defineCommand({
- *   verbs: ['get', 'take', 'grab', '拿', '拾', '拾取', '捡'],
- *   abbrev: ['g'],
- *   args: {
- *     item: { type: 'entity', filter: (e) => e.isPortable },
- *     from: { type: 'optional_entity', filter: (e) => e.hasContainer },
+ * const GreetCommand = defineCommand({
+ *   verbs: ['greet', 'hi', '你好'],
+ *   args: { target: { type: 'optional_entity' } },
+ *   handle({ args, player, world }) {
+ *     world.emit(Greeted, { player, name: args.target ?? '陌生人' });
+ *     return null; // 反馈交给事件链末端产出
  *   },
- *   handle({ args, player, raw, world }) {
- *     if (args.from && !args.from.has(Contains(args.item))) {
- *       return `${args.item.name} 不在 ${args.from.name} 里。`;
- *     }
- *     world.emit(TakeCommand, { player, item: args.item, from: args.from });
- *     return null; // 反馈交给事件链末端渲染
- *   }
- * })
+ * });
  * ```
  */
 export function defineCommand<const A extends Record<string, ArgumentDefinition>>(

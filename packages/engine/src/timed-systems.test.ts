@@ -173,4 +173,31 @@ describe('A1 定时系统', () => {
     w.tick(); w.tick();
     expect(calls).toHaveBeenCalledTimes(1); // 不再执行
   });
+
+  it('R2: 事件预算按 tick 重置（纯 tick 长跑不因累计超限崩溃）', () => {
+    const w = new World({ tickInterval: 100, maxEventsPerCommand: 3 });
+    w.register(defineSystem({
+      name: 'noisy',
+      every: 100,
+      handle: (_p, ctx) => {
+        ctx.emit('noise', { n: 1 });
+      },
+    }));
+    // 修复前：事件计数在命令间不归零，第 4 个 tick 即抛 budget exceeded
+    expect(() => {
+      for (let i = 0; i < 10; i++) w.tick();
+    }).not.toThrow();
+  });
+
+  it('R2: 单个 tick 内仍受预算约束（每 tick 独立预算而非无上限）', () => {
+    const w = new World({ tickInterval: 100, maxEventsPerCommand: 3 });
+    w.register(defineSystem({
+      name: 'flood',
+      every: 100,
+      handle: (_p, ctx) => {
+        for (let i = 0; i < 4; i++) ctx.emit('noise', { n: i });
+      },
+    }));
+    expect(() => w.tick()).toThrow(/Event budget exceeded/);
+  });
 });

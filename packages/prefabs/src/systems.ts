@@ -12,12 +12,7 @@ import { defineSystem, Name } from '@mud/ecs-engine';
 import type { EntityId, SystemContext } from '@mud/ecs-engine';
 import { Moved, Look, ItemTaken, ItemDropped } from './events.js';
 import { Position, Exits, Description, Located, Portable } from './traits.js';
-
-/** 实体展示名（Name.text，缺省回退 id） */
-function nameOf(ctx: SystemContext, id: EntityId): string {
-  const text = ctx.getComponent(id, Name)?.text;
-  return text && text !== '' ? text : id;
-}
+import { itemsInContainer, resolveInContainer, displayName } from './queries.js';
 
 /** 处理实体移动（出口校验 + 落位 + 描述） */
 export const MovementSystem = defineSystem<{
@@ -57,7 +52,7 @@ export const MovementSystem = defineSystem<{
   },
 });
 
-/** 处理查看（输出所在房间的描述与地上可拾取物） */
+/** 处理查看（输出所在房间的描述与地上可拾取物；look <目标> 查看容器内物品详情） */
 export const DescriptionSystem = defineSystem<{
   entity: EntityId;
   target?: string;
@@ -66,10 +61,27 @@ export const DescriptionSystem = defineSystem<{
   on: [Look],
   priority: 0,
   handle(event, ctx) {
-    const { entity } = event.data;
+    const { entity, target } = event.data;
 
     const pos = ctx.getComponent(entity, Position);
     if (!pos) return;
+
+    // look <目标>：在当前房间容器内解析并输出详情
+    if (target !== undefined) {
+      const targetId = resolveInContainer(ctx, pos.roomId, target);
+      if (!targetId) {
+        ctx.output.error(`这里没有「${target}」。`);
+        return;
+      }
+      const targetName = displayName(ctx, targetId);
+      const targetDesc = ctx.getComponent(targetId, Description);
+      ctx.output.narrative(
+        targetDesc && targetDesc.text !== ''
+          ? targetDesc.text
+          : `「${targetName}」看起来没什么特别的。`,
+      );
+      return;
+    }
 
     const name = ctx.getComponent(pos.roomId, Name);
     const desc = ctx.getComponent(pos.roomId, Description);
@@ -84,15 +96,13 @@ export const DescriptionSystem = defineSystem<{
     }
 
     // 列地上可拾取物（Located.at == 房间 && Portable）
-    const groundItems = ctx
-      .findByComponent(Located)
-      .filter(
-        (id) =>
-          ctx.getComponent(id, Located)?.at === pos.roomId &&
-          ctx.getComponent(id, Portable) !== undefined,
-      );
+    const groundItems = itemsInContainer(ctx, pos.roomId).filter(
+      (id) => ctx.getComponent(id, Portable) !== undefined,
+    );
     if (groundItems.length > 0) {
-      ctx.output.narrative(`你可以看到：${groundItems.map((id) => nameOf(ctx, id)).join('、')}。`);
+      ctx.output.narrative(
+        `你可以看到：${groundItems.map((id) => displayName(ctx, id)).join('、')}。`,
+      );
     }
   },
 });
@@ -120,7 +130,10 @@ type TakeDrop = { player: EntityId; item: EntityId };
 
 function handleTake(ctx: SystemContext, { player, item }: TakeDrop): void {
   const pos = ctx.getComponent(player, Position);
-  if (!pos) return;
+  if (!pos) {
+    ctx.output.error('你不在任何地方。');
+    return;
+  }
 
   const loc = ctx.getComponent(item, Located);
   if (!loc || loc.at === null) {
@@ -128,28 +141,31 @@ function handleTake(ctx: SystemContext, { player, item }: TakeDrop): void {
     return;
   }
   if (loc.at !== pos.roomId) {
-    ctx.output.error(`这里没有「${nameOf(ctx, item)}」。`);
+    ctx.output.error(`这里没有「${displayName(ctx, item)}」。`);
     return;
   }
   if (ctx.getComponent(item, Portable) === undefined) {
-    ctx.output.error(`你拿不动「${nameOf(ctx, item)}」。`);
+    ctx.output.error(`你拿不动「${displayName(ctx, item)}」。`);
     return;
   }
 
   loc.at = player;
-  ctx.output.narrative(`你拿起了「${nameOf(ctx, item)}」。`);
+  ctx.output.narrative(`你拿起了「${displayName(ctx, item)}」。`);
 }
 
 function handleDrop(ctx: SystemContext, { player, item }: TakeDrop): void {
   const pos = ctx.getComponent(player, Position);
-  if (!pos) return;
+  if (!pos) {
+    ctx.output.error('你不在任何地方。');
+    return;
+  }
 
   const loc = ctx.getComponent(item, Located);
   if (!loc || loc.at !== player) {
-    ctx.output.error(`你没有「${nameOf(ctx, item)}」。`);
+    ctx.output.error(`你没有「${displayName(ctx, item)}」。`);
     return;
   }
 
   loc.at = pos.roomId;
-  ctx.output.narrative(`你放下了「${nameOf(ctx, item)}」。`);
+  ctx.output.narrative(`你放下了「${displayName(ctx, item)}」。`);
 }

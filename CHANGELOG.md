@@ -2,6 +2,38 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [Unreleased]
+
+### 修复（跨 0.3/0.4 全量审查产出，2026-09-02）
+
+**引擎（确定性边界）**
+- 实体 ID 计数器进快照：`SnapshotData.idCounter`，`rollbackWorld`/fork 后
+  `create()` 与主世界拥有相同的"未来"（此前 fork/读档世界从 0 起算，ID 分叉）
+- 快照的延时事件载荷（`scheduler.pendingEvents[].data`）深拷贝：
+  fork 世界触发修改不再隔空污染主世界尚未触发的载荷
+- **degrade 隔离态随 fork 继承**（`EventPump.getDisabled/restoreDisabled`）：
+  已降级系统不会在分叉世界复活
+- 事件预算按 tick 重置：纯 tick 长跑（start()/自动世界）不再因跨 tick 累计超限崩溃；
+  单 tick 内风暴仍受预算约束
+- `TestWorld.emit` 事件日志去重（此前与命令路径双记录，计数断言会误报）；
+  `createTestWorld` entities 夹具支持固定 id（不再静默丢弃）
+- `ArgumentDefinition.filter` 死承诺删除（parseArgs 从不执行，类型诚实化）；
+  `define-command` 误导性示例改写
+
+**@mud/prefabs（物品语义）**
+- **take/drop 改为容器作用域内解析**（`queries.ts`：resolveInContainer）：消除
+  跨容器同名物品被先创建者永久遮蔽的硬锁死（眼前的东西永远拿不到/放不下）
+- `look <目标>` 落地：查看当前房间容器内物品描述（此前 target 参数无人消费）
+- 玩家无 Position 时 take/drop 给出明确反馈（此前静默无输出）
+- 工程：vitest 直连引擎源码已配（前版）；契约冒烟补 0.3-C 物品链路
+  （take→inventory→drop→look，外部 dist 零验证的盲区补上）
+
+**demo / 文档**
+- 隔空买酒拦截：效果系统校验玩家在酒馆（对话命令的同室校验留待 NPC 归属）
+- help 文本与实际注册表对齐（补 go/开发者命令、quit 注明仅 REPL）
+- build-html.js 补 `@mud/prefabs` 源码 alias（此前 web bundle 混用陈旧 dist）
+- `Located` 误标 `@deprecated` 修正；engine README 版本/变量小错修正
+
 ## [0.4.0] - 2026-09-02
 
 主题：**实体物品容器模型**（`@mud/ecs-engine` 0.4.0 / `@mud/prefabs` 0.2.0）。

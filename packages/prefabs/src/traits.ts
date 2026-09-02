@@ -37,7 +37,8 @@ export const Position = trait('position', () => ({
  * "某容器里有什么" = 查询所有带 Located 且 at==容器的实体（配合
  * SystemContext / CommandContext 的 findByComponent）。
  *
- * @deprecated 曾用于背包的 `Inventory { items: string[] }` 已被本模型取代。
+ * 注意：0.1 时代曾用 `Inventory { items: string[] }` 表示背包（物品只是名字
+ * 字符串）；本组件取代了它——物品是真实实体，位置是单源真相。
  */
 export const Located = trait('located', () => ({
   at: null,

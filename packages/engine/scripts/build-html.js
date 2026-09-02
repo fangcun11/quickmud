@@ -42,6 +42,7 @@ async function main() {
     external: ['fs/promises', 'fs', 'path', 'node:path', 'node:fs/promises'],
     alias: {
       '@mud/ecs-engine': resolve(rootDir, 'packages/engine/src/index.ts'),
+      '@mud/prefabs': resolve(rootDir, 'packages/prefabs/src/index.ts'),
       '@mud/web-client': resolve(rootDir, 'packages/web-client/src/index.ts'),
     },
     define: {
