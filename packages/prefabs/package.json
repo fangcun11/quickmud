@@ -1,0 +1,44 @@
+{
+  "name": "@mud/prefabs",
+  "version": "0.1.0",
+  "description": "MUD 引擎开箱即用的领域预制件：移动/房间、查看/描述、背包、状态",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node_modules/.bin/tsc && node scripts/build.mjs",
+    "test": "node_modules/.bin/vitest run",
+    "test:watch": "node_modules/.bin/vitest",
+    "lint": "node_modules/.bin/eslint src --ext .ts",
+    "typecheck": "node_modules/.bin/tsc --noEmit",
+    "test:contract": "node scripts/contract-test.mjs"
+  },
+  "dependencies": {
+    "@mud/ecs-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1",
+    "esbuild": "^0.19.12",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

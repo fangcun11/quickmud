@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@mud/ecs-engine": "workspace:*",
+    "@mud/prefabs": "workspace:*",
     "@mud/web-client": "workspace:*"
   },
   "devDependencies": {

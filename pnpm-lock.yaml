@@ -13,6 +13,9 @@ importers:
       '@mud/ecs-engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@mud/prefabs':
+        specifier: workspace:*
+        version: link:../../packages/prefabs
       '@mud/web-client':
         specifier: workspace:*
         version: link:../../packages/web-client
@@ -28,6 +31,34 @@ importers:
         version: 5.9.3
 
   packages/engine:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.5
+        version: 20.19.43
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^6.19.0
+        version: 6.21.0(@typescript-eslint/parser@6.21.0)(eslint@8.57.1)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^6.19.0
+        version: 6.21.0(eslint@8.57.1)(typescript@5.9.3)
+      esbuild:
+        specifier: ^0.19.12
+        version: 0.19.12
+      eslint:
+        specifier: ^8.56.0
+        version: 8.57.1
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vitest:
+        specifier: ^1.2.1
+        version: 1.6.1(@types/node@20.19.43)
+
+  packages/prefabs:
+    dependencies:
+      '@mud/ecs-engine':
+        specifier: workspace:*
+        version: link:../engine
     devDependencies:
       '@types/node':
         specifier: ^20.11.5

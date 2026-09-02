@@ -1,0 +1,31 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "env": { "es2022": true, "node": true },
+  "parserOptions": { "sourceType": "module" },
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.object.name='Math'][callee.property.name='random']",
+        "message": "确定性约束：禁止 Math.random()。需要随机请走显式注入的种子 RNG。"
+      },
+      {
+        "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+        "message": "确定性约束：禁止 Date.now()。时间请走显式注入的时钟。"
+      },
+      {
+        "selector": "NewExpression[callee.name='Date']",
+        "message": "确定性约束：禁止 new Date()。时间请走显式注入的时钟。"
+      },
+      {
+        "selector": "CallExpression[callee.object.name='performance'][callee.property.name='now']",
+        "message": "确定性约束：禁止 performance.now()。"
+      }
+    ],
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }]
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "scripts/"]
+}

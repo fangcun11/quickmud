@@ -6,6 +6,20 @@
 
 ### 新增
 
+- **新包 `@mud/prefabs`（领域预制件，0.3 toolkit）**
+  - 分层决策：引擎只留能力原语与对话机制，**领域常用件外置**——移动/房间、
+    查看/描述、背包、状态从 demo 上移为正式库包，换游戏直接复用
+  - `traits.ts`：Health / Position / Inventory / Description / Exits / Portable /
+    Weapon（组件名即约定，引擎开发者命令 /tp /give /heal 的命名约定正式主人）
+  - `events.ts` / `systems.ts`：`Moved`+`MovementSystem`（出口校验、落位、描述）、
+    `Look`+`DescriptionSystem`
+  - `commands.ts`：`GoCommand`、`createDirectionCommand`、`LookCommand`、
+    `InventoryCommand`、`ScoreCommand`
+  - 质量门与 engine 同标准：确定性 ESLint 禁令、集成测试（9 个）、构建双格式、
+    外部契约测试（ESM/CJS/TS strict 全新安装）
+  - demo-adventure 改为消费 `@mud/prefabs`（bootstrap 只留世界观内容），
+    删除上移的重复源码（约 300 行）；REPL / Web 双端回归通过
+
 - **对话与 NPC（0.3-B 核心）**
   - `Dialogue` trait（对话树 + 活动指针）与 `Memory` trait（记忆 flags），组件数据纯 JSON 可序列化
   - `defineDialogue(entry, nodes)`：内容定义 + 校验（entry/to 引用、id 唯一，fail-fast）

@@ -1,20 +1,38 @@
 /**
  * 共享引导逻辑 - 消除 main.ts 与 main-web.ts 之间的重复代码
+ *
+ * 本文件只做"组装"，通用件全部来自预制件包：
+ * - 引擎能力：World / Name / 开发者命令 / 对话系统（@mud/ecs-engine）
+ * - 领域预制件：移动·房间 / 查看 / 背包 / 状态（@mud/prefabs）
+ * demo 剩下的只有世界观内容（房间、物品、酒保对话）与 HelpCommand。
  */
 import {
   World,
+  Name,
   createDeveloperCommands,
   createDialogueCommands,
   DialogueSystem,
   Dialogue,
   Memory,
 } from '@mud/ecs-engine';
+import {
+  MovementSystem,
+  DescriptionSystem,
+  Health,
+  Position,
+  Inventory,
+  Description,
+  Exits,
+  Portable,
+  Weapon,
+  GoCommand,
+  createDirectionCommand,
+  LookCommand,
+  InventoryCommand,
+  ScoreCommand,
+} from '@mud/prefabs';
+import { HelpCommand } from '../commands/help';
 import { BarkeepDialogue } from './dialogue';
-import { GoCommand, createDirectionCommand } from '../commands/movement';
-import { LookCommand, InventoryCommand, ScoreCommand, HelpCommand } from '../commands/info';
-import { MovementSystem } from '../systems/movement';
-import { DescriptionSystem } from '../systems/description';
-import { Health, Position, Inventory, Name, Description, Exits, Portable, Weapon } from './traits';
 
 export interface BootstrapResult {
   world: World;
@@ -27,22 +45,22 @@ export function bootstrap(): BootstrapResult {
     maxEventsPerCommand: 1000,
   });
 
-  // 注册系统
+  // 注册系统（prefabs 的移动/描述 + 引擎的对话）
   world.register(MovementSystem, DescriptionSystem, DialogueSystem);
 
-  // 注册命令
+  // 注册命令：开发者命令 + 对话 + prefabs 通用命令 + 四方向 + demo help
   world.registerCommands(
     ...createDeveloperCommands(),
     ...createDialogueCommands(),
     GoCommand,
-    createDirectionCommand('north', ['north', 'n', '北']),
-    createDirectionCommand('south', ['south', 's', '南']),
-    createDirectionCommand('east', ['east', 'e', '东']),
-    createDirectionCommand('west', ['west', 'w', '西']),
     LookCommand,
     InventoryCommand,
     ScoreCommand,
     HelpCommand,
+    createDirectionCommand('north', ['north', 'n', '北']),
+    createDirectionCommand('south', ['south', 's', '南']),
+    createDirectionCommand('east', ['east', 'e', '东']),
+    createDirectionCommand('west', ['west', 'w', '西']),
   );
 
   // 创建玩家
@@ -105,8 +123,7 @@ export function bootstrap(): BootstrapResult {
   }
 
   // 创建 NPC（0.3-B 对话）：酒馆的酒保
-  // 注意：NPC 实体不带 Position —— 房间与其中的实体分离是引擎的职责边界，
-  // 归属关系（C 容器与物品系统）是 roadmap 0.3 的后续项。
+  // 注：NPC 不带 Position —— 房间与其中实体的归属关系是 0.3-C 容器系统的范畴。
   const barmanId = world.entities.createWithId('barman');
   world.entities.addComponent(barmanId, Name, {
     text: '酒保',

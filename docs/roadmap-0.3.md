@@ -50,6 +50,20 @@
 - 依赖：B0 蓝图（物品定义）；风险较高（可能牵动核心数据结构），放 B 之后
 - 候选特性（按需评估）：`LocalStorageBackend` 浏览器端到端验证、输出渲染的 Web demo
 
+## D. 领域预制件包（@mud/prefabs）★ 已完成第一版（2026-09-02）
+
+分层决策：引擎只保留**能力原语**（ECS/确定性/快照/对话机制），**领域常用件外置**。
+
+- `@mud/prefabs` 0.1.0：移动/房间（MovementSystem + Moved + Go/方向命令）、查看/描述
+  （DescriptionSystem + Look）、背包（Inventory）、状态（Score）——从 demo 上移并产品化
+- 组件名即约定：`position/inventory/health` 等 trait 的正式主人，引擎开发者命令依赖它们
+- 质量门与 engine 同标准：确定性 ESLint 禁令、9 集成测试、双格式构建、外部契约测试
+- demo 改为消费该包（bootstrap 只留世界观内容），REPL/Web 回归通过
+
+后续预制件候选：实体容器/拾取（待 C 的 relation 支撑）、战斗/伤害、任务进度、NPC 巡逻
+（复用 engine every/错误策略）。
+
 ## 排期
 
-B0（0.5 天）→ B 核心（2026-09-02 当日完成）→ C（1~1.5 周）
+B0（0.5 天）→ B 核心（2026-09-02 完成）→ D 预制件包第一版（2026-09-02 完成）
+→ C 容器与物品（1~1.5 周）
