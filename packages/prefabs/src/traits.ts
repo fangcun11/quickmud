@@ -143,3 +143,49 @@ export type QuestLogData = {
   completed: string[];
   turnedIn: string[];
 };
+
+/**
+ * Buff 效果（v0.7-A，最小定时效果层）
+ *
+ * `every` 是该效果的结算间隔（毫秒）——实际粒度受 BuffSystem 的 every（1000）
+ * 限制，传小于 1000 的值不会更频繁。
+ */
+export type BuffEffect =
+  | { type: 'damage'; amount: number; every: number }
+  | { type: 'heal'; amount: number; every: number };
+
+/**
+ * Buff 本体（挂在 **buff 实体**上，指向受害者）
+ *
+ * Buff 是实体而非列表组件：与 Located 同哲学——一切皆实体、单源真相。
+ * "谁身上有什么 buff" = findByComponent(Afflicted) 一次查询；
+ * 快照/录像天然一致；未来的叠加/互斥（v0.8）不用改数据结构。
+ *
+ * `startedAt <= 0` 表示**待激活**：由 BuffSystem 在首个结算网格点写入世界时间，
+ * 内容层全程不需要感知时间（spawn 即忘）。`lastTickedAt` 是上次结算时间
+ * （自上次结算起计 effect.every，而非固定网格——避免 effect.every 与结算
+ * 粒度不对齐时重复结算）；两者都是组件数据，随快照回滚，确定性无损。
+ */
+export const Afflicted = trait('afflicted', () => ({
+  victim: null as EntityId | null,
+  effect: { type: 'damage', amount: 0, every: 1000 } as BuffEffect,
+  startedAt: 0,
+  lastTickedAt: 0,
+  /** 施加者（毒杀时 Died.killer 指向它） */
+  source: undefined as EntityId | undefined,
+}));
+
+/** Afflicted 组件数据类型 */
+export type AfflictedData = {
+  victim: EntityId | null;
+  effect: BuffEffect;
+  startedAt: number;
+  lastTickedAt: number;
+  source?: EntityId;
+};
+
+/** 持续时间组件：buff 实体不带它 = 永久（直到被显式移除/受害者死亡） */
+export const Duration = trait('duration', () => ({ lasts: 5000 }));
+
+/** Duration 组件数据类型 */
+export type DurationData = { lasts: number };

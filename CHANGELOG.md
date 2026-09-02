@@ -2,6 +2,51 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.7.0] - 2026-09-02
+
+主题：**Buff 系统 + 首个"纯内容"游戏**（`@mud/prefabs` 0.5.0；`@mud/ecs-engine`
+**停在 0.6.0**——本版引擎零改动，分层成功的标志）。无 breaking。
+
+### 新增（@mud/prefabs）
+
+- **最小 Buff 系统（定时效果层）**：`Afflicted`/`Duration` trait + `BuffSystem`
+  （every 1000 结算）+ `BuffCleanupSystem`（死亡清场，priority 50，管线中段）+
+  `buffBlueprint()` 蓝图工厂。**Buff 是实体不是列表组件**（与 `Located` 同哲学）：
+  `findByComponent(Afflicted)` 查询、structuredClone 快照天然安全、
+  未来的叠加/互斥（v0.8）不用改数据结构
+- 计时模型：内容层 `startedAt` 留 0（待激活），`BuffSystem` 首个结算网格写入世界
+  时间——**内容层零时间感知**（spawn 即忘）；结算自 `lastTickedAt` 起计
+  `effect.every`（固定网格在粒度不对齐时会重复结算，弃用）；到期那格不再结算；
+  `lasts <= 0` 表示永久
+- **毒杀走完整死亡管线**：HP 归零 emit `Died`（killer = buff 的 `source`）→
+  掉落/任务计数/清场全部照常生效
+- 事件：`BuffApplied`（激活）、`BuffTicked`（含截断后实际变化量 `applied`）、
+  `BuffExpired`（到期，销毁前）
+
+### 新增（example/mini-rpg，首个"纯内容"游戏）
+
+- 纵向切片：村庄（村长·任务 / 药婆·回春）→ 森林小径（野狼×2·掉狼皮）→
+  沼泽（进房上毒）→ 蛛巢洞穴（巨蛛 boss·毒攻击·掉传家宝）→ 回村交任务终局。
+  **内容全程不碰两个包的源码**——prefabs 分层的终极命题验证
+- 内容系统示范（全部只用公开 API）：
+  - 沼泽毒雾：订阅 `Moved` → 进沼泽上毒（区域效果；`Moved.to` 是**方向**，
+    判定要走 from 房间的 `Exits`）
+  - 巨蛛反击 + 毒攻：订阅 `Attack` 的**纯内容 boss AI**——反击 emit 标准
+    `Attack`（CombatSystem 结算、死亡管线全生效），被咬中上 `source` 蛛毒
+  - 药婆草药茶：对话选项（remember: tea）→ 回春 buff（酒保模式 + heal）
+  - 终局文案：订阅 `QuestTurnedIn` 的主线交付钩子
+- `content.test.ts` **自动通关**（六幕）：真实 World + `execute` 序列 +
+  手动 `world.tick()` 推进世界时间，无 sleep 无真实定时器——测试即通关录像，
+  内容包从此有 CI；HP 断言精确到结算次数（蛛毒每只 -4 / 沼毒每次 -9）
+- REPL 可玩（`pnpm --filter mini-rpg dev`）；根 `test` 脚本纳入 mini-rpg
+
+### 文档
+
+- prefabs README 增「Buff 系统（v0.7）」章节（实体哲学 + 规则一览表）
+- 契约测试补 buff 链路：ESM 冒烟（毒上低血怪 → 手动 tick → 毒杀掉落清场）、
+  CJS `buffBlueprint` 导出检查、TS strict 蓝图类型可用
+- 设计定稿与实现记录（含 4 个内容侧的坑）见 `docs/roadmap-0.7.md`
+
 ## [0.6.0] - 2026-09-02
 
 主题：**闭环——掉落 + 任务进度 + 可控时钟**（`@mud/ecs-engine` 0.6.0 / `@mud/prefabs` 0.4.0）。

@@ -30,6 +30,9 @@ import {
   QuestProgressed,
   QuestCompleted,
   QuestTurnedIn,
+  BuffApplied,
+  BuffTicked,
+  BuffExpired,
 } from './events.js';
 import {
   Position,
@@ -43,8 +46,10 @@ import {
   Loot,
   QuestGiver,
   QuestLog,
+  Afflicted,
+  Duration,
 } from './traits.js';
-import type { LootEntry, QuestDef, QuestLogData } from './traits.js';
+import type { LootEntry, QuestDef, QuestLogData, BuffEffect } from './traits.js';
 import {
   itemsInContainer,
   resolveInContainer,
@@ -472,6 +477,126 @@ function handleTurnIn(
       if (gained > 0) ctx.output.narrative(`你恢复了 ${gained} 点生命。`);
     }
   }
+}
+
+/**
+ * Buff 系统（v0.7-A）：定时效果结算 + 到期移除
+ *
+ * 与 NpcWanderSystem 同款 every 网格模式：由世界时间派生时相，快照/回滚/录像
+ * 天然一致。Buff 实体的 `startedAt <= 0` 表示待激活——首个结算网格写入世界时间，
+ * **内容层全程不需要感知时间**（spawn 即忘）。
+ *
+ * 毒杀走完整死亡管线：HP 归零 emit `Died`（killer = 施加者）→
+ * 掉落 / 任务计数 / BuffCleanup / DeathSystem 全部照常生效。
+ */
+export const BuffSystem = defineSystem({
+  name: 'prefab.buff',
+  every: 1000,
+  handle(payload, ctx) {
+    const time = (payload.data as { time: number }).time;
+
+    for (const buffId of ctx.findByComponent(Afflicted)) {
+      const buff = ctx.getComponent(buffId, Afflicted);
+      if (!buff) continue; // 毒杀时 Died 会在本循环中途同步排水清掉后续 buff——防御已删实体
+      const victim = buff.victim;
+      if (!victim) continue;
+
+      // 待激活：写入世界时间作为计时起点，本网格不结算
+      if (buff.startedAt <= 0) {
+        buff.startedAt = time;
+        buff.lastTickedAt = time;
+        ctx.emit(BuffApplied, { buff: buffId, victim });
+        continue;
+      }
+
+      // 到期判定优先于结算（到期那格不再造成伤害/回复）
+      const dur = ctx.getComponent(buffId, Duration);
+      if (dur && time - buff.startedAt >= dur.lasts) {
+        ctx.emit(BuffExpired, { buff: buffId, victim });
+        ctx.destroy(buffId);
+        continue;
+      }
+
+      const effect = buff.effect;
+      // 自上次结算起计 effect.every（不用固定网格：effect.every 与结算粒度
+      // 不对齐时，固定网格会让同一段窗口被结算两次）
+      if (time - buff.lastTickedAt < effect.every) continue;
+
+      const hp = ctx.getComponent(victim, Health);
+      if (!hp) continue; // 受害者没有生命 → 无从结算（留待清理）
+
+      if (effect.type === 'damage') {
+        const before = hp.current;
+        hp.current = Math.max(0, before - effect.amount);
+        const applied = before - hp.current;
+        if (applied > 0) {
+          ctx.output.narrative(`「${displayName(ctx, victim)}」受到持续伤害（-${applied} 生命）。`);
+        }
+        buff.lastTickedAt = time;
+        ctx.emit(BuffTicked, { buff: buffId, victim, effect, applied });
+        if (before > 0 && hp.current <= 0) {
+          const pos = ctx.getComponent(victim, Position);
+          ctx.emit(Died, { entity: victim, killer: buff.source, roomId: pos?.roomId });
+        }
+      } else {
+        const before = hp.current;
+        hp.current = Math.min(hp.max, before + effect.amount);
+        const applied = hp.current - before;
+        if (applied > 0) {
+          ctx.output.narrative(`「${displayName(ctx, victim)}」感到伤势在缓缓恢复（+${applied} 生命）。`);
+        }
+        buff.lastTickedAt = time;
+        ctx.emit(BuffTicked, { buff: buffId, victim, effect, applied });
+      }
+    }
+  },
+});
+
+/**
+ * Buff 清场（v0.7-A）：受害者死亡时销毁 ta 身上的所有 buff
+ *
+ * priority 50 = 死亡管线中段（掉落/任务之后、DeathSystem 清场之前）——
+ * 避免留下 victim 悬挂的孤儿 buff（与 Located 悬挂引用同款预防）。
+ */
+export const BuffCleanupSystem = defineSystem({
+  name: 'prefab.buff-cleanup',
+  on: [Died.token],
+  priority: 50,
+  handle(event, ctx) {
+    const { entity } = event.data as { entity: EntityId };
+    for (const buffId of ctx.findByComponent(Afflicted)) {
+      if (ctx.getComponent(buffId, Afflicted)?.victim === entity) {
+        ctx.destroy(buffId);
+      }
+    }
+  },
+});
+
+/**
+ * 构造一个 buff 实体蓝图（每次调用新建；供 ctx.spawn / world.spawn 使用）
+ *
+ * `lasts` <= 0 表示永久（不挂 Duration）。startedAt 留 0：由 BuffSystem 激活，
+ * 内容层不需要知道当前世界时间。
+ */
+export function buffBlueprint(opts: {
+  victim: EntityId;
+  effect: BuffEffect;
+  lasts: number;
+  source?: EntityId;
+}) {
+  const components: BlueprintComponentInput[] = [
+    [
+      Afflicted,
+      {
+        victim: opts.victim,
+        effect: opts.effect,
+        startedAt: 0,
+        source: opts.source,
+      },
+    ],
+  ];
+  if (opts.lasts > 0) components.push([Duration, { lasts: opts.lasts }]);
+  return blueprint({ components });
 }
 
 /**

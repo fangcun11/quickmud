@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter demo-adventure dev",
     "build": "pnpm --filter @mud/ecs-engine build && pnpm --filter @mud/prefabs build",
-    "test": "pnpm --filter @mud/ecs-engine test && pnpm --filter @mud/prefabs test",
+    "test": "pnpm --filter @mud/ecs-engine test && pnpm --filter @mud/prefabs test && pnpm --filter mini-rpg test",
     "test:contract": "pnpm --filter @mud/ecs-engine test:contract && pnpm --filter @mud/prefabs test:contract"
   },
   "engines": {

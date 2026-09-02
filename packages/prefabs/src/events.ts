@@ -83,3 +83,26 @@ export const QuestTurnedIn = defineEvent('quest_turned_in')<{
   giver: EntityId;
   questId: string;
 }>();
+
+/**
+ * buff 挂上（v0.7-A）：内容层 spawn buff 实体后，由 BuffSystem 首个网格激活时 emit
+ * （播报/统计钩子）
+ */
+export const BuffApplied = defineEvent('buff_applied')<{
+  buff: EntityId;
+  victim: EntityId;
+}>();
+
+/** buff 单次结算：{ applied } 为本次实际变化量（heal 截断后可能小于 amount） */
+export const BuffTicked = defineEvent('buff_ticked')<{
+  buff: EntityId;
+  victim: EntityId;
+  effect: import('./traits.js').BuffEffect;
+  applied: number;
+}>();
+
+/** buff 到期：Duration 走完，buff 实体即将销毁 */
+export const BuffExpired = defineEvent('buff_expired')<{
+  buff: EntityId;
+  victim: EntityId;
+}>();

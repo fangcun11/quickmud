@@ -62,13 +62,15 @@ try {
 import { World, Name } from '@mud/ecs-engine';
 import {
   MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem,
+  BuffSystem, BuffCleanupSystem,
   Health, Position, Exits, Description, Located, Portable, Loot, QuestGiver, QuestLog,
+  Afflicted, buffBlueprint,
   GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
   TakeCommand, DropCommand, LookCommand, AttackCommand, QuestCommand, TurnInCommand,
 } from '@mud/prefabs';
 
 const w = new World();
-w.register(MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem);
+w.register(MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem, BuffSystem, BuffCleanupSystem);
 w.registerCommands(
   GoCommand, createDirectionCommand('north', ['north']), createDirectionCommand('south', ['south']),
   InventoryCommand, ScoreCommand, TakeCommand, DropCommand, LookCommand, AttackCommand,
@@ -153,6 +155,29 @@ if (!w.entities.getComponent(p, QuestLog).turnedIn.includes('dog-hunt')) {
 }
 const bag = await w.execute('inventory', p);
 if (!bag.includes('麦酒')) throw new Error('ESM 任务奖励契约失败: ' + bag);
+// v0.7 buff 链路：毒上低血怪 → 手动 tick 推进世界时间 → 毒杀走完整死亡管线
+// （掉落照常、victim 身上的 buff 被清干净、killer 归属 source）
+const rat = w.entities.createWithId('rat');
+w.entities.addComponent(rat, Name, { text: '毒鼠' });
+w.entities.addComponent(rat, Position, { roomId: 'town' });
+w.entities.addComponent(rat, Health, { current: 8, max: 8 });
+w.entities.addComponent(rat, Loot, { drops: [{ name: '鼠尾草' }] });
+w.spawn(buffBlueprint({
+  victim: rat,
+  effect: { type: 'damage', amount: 3, every: 1000 },
+  lasts: 10000,
+  source: p,
+}));
+for (let i = 0; i < 12; i++) w.tick(); // t=6000：激活(1000) + 结算三次(2000/3000/4000 归零)
+if (w.entities.has('rat')) throw new Error('ESM 毒杀契约失败');
+const herbs = w.entities.findByComponent(Located).filter(
+  (id) => w.entities.getComponent(id, Located)?.at === 'town' && id !== 'sword',
+);
+if (herbs.length !== 1) throw new Error('ESM 毒杀掉落契约失败: ' + herbs.length);
+const leftovers = w.entities.findByComponent(Afflicted).filter(
+  (id) => w.entities.getComponent(id, Afflicted)?.victim === 'rat',
+);
+if (leftovers.length !== 0) throw new Error('ESM buff 清理契约失败');
 console.log('ESM 契约 ✓');
 `,
   );
@@ -166,6 +191,7 @@ console.log('ESM 契约 ✓');
 const engine = require('@mud/ecs-engine');
 const prefabs = require('@mud/prefabs');
 if (!prefabs.Health || !prefabs.MovementSystem || !prefabs.GoCommand) throw new Error('CJS 导出缺失');
+if (typeof prefabs.buffBlueprint !== 'function') throw new Error('CJS buffBlueprint 导出缺失');
 if (typeof prefabs.Health.create !== 'function') throw new Error('CJS 无法构造');
 console.log('CJS 契约 ✓');
 `,
@@ -192,7 +218,7 @@ console.log('CJS 契约 ✓');
     join(consumer, 'usage.ts'),
     `
 import { World, trait } from '@mud/ecs-engine';
-import { Health, Position, MovementSystem, GoCommand } from '@mud/prefabs';
+import { Health, Position, MovementSystem, GoCommand, buffBlueprint } from '@mud/prefabs';
 // trait 定义类型可用
 const hp = Health.create();
 const p: number = hp.current;
@@ -202,6 +228,13 @@ void pos;
 const w = new World();
 w.register(MovementSystem);
 w.registerCommands(GoCommand);
+// v0.7 buff 蓝图类型可用
+const bp = buffBlueprint({
+  victim: 'some-entity',
+  effect: { type: 'damage', amount: 1, every: 1000 },
+  lasts: 5000,
+});
+void bp;
 // 类型错误必须被捕获（此文件不应出现编译错误）
 export const _check: number = p;
 `,

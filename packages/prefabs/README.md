@@ -83,14 +83,17 @@ await world.execute('drop 金币', player);  // → 放回当前房间
 ## 模块组成
 
 - `src/traits.ts`：组件定义（Health/Position/Located/Description/Exits/Portable/Weapon/Wander/
-  Loot/QuestGiver/QuestLog）
+  Loot/QuestGiver/QuestLog/Afflicted/Duration）
 - `src/events.ts`：`Moved`、`Look`、`ItemTaken`、`ItemDropped`、`Attack`、`Died`、
-  `LootDropped`、`QuestStarted/Progressed/Completed/TurnedIn`
+  `LootDropped`、`QuestStarted/Progressed/Completed/TurnedIn`、
+  `BuffApplied/BuffTicked/BuffExpired`
 - `src/systems.ts`：`MovementSystem`、`DescriptionSystem`（含房间物品与活物列表）、
   `ItemSystem`（take/drop）、`CombatSystem`（伤害结算 + emit `Died`，**不再自己销毁**）、
   `LootSystem`（掉落结算）、`DeathSystem`（死亡管线末端清场）、
   `QuestSystem`（任务进度 + 交付发奖）、
-  `NpcWanderSystem`（`Wander` + `Position` 实体按 every 时钟确定性巡逻）
+  `NpcWanderSystem`（`Wander` + `Position` 实体按 every 时钟确定性巡逻）、
+  `BuffSystem`（定时效果结算 + 到期移除）、`BuffCleanupSystem`（死亡清 buff）、
+  `buffBlueprint()`（buff 实体蓝图工厂）
 - `src/commands.ts`：`GoCommand`、`createDirectionCommand`、`LookCommand`、
   `TakeCommand`、`DropCommand`、`InventoryCommand`、`ScoreCommand`、`AttackCommand`、
   `QuestCommand`、`TurnInCommand`
@@ -169,6 +172,41 @@ world.registerCommands(QuestCommand, TurnInCommand);
 | 查询 | `quests` 列出当前房间 NPC 的任务与进度（0/x、已完成、已交付） |
 
 不引入随机掉落——概率需要确定性伪随机设计（seed 来源），单开一版再做。
+
+## Buff 系统（v0.7）
+
+**Buff 是实体，不是列表组件**（与 `Located` 同哲学）：每个 buff 是一个挂
+`Afflicted` 的实体，指向受害者。查询"谁身上有什么"= `findByComponent(Afflicted)`，
+快照天然安全，死亡清场只需订阅 `Died` 销毁 buff 实体。
+
+```ts
+import { BuffSystem, BuffCleanupSystem, buffBlueprint } from '@mud/prefabs';
+
+world.register(BuffSystem, BuffCleanupSystem);   // 与死亡管线一起注册
+
+// 内容侧唯一入口：构造蓝图 → ctx.spawn / world.spawn（spawn 即忘）
+world.spawn(buffBlueprint({
+  victim: player,
+  effect: { type: 'damage', amount: 3, every: 2000 },  // 或 { type: 'heal', ... }
+  lasts: 8000,          // 毫秒，自激活起；<= 0 表示永久
+  source: spiderId,     // 可选：毒杀时 Died.killer 归属 ta
+}));
+```
+
+规则一览：
+
+| 规则 | 说明 |
+| --- | --- |
+| 计时起点 | 内容层 `startedAt` 留 0（待激活），`BuffSystem` 首个结算网格写入世界时间——**内容层零时间感知** |
+| 结算 | 自 `lastTickedAt` 起计 `effect.every`，`damage` 扣血 / `heal` 回血（截断在 0..max） |
+| 毒杀 | HP 归零 → emit `Died`（killer = `source`）→ **走完整死亡管线**（掉落/任务/清场全生效） |
+| 到期 | 挂 `Duration` 的到期那格**不再结算**，emit `BuffExpired` 后销毁 |
+| 死亡清场 | `BuffCleanupSystem`（on `Died`，priority 50）：销毁死者身上全部 buff，不留孤儿 |
+| 事件 | `BuffApplied`（激活）/ `BuffTicked`（含实际变化量 `applied`）/ `BuffExpired` |
+| 确定性 | 与 `NpcWanderSystem` 同款 every 网格时相——快照/回滚/录像/分叉天然一致 |
+
+> 本版是**定时效果层**（最小 Buff）。属性修正（+攻/-防）、叠加/互斥/驱散属于
+> "属性层"复杂度，等真实内容逼出需求后再做。
 
 ## 开发
 
