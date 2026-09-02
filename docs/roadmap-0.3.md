@@ -108,4 +108,30 @@ dev-commands 变更回归。demo REPL + Web 双端回归。
 
 B0（0.5 天）→ B 核心（2026-09-02 完成）→ D 预制件包第一版（2026-09-02 完成）
 → C 容器与物品（2026-09-02 完成，路线 A：Located 实体物品 + take/drop + 对话给物）
-→ 候选：NPC 巡逻/战斗伤害/任务进度（复用 engine every/错误策略）
+
+## v0.5.0 窗口（下一开发日）
+
+两条主线并行推进，一次发版。**含 breaking**（0.4.x 未 publish，窗口内先完成 0.4.x 收尾评审再动）。
+
+### 主线 1：会"活"的世界（内容表达力第二步）
+
+- **战斗 / 伤害 / 死亡**（prefabs）：Damage 事件 + 血条结算、攻击命令（attack/kill）、
+  死亡清场（实体置 null 位置 + 掉落物回容器）
+- **NPC 巡逻**（prefabs + engine every）：NPC 挂移动意向组件，`every` 驱动按 Exits 漫游；
+  **第一次让定时系统真正驱动游戏内容**（此前 every 只有引擎测试）
+- 依赖：C 的 Located 容器模型（掉落物放回房间）、B0 spawn（NPC 生成）
+
+### 主线 2：API 评审 B/C 批（docs/api-review-2026-09-02.md）
+
+- **`ctx.spawn` 注入**（SystemContext/CommandContext 桥接 World.spawn）——补上"系统内
+  造物"能力缺口：战斗掉落、对话产出、NPC 刷怪都不再需要预置实体 hack
+- **`trait` 支持对象模板**：`trait('x', {默认数据})` 运行时归一为"每次 create 深拷贝
+  新实例"，与工厂形态语义统一（消除 README 曾经教错的形态陷阱）
+- **测试工具统一 `@mud/ecs-engine/testing` 子路径**，主入口清理测试件
+- **`register` / `registerCommands` 支持数组参数**（flatten，忘展开不再静默炸）
+- C 批死承诺清理：`validate` / `schema` / `quests` / `OutputPort` 实现或删除
+
+### 验证门
+
+新增行为全部走录像重放/金测试；prefabs 契约冒烟补战斗链路；demo 加战斗/NPC 演示；
+文档示例随 guide 双验证机制（tsc + 运行）同步。
