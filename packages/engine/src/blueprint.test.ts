@@ -72,4 +72,24 @@ describe('B0 蓝图预制件', () => {
       w.spawn(Goblin, { id: 'ok', patch: { health: { current: 1 } } }),
     ).not.toThrow();
   });
+
+  it('同蓝图 spawn 的实体组件互不共享引用（改一个不污染另一个）', () => {
+    const w = new World();
+    const a = w.spawn(Goblin, { id: 'gob-a' });
+    const b = w.spawn(Goblin, { id: 'gob-b' });
+
+    // 同蓝图两次 spawn：各自持有独立的数据副本
+    expect(w.entities.getComponent(a, Health)).not.toBe(w.entities.getComponent(b, Health));
+    w.entities.getComponent(a, Health)!.current = 1;
+    expect(w.entities.getComponent(b, Health)!.current).toBe(30);
+  });
+
+  it('同一蓝图 spawn 不反向污染蓝图本身（再次 spawn 得到全新数据）', () => {
+    const w = new World();
+    w.spawn(Goblin, { id: 'x' });
+    w.entities.getComponent('x', Health)!.current = 999;
+    // 蓝图仍应是 { current: 30 }：spawn 过程不反向改写蓝图对象
+    const y = w.spawn(Goblin, { id: 'y' });
+    expect(w.entities.getComponent(y, Health)!.current).toBe(30);
+  });
 });

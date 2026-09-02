@@ -28,6 +28,21 @@ import type { ComponentDefinition, EntityId } from './types';
 import { trait } from './trait';
 import { Name } from './name';
 
+/**
+ * 深拷贝（蓝图数据挂到实体前使用）
+ *
+ * 与快照恢复（restoreComponent）同一语义：蓝图是共享的纯数据定义，
+ * 直接挂引用会让同蓝图多次 spawn 出的实体共享同一对象——改 A 的
+ * 组件会"隔空"污染 B，也与「蓝图不可变」的承诺相悖。
+ * structuredClone 不可用时 JSON 兜底。
+ */
+function deepClone<T>(value: T): T {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 /** 蓝图组件项：trait 定义 + 实例数据（data 缺省用 trait 工厂默认值） */
 export interface BlueprintComponent<T = unknown> {
   trait: ComponentDefinition<T>;
@@ -138,7 +153,8 @@ export function spawnBlueprint(
       patchEntry && typeof base === 'object' && base !== null
         ? { ...(base as Record<string, unknown>), ...patchEntry }
         : patchEntry ?? base;
-    world.entities.addComponent(entityId, entry.trait, patchData as never);
+    // 深拷贝后再挂载：同蓝图多次 spawn 的实体互不共享引用
+    world.entities.addComponent(entityId, entry.trait, deepClone(patchData) as never);
   }
 
   if (bp.name) {
@@ -149,7 +165,7 @@ export function spawnBlueprint(
     if (existing) {
       existing.text = bp.name;
     } else {
-      world.entities.addComponent(entityId, Name, { text: bp.name, aliases: [] });
+      world.entities.addComponent(entityId, Name, deepClone({ text: bp.name, aliases: [] }));
     }
   }
 

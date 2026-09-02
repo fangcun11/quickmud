@@ -37,7 +37,9 @@ async function main() {
     write: false,
     minify: false,
     sourcemap: false,
-    external: ['fs/promises', 'fs', 'path'],
+    // node: 前缀与无前缀都要 external（FsBackend 用 import('node:path') 形式；
+    // 浏览器端只走 LocalStorageBackend，FsBackend 分支运行时永不触发）
+    external: ['fs/promises', 'fs', 'path', 'node:path', 'node:fs/promises'],
     alias: {
       '@mud/ecs-engine': resolve(rootDir, 'packages/engine/src/index.ts'),
       '@mud/web-client': resolve(rootDir, 'packages/web-client/src/index.ts'),
