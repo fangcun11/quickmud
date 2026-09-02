@@ -2,7 +2,9 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
-## [Unreleased]
+## [0.4.0] - 2026-09-02
+
+主题：**实体物品容器模型**（`@mud/ecs-engine` 0.4.0 / `@mud/prefabs` 0.2.0）。
 
 ### 新增
 
