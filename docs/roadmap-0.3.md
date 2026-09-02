@@ -43,13 +43,6 @@
 **后续候选**（按需）：效果系统示范（经 DialogueChoiceMade 给物品）、
 多轮记忆记录（时间戳/历史栈）、对话树复用与共享（内容外置注册表）。
 
-## C. 容器与物品系统
-
-- `relation()` 的系统级支持：容器/背包/房间归属
-- 涉及：实体生命周期（容器内实体激活语义）、`findEntity` 层级查找、快照对关系的序列化
-- 依赖：B0 蓝图（物品定义）；风险较高（可能牵动核心数据结构），放 B 之后
-- 候选特性（按需评估）：`LocalStorageBackend` 浏览器端到端验证、输出渲染的 Web demo
-
 ## D. 领域预制件包（@mud/prefabs）★ 已完成第一版（2026-09-02）
 
 分层决策：引擎只保留**能力原语**（ECS/确定性/快照/对话机制），**领域常用件外置**。
@@ -60,10 +53,58 @@
 - 质量门与 engine 同标准：确定性 ESLint 禁令、9 集成测试、双格式构建、外部契约测试
 - demo 改为消费该包（bootstrap 只留世界观内容），REPL/Web 回归通过
 
-后续预制件候选：实体容器/拾取（待 C 的 relation 支撑）、战斗/伤害、任务进度、NPC 巡逻
+后续预制件候选：实体容器/拾取（C 路线 A 已定规格，见下）、战斗/伤害、任务进度、NPC 巡逻
 （复用 engine every/错误策略）。
+
+## C. 容器与物品系统 ★ 设计定稿（待实现）
+
+### 目标
+
+让物品成为**真实存在于世界的实体**：能放在房间地上、能被拾起/放下、能被装进背包与容器、
+能被对话效果送出——形成完整可玩闭环。当前 `Inventory.items: string[]` 只是物品名字，谈不上物品。
+
+### 数据模型（路线 A：语义放 prefabs，引擎核心零改动）
+
+- **新增 `Located { at: EntityId | null }`**（prefabs trait）：物品实体的**单源位置**。
+  `at` = 所在容器实体 id（房间/玩家/箱子都只是普通实体，均可作容器）。
+  `null` = 虚无（预留，一般不用）
+- **移除 `Inventory { items: string[] }`**：玩家背包 = "`Located.at == 玩家` 的物品集合"。
+  查询用 `entities.findByComponent(Located)` 过滤 + 取 `Name`，O(n) 对 demo/中型世界足够
+- breaking 成本 ≈ 0：prefabs 还是 0.1.0 未发布；改动面 = prefabs + demo + 引擎 dev-commands
+
+### 分层修正（关键决策，需确认）
+
+`createDeveloperCommands` 的 `/give` 按 `inventory.items` 写字符串——在新模型下该组件不复存在，
+**引擎实现无法（也不该）依赖 prefabs 的 Located 语义**。方案：
+
+- `/give` 从 engine 的 `createDeveloperCommands()` 移除（0.3.0 刚 tag 未 publish npm，
+  实际影响为零），记录为 breaking
+- 物品版开发者命令（如 `/make <name> [n]`：创建实体并放入玩家容器）放 prefabs，
+  作为"物品开箱即用"的一部分
+- engine 保留 `/tp /heal`（health/position 约定不变）与 `/dev-help`
+
+### 命令与事件（prefabs 新增）
+
+| 命令 | 语义 |
+| --- | --- |
+| `take <物品>` | 物品实体 `Located.at` = 当前房间 && Portable → 改为玩家 id；emit `ItemTaken` |
+| `drop <物品>` | 背包中物品 → `Located.at` 改为当前房间；emit `ItemDropped` |
+| `inventory` | 列出玩家容器中的物品名（替代读 Inventory.items） |
+| `look`（增强） | 当前房间内可拾取物品列表追加到描述输出 |
+
+### demo 闭环（对话效果第一次真正落地）
+
+- 酒馆容器预置"麦酒"实体；`BarkeepEffectsSystem` 订阅 `DialogueChoiceMade`，
+  玩家点了"来一杯麦酒"→ 把麦酒移到玩家容器
+- 广场预置剑/金币 → look 可见 → take → inventory 可见 → drop 回地面
+
+### 质量门
+
+Located 只是组件数据，快照/回滚/录像天然一致。测试覆盖：拾取/放下转移、
+房间物品列表、take 不存在的物品、容器间转移、快照 round-trip、录像重放、
+dev-commands 变更回归。demo REPL + Web 双端回归。
 
 ## 排期
 
 B0（0.5 天）→ B 核心（2026-09-02 完成）→ D 预制件包第一版（2026-09-02 完成）
-→ C 容器与物品（1~1.5 周）
+→ C 容器与物品（路线 A，规格已定，待实现）
