@@ -93,6 +93,13 @@ export class World {
             this.output.narrative(textOrSegments);
           }
         },
+        dialogue: (textOrSegments: string | Segment[]) => {
+          if (typeof textOrSegments === 'string') {
+            this.output.dialogue([{ text: textOrSegments }]);
+          } else {
+            this.output.dialogue(textOrSegments);
+          }
+        },
         error: (text: string) => this.output.error(text),
         status: (data: unknown) => this.output.status(data),
       },

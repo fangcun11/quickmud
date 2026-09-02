@@ -37,3 +37,9 @@ export { createTestWorld, TestWorld, ManualClock } from './testing/index';
 export { record, replay, verifyReplay, WorldRecorder, firstDiff } from './debug/recorder';
 export { TICK_TOKEN } from './core/world';
 export type { Recording, RecordedOp, ReplayResult } from './debug/recorder';
+
+// 对话与 NPC（0.3-B）
+export { Dialogue, Memory, defineDialogue, DialogueTalk, DialogueChoose, DialogueChoiceMade } from './dialogue/traits';
+export type { DialogueData, DialogueNode, DialogueOption, MemoryData } from './dialogue/traits';
+export { DialogueSystem } from './dialogue/system';
+export { createDialogueCommands } from './dialogue/commands';

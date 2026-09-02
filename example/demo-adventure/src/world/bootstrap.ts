@@ -1,7 +1,15 @@
 /**
  * 共享引导逻辑 - 消除 main.ts 与 main-web.ts 之间的重复代码
  */
-import { World, createDeveloperCommands } from '@mud/ecs-engine';
+import {
+  World,
+  createDeveloperCommands,
+  createDialogueCommands,
+  DialogueSystem,
+  Dialogue,
+  Memory,
+} from '@mud/ecs-engine';
+import { BarkeepDialogue } from './dialogue';
 import { GoCommand, createDirectionCommand } from '../commands/movement';
 import { LookCommand, InventoryCommand, ScoreCommand, HelpCommand } from '../commands/info';
 import { MovementSystem } from '../systems/movement';
@@ -20,11 +28,12 @@ export function bootstrap(): BootstrapResult {
   });
 
   // 注册系统
-  world.register(MovementSystem, DescriptionSystem);
+  world.register(MovementSystem, DescriptionSystem, DialogueSystem);
 
   // 注册命令
   world.registerCommands(
     ...createDeveloperCommands(),
+    ...createDialogueCommands(),
     GoCommand,
     createDirectionCommand('north', ['north', 'n', '北']),
     createDirectionCommand('south', ['south', 's', '南']),
@@ -94,6 +103,20 @@ export function bootstrap(): BootstrapResult {
       world.entities.addComponent(itemId, Weapon, item.weapon);
     }
   }
+
+  // 创建 NPC（0.3-B 对话）：酒馆的酒保
+  // 注意：NPC 实体不带 Position —— 房间与其中的实体分离是引擎的职责边界，
+  // 归属关系（C 容器与物品系统）是 roadmap 0.3 的后续项。
+  const barmanId = world.entities.createWithId('barman');
+  world.entities.addComponent(barmanId, Name, {
+    text: '酒保',
+    aliases: ['bartender', '老王'],
+  });
+  world.entities.addComponent(barmanId, Description, {
+    text: '一个系着围裙的中年男人，正用抹布擦着杯子。',
+  });
+  world.entities.addComponent(barmanId, Dialogue, BarkeepDialogue);
+  world.entities.addComponent(barmanId, Memory, { flags: [] });
 
   return { world, playerId };
 }

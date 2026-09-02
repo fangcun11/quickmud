@@ -70,6 +70,7 @@ export const HelpCommand = defineCommand({
       '  west  (w/西)    - 向西移动',
       '  inventory (i/物品) - 查看背包',
       '  score (状态)    - 查看状态',
+      '  talk/ask (说/对话) - 与 NPC 对话（如 talk 酒保；选项用 talk 酒保 1）',
       '  help (帮助)     - 显示帮助',
       '  quit (退出)     - 退出游戏',
     ].join('\n');

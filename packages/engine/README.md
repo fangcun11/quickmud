@@ -79,6 +79,45 @@ await sandbox.execute('attack boss', player); // 主世界纹丝不动
 输出渲染：`renderAnsi` / `renderSemanticHtml` / `renderPlainText`（纯函数，语义化消息 → 终端/Web/日志）。
 完整新手指南见仓库根 `docs/guide.md`；变更明细见 `CHANGELOG.md`。
 
+## 0.3-B 对话与 NPC
+
+分支对话开箱即用：内容内联代码（纯数据），条件与记忆用 flags，组件可快照/回滚/存档。
+
+```ts
+import {
+  Dialogue, Memory, defineDialogue, DialogueSystem, createDialogueCommands,
+} from '@mud/ecs-engine';
+
+// 1. 定义对话树（to 跳转 / requires 门控 / remember 记忆 / reply 收尾）
+const tree = defineDialogue('start', [
+  { id: 'start', text: '欢迎光临酒馆。', options: [
+    { text: '打听传闻', to: 'rumor', requires: ['patron'] }, // 买酒后解锁
+    { text: '你是谁？', to: 'who', remember: ['asked_name'] },
+    { text: '再见。', reply: '慢走。' },
+  ]},
+  { id: 'who', text: '我叫老王。', options: [{ text: '来杯麦酒。', remember: ['patron'] }] },
+  { id: 'rumor', text: '北边矿洞有宝藏。' },
+]);
+
+// 2. 挂到 NPC + 注册系统/命令
+world.register(DialogueSystem);
+world.registerCommands(...createDialogueCommands());
+world.entities.addComponent(npcId, Dialogue, tree);
+world.entities.addComponent(npcId, Memory, { flags: [] });
+
+// 3. 玩家输入：talk 酒保 → 1 → 2（选项序号）
+const feedback = await world.execute('talk 酒保', playerId);
+```
+
+要点：
+
+- **分支**：`requires` 不满足的选项直接不可见；`remember` 在选中时写入 `Memory.flags`
+- **副作用**：选项生效会 emit `DialogueChoiceMade`，给物品/发任务等效果由游戏层
+  系统订阅该事件实现——对话模块只管说，不改世界
+- **确定性**：对话状态全部在组件上，快照/回滚/fork/录像重放天然一致（demo 完整对话
+  流程已进录像重放测试）
+- 无 `options`（或全部被门控）的节点说完自动结束；NPC 需挂 `Memory` 才支持记忆
+
 ## 双模块格式
 
 | 入口 | import (ESM) | require (CJS) |

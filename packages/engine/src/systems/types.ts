@@ -45,6 +45,7 @@ export interface SystemContext {
   /** 输出消息 */
   output: {
     narrative: (textOrSegments: string | Segment[]) => void;
+    dialogue: (textOrSegments: string | Segment[]) => void;
     error: (text: string) => void;
     status: (data: unknown) => void;
   };

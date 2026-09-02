@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **对话与 NPC（0.3-B 核心）**
+  - `Dialogue` trait（对话树 + 活动指针）与 `Memory` trait（记忆 flags），组件数据纯 JSON 可序列化
+  - `defineDialogue(entry, nodes)`：内容定义 + 校验（entry/to 引用、id 唯一，fail-fast）
+  - `DialogueSystem`：唯一推进对话状态的手。talk/choose 展示文本与"可用选项"
+    （`requires` flags 门过滤）、选项推进（`remember` 写记忆、跳转 to / reply 收尾）、
+    无可用选项自动结束；随快照/回滚/存档走
+  - `createDialogueCommands()`：`talk/ask/说/对话 <npc> [序号]`，动词冲突 fail-fast 同引擎惯例
+  - `DialogueChoiceMade` 事件：选项生效时 emit，供游戏层效果系统订阅
+    （给物品、发任务等副作用走事件链，不在对话模块内实现）
+- **蓝图 spawn 隔离性**：同蓝图多次 spawn 的实体组件数据深拷贝隔离
+  （此前直接挂引用，改 A 组件会"隔空"污染 B，破坏蓝图不可变承诺）
+
 ### 修复
 
 - **every 系统时相改为由世界时间派生的固定网格（drift-free）**：原"自上次触发起算"依赖
@@ -23,6 +37,8 @@
   别名子串 > 输入反包含。先注册的长名不再用子串包含抢走后注册的精确同名实体
 - `World.spawn` 的 `patch` 引用蓝图中不存在的组件时 fail-fast 抛错（不再静默失效）
 - `EventPump` 新增公开 `drain()` 方法（测试工具显式排水的官方通道）
+- Web demo 构建回归：`build-html.js` external 清单缺 `node:` 前缀（FsBackend 的
+  `import('node:path')` 在 esbuild 无法解析，浏览器打包失败）——补 `node:path`/`node:fs/promises`
 
 ## [0.2.0] - 2026-09-02
 

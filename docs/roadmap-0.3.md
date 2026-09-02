@@ -19,17 +19,29 @@
 - 不做：继承树、序列化格式、延迟解析（引用未注册 trait 时 fail-fast）
 
 **验收标准**：
-- [ ] spawn 产出的实体与手写 addComponent 逐组件等价
-- [ ] patch 覆盖生效且不污染蓝图本身（蓝图不可变）
-- [ ] 同 id 重复 spawn 快照恒等；确定性金测试无回归
-- [ ] 蓝图引用未注册 trait 时 fail-fast
+- [x] spawn 产出的实体与手写 addComponent 逐组件等价
+- [x] patch 覆盖生效且不污染蓝图本身（蓝图不可变）
+- [x] 同 id 重复 spawn 快照恒等；确定性金测试无回归
+- [x] 蓝图引用未注册 trait 时 fail-fast（patch 拼错键名同样 fail-fast）
+- [x] 同蓝图多次 spawn 实体互不共享组件引用（深拷贝隔离，改 A 不污染 B）
 
-## B. 对话与 NPC
+## B. 对话与 NPC ★ 已完成核心（2026-09-02）
 
-- `Dialogue` trait（树状节点 + 条件跳转）+ `DialogueSystem`
-- 选项走命令系统（`ask`/选项序号），复用 args 类型推导
-- NPC 记忆：`Memory` trait 记录对话历史，条件分支可查
-- 依赖：B0 蓝图（定义 NPC）、0.2 定时/错误策略（已就绪）
+**已落地**（对应 CHANGELOG [Unreleased] 新增）：
+- `Dialogue` trait（对话树 + 活动指针）+ `Memory` trait（记忆 flags）
+- `DialogueSystem` + `createDialogueCommands()`（talk/ask/说/对话 + 选项序号）
+- 分支模型：`requires`（flags 门，过滤不可见选项）/ `remember`（写记忆）/
+  `to`（节点跳转）/ `reply`（收尾语）——纯数据，无 DSL 无函数，组件可 JSON
+- `DialogueChoiceMade` 事件：选项生效时 emit，效果系统（给物品/发任务）经事件链接入
+- demo：酒馆酒保对话（问名字→买麦酒→解锁传闻分支），REPL 冒烟通过
+- 新测试 15 个（内容校验 / talk / choose / 门控 / 记忆 / 快照 round-trip / 录像重放）
+
+**设计决策（与 0.1 砍 YAML 一脉相承）**：对话树内联在代码里作为纯数据；
+条件/记忆用 flags 而不用函数或 DSL——组件数据因此保持可序列化、可快照、确定性。
+函数式条件与多段语义文本（Segment）留待真实需求。
+
+**后续候选**（按需）：效果系统示范（经 DialogueChoiceMade 给物品）、
+多轮记忆记录（时间戳/历史栈）、对话树复用与共享（内容外置注册表）。
 
 ## C. 容器与物品系统
 
@@ -40,4 +52,4 @@
 
 ## 排期
 
-B0（0.5 天）→ B（1~1.5 周）→ C（1~1.5 周）
+B0（0.5 天）→ B 核心（2026-09-02 当日完成）→ C（1~1.5 周）
