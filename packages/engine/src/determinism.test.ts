@@ -109,6 +109,9 @@ function buildWorld(seed: number) {
     systems: [CombatSystem, HealSystem, LootSystem],
     commands: [Attack, Rest],
     clock,
+    // advance(100) = 1 tick：让"推进 100 毫秒"的语义与世界时间一致
+    // （此前 clock.advance 不驱动世界，tick 数恒为 0 —— 金测试一直在跑时间静止的世界）
+    tickInterval: 100,
   });
   return { w, clock, rng };
 }

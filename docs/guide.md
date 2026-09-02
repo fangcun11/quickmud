@@ -318,8 +318,15 @@ it('休息回血不超过上限', () => {
 要点：
 
 - `w.runChain()` 同步跑完整个事件链，**没有隐藏的异步**，断言可以紧跟其后。
-- `createTestWorld` 接受 `systems`（注册的系统）与 `entities`（夹具数据）。
-  想测基于世界时钟的行为（every 周期/延时事件）就别走 runChain——直接 `w.world.tick()`。
+- `createTestWorld` 接受 `systems` / `commands` / `entities` / `clock` / `tickInterval`。
+  测基于世界时钟的行为（every 周期/延时事件）用 `clock.advance(ms)`——0.6 起
+  它**真的驱动世界时间**（按 tickInterval 循环 tick），或直接 `w.tick(n)` / `w.advance(ms)`：
+  ```ts
+  const clock = new ManualClock();
+  const w = createTestWorld({ systems: [NpcWanderSystem], clock, tickInterval: 100 });
+  clock.advance(3000);   // 世界时间到 3000，every:3000 的巡逻系统触发 1 次
+  expect(w.currentTime).toBe(3000);   // 世界时间是唯一真相，clock 与之同步
+  ```
 - 测命令就直接 `await w.world.execute('rest 30', p)`，断言 `w.world.output`。
 - 测试工具的完整形态见 §8 速查表；`record/replay`（录像）也是测试好帮手。
 
@@ -363,15 +370,17 @@ it('休息回血不超过上限', () => {
 | 存档 | `new SavePort(backend, version)` | `save/load/exists/delete` |
 | | `save.registerMigrations(...)` | 版本迁移链 |
 | | `FsBackend` / `LocalStorageBackend` | Node / 浏览器 |
-| 测试 | `createTestWorld({ systems?, entities?, clock? })` | 测试世界 |
+| 测试 | `createTestWorld({ systems?, commands?, entities?, clock?, tickInterval? })` | 测试世界 |
 | | `w.emit(token, data)` / `w.runChain()` / `w.getLog()` | 驱动与断言 |
-| | `ManualClock`（可选注入） | 时钟参考对象；**不驱动世界时间**——测基于时钟的行为请直接 `w.world.tick()` |
+| | `w.tick(n)` / `w.advance(ms)` / `w.currentTime` | 推进世界时间（0.6） |
+| | `ManualClock`（可选注入） | `advance(ms)` 驱动世界时间并同步读数（0.6 兑现）；未注入时由 TestWorld 自动创建 |
 
 **0.2 已实现**（写作时"尚未实现"的清单，现已全部落地）：定时系统（every + ctx.after）、逐系统错误策略（onError 三模式）、开发者命令（/tp /heal /dev-help）。另有录像重放（record/verifyReplay）与世界分叉（world.fork）两项确定性新能力——细节见 `packages/engine/README.md` 的 0.2 速览与 `CHANGELOG.md`。
 
 **0.3 之后**：对话与 NPC（0.3-B）、@mud/prefabs 领域预制件与实体物品容器模型
 （0.3-C：Located 单源位置，/give 随 Inventory 退役迁出）见 `packages/engine/README.md`
-与 `docs/roadmap-0.3.md`。
+与 `docs/roadmap-0.3.md`。0.6 起预制件自带**掉落与任务进度**（`Died` 钩子的官方
+消费者）与可控测试时钟——见 `packages/prefabs/README.md`。
 
 ---
 

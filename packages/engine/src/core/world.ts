@@ -20,6 +20,9 @@ import type { Segment } from '../output/types';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySystemDefinition = SystemDefinition<unknown> | SystemDefinition<any>;
 
+/** 默认 tick 间隔（毫秒）——测试工具与 World 构造共用同一来源 */
+export const DEFAULT_TICK_INTERVAL = 500;
+
 /** 深拷贝（快照冻结视图用：组件与延时事件载荷都必须与活世界切断引用） */
 function deepClone<T>(value: T): T {
   if (typeof structuredClone === 'function') {
@@ -68,7 +71,7 @@ export class World {
       maxEventsPerCommand: config?.maxEventsPerCommand,
     });
     this.output = new OutputCollector();
-    this.tickInterval = config?.tickInterval ?? 500;
+    this.tickInterval = config?.tickInterval ?? DEFAULT_TICK_INTERVAL;
   }
 
   /**

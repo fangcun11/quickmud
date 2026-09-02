@@ -41,3 +41,45 @@ export const Died = defineEvent('died')<{
   killer?: EntityId;
   roomId?: string;
 }>();
+
+/**
+ * 掉落完成事件（v0.6-A1）：{ entity, roomId, items }
+ *
+ * `items` 是新生成的掉落物实体 id 列表——任务系统的 kill 型目标、统计、
+ * 掉落播报都挂在这个钩子上。
+ */
+export const LootDropped = defineEvent('loot_dropped')<{
+  entity: EntityId;
+  roomId: EntityId;
+  items: EntityId[];
+}>();
+
+/** 任务开始（v0.6-A2）：玩家首次对某任务产生进度 */
+export const QuestStarted = defineEvent('quest_started')<{
+  player: EntityId;
+  giver: EntityId;
+  questId: string;
+}>();
+
+/** 任务进度推进：{ progress, count } 为当前值与目标值 */
+export const QuestProgressed = defineEvent('quest_progressed')<{
+  player: EntityId;
+  giver: EntityId;
+  questId: string;
+  progress: number;
+  count: number;
+}>();
+
+/** 任务达标（尚未交付，奖励在 turnin 时发放） */
+export const QuestCompleted = defineEvent('quest_completed')<{
+  player: EntityId;
+  giver: EntityId;
+  questId: string;
+}>();
+
+/** 任务交付：由 turnin 命令 emit，QuestSystem 据此发奖 */
+export const QuestTurnedIn = defineEvent('quest_turned_in')<{
+  player: EntityId;
+  giver: EntityId;
+  questId: string;
+}>();

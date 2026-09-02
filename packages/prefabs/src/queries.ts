@@ -25,6 +25,16 @@ export function itemsInContainer(q: WorldQuery, container: EntityId): EntityId[]
     .filter((id) => q.getComponent(id, Located)?.at === container);
 }
 
+/**
+ * 实体所在房间（v0.6-A2）
+ *
+ * 两种归属都认：会动的用 `Position`（玩家/NPC/怪物），常驻的用 `Located`
+ * （酒保这类钉在房间里的 NPC）。任务归属、房间内交互都基于它。
+ */
+export function containerOf(q: WorldQuery, entity: EntityId): EntityId | undefined {
+  return q.getComponent(entity, Position)?.roomId ?? q.getComponent(entity, Located)?.at ?? undefined;
+}
+
 /** 实体展示名（Name.text，空则回退 id） */
 export function displayName(q: WorldQuery, id: EntityId): string {
   const text = q.getComponent(id, Name)?.text;

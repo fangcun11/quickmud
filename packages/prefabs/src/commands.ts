@@ -5,9 +5,15 @@
  */
 import { defineCommand } from '@mud/ecs-engine';
 import type { AnyCommand } from '@mud/ecs-engine';
-import { Moved, Look, ItemTaken, ItemDropped, Attack } from './events.js';
-import { Position, Health } from './traits.js';
-import { itemsInContainer, resolveInContainer, resolveOccupantIn, displayName } from './queries.js';
+import { Moved, Look, ItemTaken, ItemDropped, Attack, QuestTurnedIn } from './events.js';
+import { Position, Health, QuestGiver, QuestLog } from './traits.js';
+import {
+  itemsInContainer,
+  resolveInContainer,
+  resolveOccupantIn,
+  displayName,
+  containerOf,
+} from './queries.js';
 
 /** 移动命令：go/move/walk/走 <方向>，支持 n/s/e/w/北 等归一 */
 export const GoCommand = defineCommand({
@@ -128,6 +134,64 @@ export const ScoreCommand = defineCommand({
       lines.push(`位置：${pos.roomId}`);
     }
     return lines.join('\n') || '没有状态信息。';
+  },
+});
+
+/**
+ * 任务列表命令：quests/任务 <列出当前房间 NPC 提供的任务与自己的进度>
+ *
+ * 只读查询（与 inventory 同款）：任务归属按房间，换个地方问就是另一批任务。
+ */
+export const QuestCommand = defineCommand({
+  verbs: ['quests', 'quest', '任务'],
+  handle({ player, world }) {
+    const pos = world.getComponent(player, Position);
+    if (!pos) return '你不在任何地方。';
+
+    const log = world.getComponent(player, QuestLog);
+    const lines: string[] = [];
+    for (const giver of world.findByComponent(QuestGiver)) {
+      if (containerOf(world, giver) !== pos.roomId) continue;
+      const data = world.getComponent(giver, QuestGiver);
+      for (const q of data?.quests ?? []) {
+        if (log?.turnedIn.includes(q.id)) {
+          lines.push(`- ${q.title}（已交付）`);
+        } else if (log?.completed.includes(q.id)) {
+          lines.push(`- ${q.title}（已完成，可交付）`);
+        } else {
+          const progress = log?.active[q.id] ?? 0;
+          lines.push(`- ${q.title}（${progress}/${q.objective.count}）`);
+        }
+      }
+    }
+
+    if (lines.length === 0) return '这里没有人需要帮忙。';
+    return `任务：\n${lines.join('\n')}`;
+  },
+});
+
+/** 交任务命令：turnin/交任务 <向同房间的发任务者交付已完成的任务，领奖> */
+export const TurnInCommand = defineCommand({
+  verbs: ['turnin', '交任务', '交付'],
+  handle({ player, world }) {
+    const pos = world.getComponent(player, Position);
+    if (!pos) return '你不在任何地方。';
+
+    const log = world.getComponent(player, QuestLog);
+    if (!log) return '你还没有任何任务。';
+
+    for (const giver of world.findByComponent(QuestGiver)) {
+      if (containerOf(world, giver) !== pos.roomId) continue;
+      const data = world.getComponent(giver, QuestGiver);
+      for (const q of data?.quests ?? []) {
+        if (!log.completed.includes(q.id) || log.turnedIn.includes(q.id)) continue;
+        // 只 emit：发奖由 QuestSystem 完成（命令不改状态）
+        world.emit(QuestTurnedIn, { player, giver, questId: q.id });
+        return null;
+      }
+    }
+
+    return '这里没有可交付的任务。';
   },
 });
 

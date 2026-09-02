@@ -50,9 +50,15 @@ const feedback = await world.execute('look', player); // async：支持异步命
 ```ts
 import { createTestWorld } from '@mud/ecs-engine/testing';
 
-const t = createTestWorld();
-t.clock.advance(1000); // 手动时钟，确定性测试
+const t = createTestWorld({ tickInterval: 100 });
+t.clock.advance(1000); // 手动时钟，确定性测试——真的驱动世界时间
+                       // （推进 10 个 tick，every 周期/延时事件随之触发）
+t.currentTime;         // 1000，世界时间与 clock 保持同步
 ```
+
+> 0.5 及更早版本 `clock.advance` 只改自己的计数器、不驱动世界（文档空头承诺，
+> API 评审 P1-4）；0.6 起兑现：`advance(ms)` 按 `tickInterval` 循环 tick，
+> 世界时间真正前进。另有 `t.tick(n)` / `t.advance(ms)` 两个直接驱动的便捷 API。
 
 ## 0.2 新特性速览
 

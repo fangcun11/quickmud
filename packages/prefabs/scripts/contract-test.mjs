@@ -61,20 +61,23 @@ try {
     `
 import { World, Name } from '@mud/ecs-engine';
 import {
-  MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, Health, Position, Exits, Description,
-  Located, Portable, GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
-  TakeCommand, DropCommand, LookCommand, AttackCommand,
+  MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem,
+  Health, Position, Exits, Description, Located, Portable, Loot, QuestGiver, QuestLog,
+  GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
+  TakeCommand, DropCommand, LookCommand, AttackCommand, QuestCommand, TurnInCommand,
 } from '@mud/prefabs';
 
 const w = new World();
-w.register(MovementSystem, DescriptionSystem, ItemSystem, CombatSystem);
+w.register(MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem);
 w.registerCommands(
   GoCommand, createDirectionCommand('north', ['north']), createDirectionCommand('south', ['south']),
   InventoryCommand, ScoreCommand, TakeCommand, DropCommand, LookCommand, AttackCommand,
+  QuestCommand, TurnInCommand,
 );
 const p = w.entities.createWithId('player-1');
 w.entities.addComponent(p, Health, { current: 100, max: 100 });
 w.entities.addComponent(p, Position, { roomId: 'town' });
+w.entities.addComponent(p, QuestLog);
 const town = w.entities.createWithId('town');
 w.entities.addComponent(town, Name, { text: '城镇' });
 w.entities.addComponent(town, Description, { text: '小镇广场。' });
@@ -106,14 +109,50 @@ w.output.clear();
 await w.execute('look', p);
 const lines2 = w.output.getAll().map(m => m.segments.map(s => s.text).join(''));
 if (!lines2.some(l => l.includes('生锈的剑'))) throw new Error('ESM look 物品列表契约失败');
-// v0.5 战斗：击杀同房间敌人（Health 归零后实体被销毁）
+// v0.6 战斗 + 掉落 + 任务：酒保悬赏杀狗 → 击杀 → 掉狗肉 → 回酒馆交任务领奖
+const barman = w.entities.createWithId('barman');
+w.entities.addComponent(barman, Name, { text: '酒保' });
+w.entities.addComponent(barman, Located, { at: 'tavern' });
+w.entities.addComponent(barman, QuestGiver, {
+  quests: [{
+    id: 'dog-hunt',
+    title: '除掉野狗',
+    objective: { type: 'kill', target: '野狗', count: 1 },
+    reward: { items: [{ name: '麦酒' }], heal: 10 },
+  }],
+});
 const mob = w.entities.createWithId('mob');
 w.entities.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
 w.entities.addComponent(mob, Position, { roomId: 'town' });
 w.entities.addComponent(mob, Health, { current: 20, max: 20 });
+w.entities.addComponent(mob, Loot, { drops: [{ name: '狗肉' }] });
 await w.execute('attack 野狗', p);
 await w.execute('attack 野狗', p);
 if (w.entities.has('mob')) throw new Error('ESM attack/死亡契约失败');
+// 掉落：狗肉实体落到城镇容器，且能被拾取
+const dropped = w.entities.findByComponent(Located).filter(
+  (id) => w.entities.getComponent(id, Located)?.at === 'town' && id !== 'sword',
+);
+if (dropped.length !== 1) throw new Error('ESM 掉落数量契约失败: ' + dropped.length);
+const meat = dropped[0];
+await w.execute('take 狗肉', p);
+if (w.entities.getComponent(meat, Located)?.at !== p) throw new Error('ESM 掉落物拾取契约失败');
+// 任务：kill 目标达成（玩家此时在城镇，酒保在酒馆 → 进度仍应记上）
+const log = w.entities.getComponent(p, QuestLog);
+if (log.active['dog-hunt'] !== 1 || !log.completed.includes('dog-hunt')) {
+  throw new Error('ESM 任务进度契约失败: ' + JSON.stringify(log));
+}
+// 交付：必须回到酒保身边
+if (!(await w.execute('turnin', p)).includes('没有可交付')) {
+  throw new Error('ESM 跨房间交付不应成功');
+}
+await w.execute('north', p);
+await w.execute('turnin', p);
+if (!w.entities.getComponent(p, QuestLog).turnedIn.includes('dog-hunt')) {
+  throw new Error('ESM turnin 契约失败');
+}
+const bag = await w.execute('inventory', p);
+if (!bag.includes('麦酒')) throw new Error('ESM 任务奖励契约失败: ' + bag);
 console.log('ESM 契约 ✓');
 `,
   );

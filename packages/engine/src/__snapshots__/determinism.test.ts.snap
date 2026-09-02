@@ -12,7 +12,7 @@ exports[`确定性金测试 > 同种子两次运行 → 全量状态深度相等
   "gold": {
     "amount": 390
   },
-  "ticks": 0,
+  "ticks": 17,
   "log": [
     "heal:8",
     "dmg:13",

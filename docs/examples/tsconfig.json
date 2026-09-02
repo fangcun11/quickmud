@@ -7,11 +7,25 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@mud/ecs-engine": ["../../packages/engine/src/index.ts"],
-      "@mud/ecs-engine/testing": ["../../packages/engine/src/testing.ts"]
+      "@mud/ecs-engine": [
+        "../../packages/engine/src/index.ts"
+      ],
+      "@mud/ecs-engine/testing": [
+        "../../packages/engine/src/testing.ts"
+      ],
+      "@mud/prefabs": [
+        "../../packages/prefabs/src/index.ts"
+      ]
     },
-    "types": ["node"],
-    "typeRoots": ["../../packages/engine/node_modules/@types"]
+    "types": [
+      "node"
+    ],
+    "typeRoots": [
+      "../../packages/engine/node_modules/@types"
+    ]
   },
-  "include": ["*.mts", "*.test.ts"]
+  "include": [
+    "*.mts",
+    "*.test.ts"
+  ]
 }

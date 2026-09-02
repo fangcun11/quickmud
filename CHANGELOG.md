@@ -2,6 +2,53 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.6.0] - 2026-09-02
+
+主题：**闭环——掉落 + 任务进度 + 可控时钟**（`@mud/ecs-engine` 0.6.0 / `@mud/prefabs` 0.4.0）。
+世界形成第一个完整游戏循环：`击杀 → 掉落 → 拾取 → 交任务 → 领奖`。
+无 breaking。
+
+### 新增（@mud/prefabs）
+
+- **掉落系统**：`Loot` trait（纯数据掉落表，可 JSON、进快照）+ `LootSystem`——
+  死者带 `Loot` 时按表用 `ctx.spawn` **现造掉落物实体**落入死亡房间容器
+  （look 看得见、take 拿得走），emit `LootDropped`。`Died` 钩子不再是悬空承诺
+- **任务进度系统**：`QuestGiver`（挂 NPC）/`QuestLog`（挂玩家，进度纯数据进快照）+
+  `QuestSystem`；目标两种：`collect`（订阅 `ItemTaken`，物品真正到手才计数）与
+  `kill`（订阅 `Died`，按死者名匹配 + `killer` 记功）；进度**全局追踪**，
+  交付须回发任务者身边；`QuestStarted/Progressed/Completed/TurnedIn` 事件
+- **命令**：`quests`（列当前房间 NPC 的任务与进度）、`turnin`（交付已完成任务，
+  发奖：物品 `ctx.spawn` 进背包 + `heal` 回血，`turnedIn` 记账不可重复领）
+- **查询工具**：`containerOf`（Position 优先、Located 兜底的房间归属——常驻 NPC
+  用 `Located` 锚定房间即可参与任务）
+
+### 变更（@mud/prefabs，行为修正）
+
+- **死亡改为管线**：`CombatSystem` 不再自己销毁目标（处理中 emit 只入队，
+  同步 destroy 会让 `Died` 订阅者读不到死者——掉落因此静默失效）；
+  新增 `DeathSystem`（priority 100，永远最后清场）。**击杀后要实体消失，
+  必须注册 `DeathSystem`**（未注册时目标 HP 归零但留存）
+- demo：野狗带掉落表（狗肉/项圈）、酒保挂两个悬赏任务（杀狗/送肉）、
+  常驻酒保补 `Located`；REPL 全闭环冒烟（杀狗 → 捡肉 → 交任务 → 领陈酿麦酒）
+
+### 修复（@mud/ecs-engine）
+
+- **`ManualClock.advance(ms)` 真正驱动世界时间**（API 评审 P1-4 空承诺兑现）：
+  `TestWorld` 装载推进槽位，`advance` 按 `tickInterval` 循环 tick 直到目标时间，
+  clock 与世界时间保持同步（世界时间是唯一真相）；`TestWorldConfig` 补 `tickInterval`，
+  新增 `w.tick(n)` / `w.advance(ms)` / `w.currentTime`；独立 ManualClock（未绑定）
+  行为不变；`tickInterval <= 0` 显式报错
+- 确定性金测试基线更新：时间真正推进后 `ticks` 从恒 0 变为 17——
+  该测试此前一直在跑"时间静止"的世界，这正是 P1-4 的证据
+
+### 文档
+
+- prefabs README 增「掉落与任务（v0.6）」章节（规则一览表）与死亡管线说明；
+  engine README / guide 兑现 `ManualClock` 承诺并更新速查表
+- 新增 `docs/examples/04-loot-quest.mts`（掉落/任务闭环 + 可控时钟），
+  纳入 strict tsc + 运行双验证；`docs/examples` 补 `@mud/prefabs` 路径映射
+- 设计定稿与实现记录见 `docs/roadmap-0.6.md`
+
 ## [0.5.0] - 2026-09-02
 
 主题：**会"活"的世界 + API 形态修正**（`@mud/ecs-engine` 0.5.0 / `@mud/prefabs` 0.3.0）。

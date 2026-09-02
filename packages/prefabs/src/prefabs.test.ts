@@ -9,6 +9,7 @@ import {
   DescriptionSystem,
   ItemSystem,
   CombatSystem,
+  DeathSystem,
   NpcWanderSystem,
 } from './systems.js';
 import {
@@ -301,7 +302,7 @@ describe('V2 战斗与死亡（v0.5）', () => {
   /** 玩家 + 一只同房间野狗 */
   function combatWorld() {
     const w = new World({ tickInterval: 500 });
-    w.register(ItemSystem, CombatSystem);
+    w.register(ItemSystem, CombatSystem, DeathSystem);
     w.registerCommands(TakeCommand, DropCommand, InventoryCommand, AttackCommand);
 
     const player = w.entities.createWithId('player');

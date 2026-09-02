@@ -20,7 +20,10 @@ import {
   DescriptionSystem,
   ItemSystem,
   CombatSystem,
+  DeathSystem,
+  LootSystem,
   NpcWanderSystem,
+  QuestSystem,
   Health,
   Position,
   Description,
@@ -29,6 +32,9 @@ import {
   Weapon,
   Located,
   Wander,
+  Loot,
+  QuestGiver,
+  QuestLog,
   GoCommand,
   createDirectionCommand,
   LookCommand,
@@ -37,6 +43,8 @@ import {
   TakeCommand,
   DropCommand,
   AttackCommand,
+  QuestCommand,
+  TurnInCommand,
 } from '@mud/prefabs';
 import { HelpCommand } from '../commands/help';
 import { BarkeepDialogue } from './dialogue';
@@ -53,13 +61,16 @@ export function bootstrap(): BootstrapResult {
     maxEventsPerCommand: 1000,
   });
 
-  // 注册系统（prefabs 移动/描述/物品/战斗/巡逻 + 引擎对话 + demo 效果）
+  // 注册系统（prefabs 移动/描述/物品/战斗·死亡·掉落/巡逻/任务 + 引擎对话 + demo 效果）
   world.register(
     MovementSystem,
     DescriptionSystem,
     ItemSystem,
     CombatSystem,
+    LootSystem,
+    DeathSystem,
     NpcWanderSystem,
+    QuestSystem,
     DialogueSystem,
     BarkeepEffectsSystem,
   );
@@ -75,6 +86,8 @@ export function bootstrap(): BootstrapResult {
     TakeCommand,
     DropCommand,
     AttackCommand,
+    QuestCommand,
+    TurnInCommand,
     HelpCommand,
     createDirectionCommand('north', ['north', 'n', '北']),
     createDirectionCommand('south', ['south', 's', '南']),
@@ -82,11 +95,12 @@ export function bootstrap(): BootstrapResult {
     createDirectionCommand('west', ['west', 'w', '西']),
   );
 
-  // 创建玩家
+  // 创建玩家（QuestLog 是参与任务的前提：系统不能替玩家补组件）
   const playerId = world.entities.create();
   world.entities.addComponent(playerId, Health, { current: 100, max: 100 });
   world.entities.addComponent(playerId, Position, { roomId: 'town_square' });
   world.entities.addComponent(playerId, Name, { text: '冒险者' });
+  world.entities.addComponent(playerId, QuestLog);
 
   // 创建房间
   const rooms = [
@@ -138,16 +152,23 @@ export function bootstrap(): BootstrapResult {
 
   // 广场游荡的野狗：带 Wander + Position + Health，由 NpcWanderSystem 驱动巡逻，
   // 玩家可以攻击它（CombatSystem）。demo REPL 每 500ms tick → 每 3 秒跳一次房。
+  // 带 Loot：死后掉落狗肉（v0.6 —— Died 钩子终于有消费者了）
   const dog = world.entities.createWithId('dog');
   world.entities.addComponent(dog, Name, { text: '野狗', aliases: ['狗', 'dog'] });
   world.entities.addComponent(dog, Description, { text: '一条瘦骨嶙峋的野狗，正警惕地盯着你。' });
   world.entities.addComponent(dog, Position, { roomId: 'town_square' });
   world.entities.addComponent(dog, Health, { current: 20, max: 20 });
   world.entities.addComponent(dog, Wander);
+  world.entities.addComponent(dog, Loot, {
+    drops: [
+      { name: '狗肉', aliases: ['肉'], description: '一块血淋淋的肉，野狗身上割下来的。' },
+      { name: '脏兮兮的项圈', aliases: ['项圈'], description: '磨得发亮的旧项圈，看不出主人的名字。' },
+    ],
+  });
 
   // 创建 NPC（0.3-B 对话）：酒馆的酒保
-  // 注：NPC 不带 Position / Located —— 实体与容器的归属可视作"常驻"，容器模型
-  // 主要用于物品流转，NPC 归属留待有移动 NPC 需求时再扩展。
+  // v0.6：常驻 NPC 用 Located 锚定房间（会动的才用 Position），这样 QuestGiver
+  // 的"同房间才算数"规则才能落到酒保身上；顺带挂上悬赏任务。
   const barmanId = world.entities.createWithId('barman');
   world.entities.addComponent(barmanId, Name, {
     text: '酒保',
@@ -155,6 +176,26 @@ export function bootstrap(): BootstrapResult {
   });
   world.entities.addComponent(barmanId, Description, {
     text: '一个系着围裙的中年男人，正用抹布擦着杯子。',
+  });
+  world.entities.addComponent(barmanId, Located, { at: 'tavern' });
+  world.entities.addComponent(barmanId, QuestGiver, {
+    quests: [
+      {
+        id: 'dog-hunt',
+        title: '除掉广场的野狗',
+        objective: { type: 'kill', target: '野狗', count: 1 },
+        reward: {
+          items: [{ name: '陈酿麦酒', description: '老王私藏的好酒，市面上喝不到。' }],
+          heal: 20,
+        },
+      },
+      {
+        id: 'dog-meat',
+        title: '给厨房找块狗肉',
+        objective: { type: 'collect', target: '狗肉', count: 1 },
+        reward: { items: [{ name: '金币', description: '一枚闪闪发光的金币。' }] },
+      },
+    ],
   });
   world.entities.addComponent(barmanId, Dialogue, BarkeepDialogue);
   world.entities.addComponent(barmanId, Memory, { flags: [] });

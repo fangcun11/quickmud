@@ -3,7 +3,13 @@ export { EntityManager } from './core/entity';
 export { World } from './core/world';
 export { trait, relation, deterministicId } from './core/trait';
 export { blueprint, spawnBlueprint } from './core/blueprint';
-export type { EntityBlueprint, BlueprintComponent, BlueprintPatch, SpawnOptions } from './core/blueprint';
+export type {
+  EntityBlueprint,
+  BlueprintComponent,
+  BlueprintComponentInput,
+  BlueprintPatch,
+  SpawnOptions,
+} from './core/blueprint';
 export { Name } from './core/name';
 export { ENGINE_VERSION } from './version';
 export type { Entity, EntityId, ComponentDefinition, ComponentId, EventToken } from './core/types';

@@ -62,3 +62,84 @@ export const Weapon = trait('weapon', () => ({
 
 /** 巡逻标记组件：带它 + Position 的实体由 NpcWanderSystem 驱动漫游 */
 export const Wander = trait('wander', () => ({}));
+
+/**
+ * 掉落条目（v0.6-A1）：**纯数据**描述一个掉落物
+ *
+ * 刻意用数据而非蓝图引用：组件数据必须可 JSON（引擎铁律，快照走 structuredClone），
+ * 而蓝图持有 ComponentDefinition（内含函数）。掉落时由 LootSystem 用 blueprint()
+ * 运行时构造蓝图——blueprint() 是纯函数，运行时调用没有任何问题。
+ */
+export type LootEntry = {
+  /** 掉落物名字（同时作为 Name.text） */
+  name: string;
+  /** 别名（供 take/look 的名称解析） */
+  aliases?: string[];
+  /** 掉落物描述 */
+  description?: string;
+  /** 可拾取性（默认 true——掉落物本来就是要被捡起的） */
+  portable?: boolean;
+  /** > 0 时挂 Weapon（掉落武器） */
+  damage?: number;
+};
+
+/** 掉落表组件：带它的实体死亡时（Died）由 LootSystem 结算掉落 */
+export const Loot = trait('loot', () => ({ drops: [] as LootEntry[] }));
+
+/** Loot 组件数据类型 */
+export type LootData = { drops: LootEntry[] };
+
+/**
+ * 任务目标（v0.6-A2）
+ *
+ * `target` 是**名字**而不是实体 id：掉落物是运行时 spawn 的新实体，id 由计数器
+ * 生成、不可预知；名字才是内容作者能写进任务定义的稳定锚点（与 look/take 的
+ * 名称解析同路线）。匹配为包含匹配（`'脏兮兮的项圈'.includes('项圈')` 成立）。
+ */
+export type QuestObjective =
+  | { type: 'collect'; target: string; count: number }
+  | { type: 'kill'; target: string; count: number };
+
+/** 奖励：掉落物条目 + 回血（纯数据，进快照） */
+export type QuestReward = {
+  items?: LootEntry[];
+  heal?: number;
+};
+
+/** 任务定义（挂在 QuestGiver 上） */
+export type QuestDef = {
+  /** 全局唯一的任务 id（内容作者保证） */
+  id: string;
+  /** 展示名 */
+  title: string;
+  objective: QuestObjective;
+  reward?: QuestReward;
+};
+
+/** 发任务者组件（挂 NPC）：ta 能提供哪些任务 */
+export const QuestGiver = trait('quest_giver', () => ({ quests: [] as QuestDef[] }));
+
+/** QuestGiver 组件数据类型 */
+export type QuestGiverData = { quests: QuestDef[] };
+
+/**
+ * 玩家任务账本（v0.6-A2）
+ *
+ * 纯数据，随快照走。**必须挂在玩家实体上**——系统不能给实体补组件
+ * （SystemContext 无 addComponent），没挂的玩家静默不参与任务。
+ */
+export const QuestLog = trait('quest_log', () => ({
+  /** 任务 id → 已达成数量 */
+  active: {} as Record<string, number>,
+  /** 已达标的任务 id */
+  completed: [] as string[],
+  /** 已交付的任务 id（领过奖，不可重复） */
+  turnedIn: [] as string[],
+}));
+
+/** QuestLog 组件数据类型 */
+export type QuestLogData = {
+  active: Record<string, number>;
+  completed: string[];
+  turnedIn: string[];
+};

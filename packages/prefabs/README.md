@@ -82,21 +82,30 @@ await world.execute('drop 金币', player);  // → 放回当前房间
 
 ## 模块组成
 
-- `src/traits.ts`：组件定义（Health/Position/Located/Description/Exits/Portable/Weapon/Wander）
-- `src/events.ts`：`Moved`、`Look`、`ItemTaken`、`ItemDropped`、`Attack`、`Died`
+- `src/traits.ts`：组件定义（Health/Position/Located/Description/Exits/Portable/Weapon/Wander/
+  Loot/QuestGiver/QuestLog）
+- `src/events.ts`：`Moved`、`Look`、`ItemTaken`、`ItemDropped`、`Attack`、`Died`、
+  `LootDropped`、`QuestStarted/Progressed/Completed/TurnedIn`
 - `src/systems.ts`：`MovementSystem`、`DescriptionSystem`（含房间物品与活物列表）、
-  `ItemSystem`（take/drop）、`CombatSystem`（伤害结算 + 死亡销毁 + `Died` 钩子）、
+  `ItemSystem`（take/drop）、`CombatSystem`（伤害结算 + emit `Died`，**不再自己销毁**）、
+  `LootSystem`（掉落结算）、`DeathSystem`（死亡管线末端清场）、
+  `QuestSystem`（任务进度 + 交付发奖）、
   `NpcWanderSystem`（`Wander` + `Position` 实体按 every 时钟确定性巡逻）
 - `src/commands.ts`：`GoCommand`、`createDirectionCommand`、`LookCommand`、
-  `TakeCommand`、`DropCommand`、`InventoryCommand`、`ScoreCommand`、`AttackCommand`
-- `src/queries.ts`：容器/房间解析工具（`itemsInContainer`/`occupantsIn`/`resolveInContainer`/`resolveOccupantIn`）
+  `TakeCommand`、`DropCommand`、`InventoryCommand`、`ScoreCommand`、`AttackCommand`、
+  `QuestCommand`、`TurnInCommand`
+- `src/queries.ts`：容器/房间解析工具（`itemsInContainer`/`occupantsIn`/`resolveInContainer`/`resolveOccupantIn`/`containerOf`）
 
 ## 战斗与巡逻（v0.5）
 
 ```ts
-import { CombatSystem, NpcWanderSystem, AttackCommand, Wander } from '@mud/prefabs';
+import {
+  CombatSystem, LootSystem, DeathSystem, NpcWanderSystem, AttackCommand, Wander,
+} from '@mud/prefabs';
 
-world.register(CombatSystem, NpcWanderSystem);   // 战斗 + 巡逻
+// 死亡是一条管线：战斗只 emit Died，掉落/清场按各自 priority 依次处理。
+// 要"打死了就消失"必须带上 DeathSystem（priority 最高，永远最后清场）。
+world.register(CombatSystem, LootSystem, DeathSystem, NpcWanderSystem);
 world.registerCommands(AttackCommand);
 
 // 一只会巡逻、可被攻击的敌人
@@ -107,7 +116,7 @@ world.entities.addComponent(mob, Health, { current: 20, max: 20 });
 world.entities.addComponent(mob, Wander);        // 巡逻标记
 
 await world.execute('attack 野狗', player);      // 造成 Weapon.damage（默认 10）
-// HP 归零：输出 → emit Died（掉落/任务钩子）→ 目标实体被销毁
+// HP 归零：输出 → emit Died → [LootSystem 结算掉落 → DeathSystem 销毁实体]
 ```
 
 - **攻击规则**：目标须与自己同房间且有 Health；伤害取攻击者 `Weapon.damage`（>0）否则 10
@@ -115,6 +124,51 @@ await world.execute('attack 野狗', player);      // 造成 Weapon.damage（默
   同世界同时间 ⇒ 同位置，录像/分叉/读档天然一致
 - `Died` 事件含 `{ entity, killer?, roomId }`，供掉落、任务等效果系统订阅
 - look 会列出房间里的活物（有 `Position` 的同房实体，不含查看者自己）
+
+## 掉落与任务（v0.6）
+
+`Died` 钩子从此有了官方消费者：**击杀 → 掉落 → 拾取 → 交任务 → 领奖**，一条闭环。
+
+```ts
+import { Loot, QuestGiver, QuestLog, QuestCommand, TurnInCommand, Located } from '@mud/prefabs';
+
+// 掉落表：纯数据（可 JSON、进快照）；掉落物由 LootSystem 用 ctx.spawn 现造实体
+world.entities.addComponent(mob, Loot, {
+  drops: [
+    { name: '狗肉', aliases: ['肉'], description: '一块血淋淋的肉。' },
+    { name: '生锈的犬牙', damage: 4 },          // damage > 0 → 掉落物带 Weapon
+  ],
+});
+
+// 发任务者：常驻 NPC 用 Located 锚定房间（会动的才用 Position）
+world.entities.addComponent(barman, Located, { at: 'tavern' });
+world.entities.addComponent(barman, QuestGiver, {
+  quests: [{
+    id: 'dog-hunt',
+    title: '除掉野狗',
+    objective: { type: 'kill', target: '野狗', count: 1 },   // 或 { type: 'collect', ... }
+    reward: { items: [{ name: '陈酿麦酒' }], heal: 20 },
+  }],
+});
+
+// 玩家必须有 QuestLog 才参与任务（系统不能替玩家补组件）
+world.entities.addComponent(player, QuestLog);
+world.registerCommands(QuestCommand, TurnInCommand);
+```
+
+规则一览：
+
+| 规则 | 说明 |
+| --- | --- |
+| 掉落 | 死者带 `Loot` → 掉落物实体落入**死亡房间**容器，输出一句话，emit `LootDropped` |
+| kill 目标 | 订阅 `Died`，死者名与 `target` 包含匹配，`killer` 记功 |
+| collect 目标 | 订阅 `ItemTaken`，**物品真正到手里才计数**（拿不动的不白送进度） |
+| 进度 | 全局追踪，不看玩家在哪（在酒馆接任务、去广场杀怪照样记功） |
+| 交付 | `turnin` 必须与发任务者**同房间**；发奖后写入 `turnedIn`，不可重复领 |
+| 奖励 | `items` 用 `ctx.spawn` 进玩家容器；`heal` 回血（上限 max） |
+| 查询 | `quests` 列出当前房间 NPC 的任务与进度（0/x、已完成、已交付） |
+
+不引入随机掉落——概率需要确定性伪随机设计（seed 来源），单开一版再做。
 
 ## 开发
 

@@ -21,6 +21,8 @@ export const HelpCommand = defineCommand({
       '  take (拿) <物品>  - 拾取当前房间的物品',
       '  drop (放下) <物品> - 放下背包中的物品',
       '  attack (打) <目标> - 攻击同房间的目标（先 look 看看有什么）',
+      '  quests (任务)   - 查看当前房间 NPC 的任务与进度',
+      '  turnin (交任务) - 向当前房间的 NPC 交付已完成的任务（领奖）',
       '  score (状态)    - 查看状态',
       '  talk/ask (说/对话) - 与 NPC 对话（如 talk 酒保；选项用 talk 酒保 1）',
       '  /dev-help       - 开发者命令（/tp /heal）',
