@@ -83,7 +83,7 @@ await world.execute('drop 金币', player);  // → 放回当前房间
 ## 模块组成
 
 - `src/traits.ts`：组件定义（Health/Position/Located/Description/Exits/Portable/Weapon/Wander/
-  Loot/QuestGiver/QuestLog/Afflicted/Duration）
+  Loot/QuestGiver/QuestLog/Afflicted/Duration/Coordinates/Visited）
 - `src/events.ts`：`Moved`、`Look`、`ItemTaken`、`ItemDropped`、`Attack`、`Died`、
   `LootDropped`、`QuestStarted/Progressed/Completed/TurnedIn`、
   `BuffApplied/BuffTicked/BuffExpired`
@@ -93,11 +93,14 @@ await world.execute('drop 金币', player);  // → 放回当前房间
   `QuestSystem`（任务进度 + 交付发奖）、
   `NpcWanderSystem`（`Wander` + `Position` 实体按 every 时钟确定性巡逻）、
   `BuffSystem`（定时效果结算 + 到期移除）、`BuffCleanupSystem`（死亡清 buff）、
-  `buffBlueprint()`（buff 实体蓝图工厂）
+  `buffBlueprint()`（buff 实体蓝图工厂）、
+  `VisitationSystem`（把走到的房间记进 `Visited`——地图迷雾的数据源）
 - `src/commands.ts`：`GoCommand`、`createDirectionCommand`、`LookCommand`、
   `TakeCommand`、`DropCommand`、`InventoryCommand`、`ScoreCommand`、`AttackCommand`、
-  `QuestCommand`、`TurnInCommand`
+  `QuestCommand`、`TurnInCommand`、`MapCommand`
 - `src/queries.ts`：容器/房间解析工具（`itemsInContainer`/`occupantsIn`/`resolveInContainer`/`resolveOccupantIn`/`containerOf`）
+- `src/room.ts`：`defineRoom`（纯数据定义）/ `layoutRooms`（坐标推断 + 冲突 fail-fast）/
+  `buildRooms`（注入世界）/ `renderAsciiMap`（渲染纯函数）/ `markVisited`（seed 探索记录）
 
 ## 战斗与巡逻（v0.5）
 
@@ -207,6 +210,49 @@ world.spawn(buffBlueprint({
 
 > 本版是**定时效果层**（最小 Buff）。属性修正（+攻/-防）、叠加/互斥/驱散属于
 > "属性层"复杂度，等真实内容逼出需求后再做。
+
+## 房间定义与 ASCII 地图（v0.8）
+
+房间曾是唯一没有 `define*` 封装的领域对象。本版补上，并让地图成为**免费赠品**：
+
+```ts
+import {
+  defineRoom, layoutRooms, buildRooms, renderAsciiMap,
+  VisitationSystem, MapCommand, markVisited, Visited,
+} from '@mud/prefabs';
+
+// 只写拓扑（Exits 是唯一真相），二维坐标由 layoutRooms 从入口 BFS 自动推断
+const layout = layoutRooms(
+  [
+    defineRoom({ id: 'village', name: '村庄', description: '安静的小村。', exits: { east: 'forest' } }),
+    defineRoom({ id: 'forest', name: '森林小径', description: '树影幢幢。', exits: { west: 'village', south: 'swamp' } }),
+    defineRoom({ id: 'swamp', name: '沼泽', description: '瘴气弥漫。', exits: { north: 'forest', east: 'cave' } }),
+  ],
+  { entry: 'village' },            // 入口坐标 = (0,0)，坐标系锚点
+);
+buildRooms(world, layout);          // 注入：Name/Description/Exits/Coordinates
+
+// 地图带迷雾：玩家挂 Visited，走到的房间才亮（没挂则 map 渲染全图）
+world.register(VisitationSystem);   // 探索记录
+world.registerCommands(MapCommand);
+world.entities.addComponent(player, Visited);
+markVisited(world, player);         // seed 出生房间（初始位置没有 Moved 事件）
+```
+
+规则一览：
+
+| 规则 | 说明 |
+| --- | --- |
+| 坐标推断 | BFS 从入口铺开，四方向偏移；`up/down` 等非四方向出口可达但**无坐标**（二维平面装不下，地图不画） |
+| 冲突 fail-fast | 重复 id / 悬空出口 / 坐标撞格 / 显式坐标不一致 / **反向出口不自洽**（A east→B 但 B 用 east→ 指回 A）/ 孤岛房间——全在 `layoutRooms` 时抛错，启动即炸 |
+| 显式 coords | escape hatch（非欧空间），必须与推断一致，否则报错 |
+| 迷雾 | 只画已探明房间；**连线两端都探明才画**（不泄漏邻接信息）；未探明区域留白 |
+| 字符 | `@` 当前 / `S` 入口（内容层自定义命令时用）/ `·` 已探明 / `—` `│` 连线 |
+| 渲染 | `renderAsciiMap` 是纯函数（坐标 → 字符串），测试可直接断言每一行 |
+
+**为什么坐标在定义期推断而不是运行时**：冲突在启动阶段就炸（玩家不会走进第三个
+房间才发现地图像鬼画符）、运行时零推断开销、快照里坐标只是普通数据。
+`Coordinates` 是 `Exits` 的**派生产物**，不是第二份真相——拓扑改了地图跟着变。
 
 ## 开发
 

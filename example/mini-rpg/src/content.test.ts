@@ -52,6 +52,9 @@ beforeAll(() => {
 
 describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
   it('第一幕：村长挂赏，森林杀狼收狼皮', async () => {
+    // 出生点只见过村庄 → 地图只有自己（迷雾：未探明区域不显示）
+    expect(await run('map')).toBe('@\n图例：@ 当前位置 · 已探明（未探明区域留白）');
+
     // 村庄里能看到两条任务
     const board = await run('quests');
     expect(board).toContain('巨蛛悬赏（0/1）');
@@ -152,5 +155,12 @@ describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
     const board = await run('quests');
     expect(board).toContain('巨蛛悬赏（已交付）');
     expect(board).toContain('狼皮褥子（已交付）');
+  });
+
+  it('第七幕：踏遍四境，地图展开为全图', async () => {
+    // 已走过 village/forest/swamp/cave 全部房间 → 迷雾全亮，坐标布局正确：
+    //   village(0,0) — forest(1,0)；forest ↓ swamp(1,1) — cave(2,1)
+    const map = await run('map');
+    expect(map).toBe(['@—·', '  │', '  ·—·', '图例：@ 当前位置 · 已探明（未探明区域留白）'].join('\n'));
   });
 });

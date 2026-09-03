@@ -2,6 +2,48 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.8.0] - 2026-09-03
+
+主题：**房间定义封装 + 隐式坐标 + ASCII 地图**（`@mud/prefabs` 0.6.0；`@mud/ecs-engine`
+**连续两版停在 0.6.0**——引擎零改动，分层成功的标志）。无 breaking。
+
+### 新增（@mud/prefabs）
+
+- **房间定义封装**（最后一个没有 `define*` 的领域对象补上了）：
+  - `defineRoom()`——纯数据定义（可 JSON、进快照），校验 id/name 非空
+  - `layoutRooms(defs, { entry, entryCoords?, checkReverseExits? })`——BFS 从入口铺开，
+    四方向偏移自动推断坐标；**冲突一律定义期 fail-fast**：重复 id / 悬空出口 /
+    坐标撞格（图无法嵌入平面）/ 显式坐标不一致与重叠 / 反向出口不自洽
+    （A east→B 但 B 用 east→ 指回 A，手滑最常见形态）/ 孤岛房间
+  - `buildRooms(world, layout)`——注入世界（Name/Description/Exits/Coordinates）
+- **`Coordinates` trait**：`Exits` 拓扑的**派生产物**，不是第二份真相
+  （单一真相铁律：只写出口，坐标跟着拓扑走）
+- **`Visited` trait + `VisitationSystem`**：探索记录（走到的房间写进 `Visited`，
+  可 JSON、进快照）；用 `Exits[方向]` 反查目标房间——与 v0.7 沼泽毒雾同款
+  `Moved.to` 是方向陷阱，撞墙不记账
+- **ASCII 地图**：`renderAsciiMap()` 纯函数（坐标 → 字符串，测试可直接断言每一行）+
+  `map` 命令；**迷雾**：挂 `Visited` 只画已探明房间、连线两端都探明才画
+  （不泄漏邻接）；未挂则渲染全图；`markVisited()` seed 出生房间
+- 非四方向出口（`up/down`）可达但**无坐标**——跨层空间二维平面装不下，地图不画
+
+### 变更（example 迁移，行为不变）
+
+- mini-rpg 与 demo-adventure 的 bootstrap 改用 `defineRoom`/`layoutRooms`/`buildRooms`，
+  注册 `VisitationSystem` + `MapCommand`，玩家出生点用 `layout.entry`
+  （拓扑与初始位置不可能写歪）
+- mini-rpg content.test.ts 扩到 7 幕：出生点地图只亮自己 → 终局全图展开
+  （`@—· / │ / ·—·`）；顺手修正森林描述文案与拓扑不符的旧 bug
+- `help` 补 `map` 条目
+
+### 文档
+
+- prefabs README 增「房间定义与 ASCII 地图（v0.8）」章节
+- 新增 `docs/examples/05-room-map.mts`（定义/推断/fail-fast/全图/迷雾），
+  纳入 strict tsc + 运行双验证
+- 契约测试补 v0.8 链路：ESM（拓扑 fail-fast + map 命令 + 迷雾渲染）、
+  CJS（房间/地图导出）、TS strict（定义/布局/渲染类型）
+- 设计定稿与实现记录见 `docs/roadmap-0.8.md`
+
 ## [0.7.0] - 2026-09-02
 
 主题：**Buff 系统 + 首个"纯内容"游戏**（`@mud/prefabs` 0.5.0；`@mud/ecs-engine`

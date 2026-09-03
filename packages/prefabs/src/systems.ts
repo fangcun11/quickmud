@@ -48,6 +48,7 @@ import {
   QuestLog,
   Afflicted,
   Duration,
+  Visited,
 } from './traits.js';
 import type { LootEntry, QuestDef, QuestLogData, BuffEffect } from './traits.js';
 import {
@@ -93,6 +94,30 @@ export const MovementSystem = defineSystem<{
     if (desc) {
       ctx.output.narrative(desc.text);
     }
+  },
+});
+
+/**
+ * 探索记录系统（v0.8-B）：把去过的房间写进 `Visited`
+ *
+ * 顺序陷阱（与 v0.7 沼泽毒雾同款）：`Moved.to` 是**方向**不是房间 id，
+ * 所以从出发房间的 `Exits` 反查目标——读 `Position` 也能拿到落位后的房间，
+ * 但那要求本系统注册在 `MovementSystem` 之后（依赖注册顺序）。
+ * 出口校验失败（撞墙）时没有落位，不记账。
+ */
+export const VisitationSystem = defineSystem<{ entity: EntityId; from: string; to: string }>({
+  name: 'prefab.visitation',
+  on: [Moved],
+  priority: 0,
+  handle(event, ctx) {
+    const { entity, from, to } = event.data;
+    const visited = ctx.getComponent(entity, Visited);
+    if (!visited) return; // 没挂 Visited = 这个实体不参与探索记录
+
+    const target = ctx.getComponent(from as EntityId, Exits)?.[to];
+    if (!target) return;
+
+    if (!visited.rooms.includes(target)) visited.rooms.push(target);
   },
 });
 

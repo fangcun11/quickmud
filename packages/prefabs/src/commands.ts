@@ -6,7 +6,16 @@
 import { defineCommand } from '@mud/ecs-engine';
 import type { AnyCommand } from '@mud/ecs-engine';
 import { Moved, Look, ItemTaken, ItemDropped, Attack, QuestTurnedIn } from './events.js';
-import { Position, Health, QuestGiver, QuestLog } from './traits.js';
+import {
+  Position,
+  Health,
+  QuestGiver,
+  QuestLog,
+  Coordinates,
+  Visited,
+  Exits,
+} from './traits.js';
+import { renderAsciiMap } from './room.js';
 import {
   itemsInContainer,
   resolveInContainer,
@@ -211,5 +220,38 @@ export const AttackCommand = defineCommand({
 
     world.emit(Attack, { attacker: player, target });
     return null;
+  },
+});
+
+/**
+ * 地图命令：map/地图 <绘制 ASCII 地图>
+ *
+ * 只读查询（与 inventory/quests 同款）。是否迷雾由玩家挂不挂 `Visited` 决定：
+ * 挂了 → 只画已探明区域；没挂 → 内容没声明探索，渲染全图。
+ * 入口标记 `S` 不在命令里用——世界不存"谁是入口"，需要时由内容层自己调
+ * `renderAsciiMap(rooms, { entry })`。
+ */
+export const MapCommand = defineCommand({
+  verbs: ['map', '地图'],
+  handle({ player, world }) {
+    const rooms = world
+      .findByComponent(Coordinates)
+      .filter((id) => world.getComponent(id, Exits))
+      .map((id) => ({
+        id,
+        coords: world.getComponent(id, Coordinates)!,
+        exits: world.getComponent(id, Exits)!,
+      }));
+
+    if (rooms.length === 0) return '这里没有可绘制的地图。';
+
+    const pos = world.getComponent(player, Position);
+    const visited = world.getComponent(player, Visited);
+    const map = renderAsciiMap(rooms, {
+      current: pos?.roomId,
+      visited: visited?.rooms,
+    });
+
+    return `${map}\n图例：@ 当前位置 · 已探明（未探明区域留白）`;
   },
 });

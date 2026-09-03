@@ -27,10 +27,10 @@ import {
   QuestSystem,
   BuffSystem,
   BuffCleanupSystem,
+  VisitationSystem,
   Health,
   Position,
   Description,
-  Exits,
   Portable,
   Weapon,
   Located,
@@ -38,6 +38,7 @@ import {
   Loot,
   QuestGiver,
   QuestLog,
+  Visited,
   GoCommand,
   createDirectionCommand,
   LookCommand,
@@ -48,6 +49,11 @@ import {
   AttackCommand,
   QuestCommand,
   TurnInCommand,
+  MapCommand,
+  defineRoom,
+  layoutRooms,
+  buildRooms,
+  markVisited,
 } from '@mud/prefabs';
 import {
   SwampMiasmaSystem,
@@ -83,6 +89,7 @@ export function bootstrap(): BootstrapResult {
     QuestSystem,
     BuffSystem,
     BuffCleanupSystem,
+    VisitationSystem,
     DialogueSystem,
     SwampMiasmaSystem,
     SpiderRevengeSystem,
@@ -104,6 +111,7 @@ export function bootstrap(): BootstrapResult {
     AttackCommand,
     QuestCommand,
     TurnInCommand,
+    MapCommand,
     HelpCommand,
     createDirectionCommand('north', ['north', 'n', '北']),
     createDirectionCommand('south', ['south', 's', '南']),
@@ -111,55 +119,57 @@ export function bootstrap(): BootstrapResult {
     createDirectionCommand('west', ['west', 'w', '西']),
   );
 
-  // ---- 玩家（QuestLog 是参与任务的前提）----
+  // ---- 房间（v0.8：defineRoom 定义 + 入口锚定 + 坐标自动推断）----
+  // 拓扑是唯一真相：只写出口，二维坐标由 layoutRooms 从入口 BFS 推出
+  // （拓扑写错会在启动时 fail-fast，不会等玩家走进第三个房间才发现地图像鬼画符）
+  const layout = layoutRooms(
+    [
+      defineRoom({
+        id: 'village',
+        name: '村庄',
+        aliases: ['村子'],
+        description:
+          '晨光里的村庄安静而破败。村口的老槐树下站着村长，东侧屋檐下是药婆的药摊。一条小路向东伸进森林。',
+        exits: { east: 'forest' },
+      }),
+      defineRoom({
+        id: 'forest',
+        name: '森林小径',
+        aliases: ['森林'],
+        description:
+          '浓密的树冠遮住了半边天。灌木丛里传来窸窸窣窣的动静——绿油油的眼睛正盯着你。西面回村庄，南边的空气越来越潮。',
+        exits: { west: 'village', south: 'swamp' },
+      }),
+      defineRoom({
+        id: 'swamp',
+        name: '沼泽',
+        aliases: ['湿地'],
+        description:
+          '腐臭的泥浆没过脚踝，灰绿色的雾气贴着水面翻涌。北面是森林，东边的岩壁下裂开一道洞口，深不见底。',
+        exits: { north: 'forest', east: 'cave' },
+      }),
+      defineRoom({
+        id: 'cave',
+        name: '蛛巢洞穴',
+        aliases: ['洞穴'],
+        description:
+          '洞壁上挂满厚重的蛛网，地面散落着白森森的兽骨。洞穴深处，八只眼睛在黑暗里反着光。西面是唯一的退路。',
+        exits: { west: 'swamp' },
+      }),
+    ],
+    { entry: 'village' },
+  );
+  buildRooms(world, layout);
+
+  // ---- 玩家（QuestLog 是参与任务的前提；Visited 决定地图迷雾）----
   const playerId = world.entities.create();
   world.entities.addComponent(playerId, Health, { current: 100, max: 100 });
-  world.entities.addComponent(playerId, Position, { roomId: 'village' });
+  // 出生点直接用 layout.entry：房间拓扑与玩家初始位置不可能写歪
+  world.entities.addComponent(playerId, Position, { roomId: layout.entry });
   world.entities.addComponent(playerId, Name, { text: '冒险者' });
   world.entities.addComponent(playerId, QuestLog);
-
-  // ---- 房间 ----
-  const rooms = [
-    {
-      id: 'village',
-      name: { text: '村庄', aliases: ['村子'] },
-      desc: {
-        text: '晨光里的村庄安静而破败。村口的老槐树下站着村长，东侧屋檐下是药婆的药摊。一条小路向东伸进森林。',
-      },
-      exits: { east: 'forest' } as Record<string, string>,
-    },
-    {
-      id: 'forest',
-      name: { text: '森林小径', aliases: ['森林'] },
-      desc: {
-        text: '浓密的树冠遮住了半边天。灌木丛里传来窸窸窣窣的动静——绿油油的眼睛正盯着你。北面回村庄，南边的空气越来越潮。',
-      },
-      exits: { west: 'village', south: 'swamp' } as Record<string, string>,
-    },
-    {
-      id: 'swamp',
-      name: { text: '沼泽', aliases: ['湿地'] },
-      desc: {
-        text: '腐臭的泥浆没过脚踝，灰绿色的雾气贴着水面翻涌。北面是森林，东边的岩壁下裂开一道洞口，深不见底。',
-      },
-      exits: { north: 'forest', east: 'cave' } as Record<string, string>,
-    },
-    {
-      id: 'cave',
-      name: { text: '蛛巢洞穴', aliases: ['洞穴'] },
-      desc: {
-        text: '洞壁上挂满厚重的蛛网，地面散落着白森森的兽骨。洞穴深处，八只眼睛在黑暗里反着光。西面是唯一的退路。',
-      },
-      exits: { west: 'swamp' } as Record<string, string>,
-    },
-  ];
-
-  for (const room of rooms) {
-    const roomId = world.entities.createWithId(room.id);
-    world.entities.addComponent(roomId, Name, room.name);
-    world.entities.addComponent(roomId, Description, room.desc);
-    world.entities.addComponent(roomId, Exits, room.exits);
-  }
+  world.entities.addComponent(playerId, Visited);
+  markVisited(world, playerId); // seed 入口（初始位置没有 Moved 事件可订阅）
 
   // ---- 村长：挂两条任务（主线 kill 巨蛛 / 支线 collect 狼皮）----
   const elderId = world.entities.createWithId('elder');

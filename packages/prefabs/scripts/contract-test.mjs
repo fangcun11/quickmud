@@ -64,17 +64,18 @@ import {
   MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem,
   BuffSystem, BuffCleanupSystem,
   Health, Position, Exits, Description, Located, Portable, Loot, QuestGiver, QuestLog,
-  Afflicted, buffBlueprint,
+  Afflicted, buffBlueprint, Visited, VisitationSystem, MapCommand, Coordinates,
+  defineRoom, layoutRooms, buildRooms, renderAsciiMap, markVisited,
   GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
   TakeCommand, DropCommand, LookCommand, AttackCommand, QuestCommand, TurnInCommand,
 } from '@mud/prefabs';
 
 const w = new World();
-w.register(MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem, BuffSystem, BuffCleanupSystem);
+w.register(MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem, BuffSystem, BuffCleanupSystem, VisitationSystem);
 w.registerCommands(
   GoCommand, createDirectionCommand('north', ['north']), createDirectionCommand('south', ['south']),
   InventoryCommand, ScoreCommand, TakeCommand, DropCommand, LookCommand, AttackCommand,
-  QuestCommand, TurnInCommand,
+  QuestCommand, TurnInCommand, MapCommand,
 );
 const p = w.entities.createWithId('player-1');
 w.entities.addComponent(p, Health, { current: 100, max: 100 });
@@ -178,6 +179,28 @@ const leftovers = w.entities.findByComponent(Afflicted).filter(
   (id) => w.entities.getComponent(id, Afflicted)?.victim === 'rat',
 );
 if (leftovers.length !== 0) throw new Error('ESM buff 清理契约失败');
+// v0.8 房间定义与地图：defineRoom/layoutRooms/buildRooms 坐标推断 + renderAsciiMap + map 命令
+// 拓扑写错（如反向出口不自洽）必须在定义期 fail-fast
+let threw = false;
+try {
+  layoutRooms([
+    defineRoom({ id: 'x', name: 'X', description: '', exits: { east: 'y' } }),
+    defineRoom({ id: 'y', name: 'Y', description: '', exits: { east: 'x' } }),
+  ], { entry: 'x' });
+} catch (err) { threw = true; }
+if (!threw) throw new Error('ESM 拓扑冲突 fail-fast 契约失败');
+const layout = layoutRooms([
+  defineRoom({ id: 'plaza', name: '广场', description: '一个广场。', exits: { east: 'shop' } }),
+  defineRoom({ id: 'shop', name: '商店', description: '一家小店。', exits: { west: 'plaza' } }),
+], { entry: 'plaza' });
+buildRooms(w, layout);
+if (w.entities.getComponent('plaza', Coordinates)?.x !== 0) throw new Error('ESM buildRooms 坐标契约失败');
+// map 命令：无 Visited → 全图；玩家当前不在图内则没有 @
+const mapOut = await w.execute('map', p);
+if (!mapOut.includes('·—·') || !mapOut.includes('图例')) throw new Error('ESM map 契约失败: ' + mapOut);
+// 迷雾：只画去过的房间
+const fog = renderAsciiMap(layout.rooms, { visited: ['plaza'] });
+if (fog !== '·') throw new Error('ESM renderAsciiMap 迷雾契约失败: ' + fog);
 console.log('ESM 契约 ✓');
 `,
   );
@@ -192,6 +215,8 @@ const engine = require('@mud/ecs-engine');
 const prefabs = require('@mud/prefabs');
 if (!prefabs.Health || !prefabs.MovementSystem || !prefabs.GoCommand) throw new Error('CJS 导出缺失');
 if (typeof prefabs.buffBlueprint !== 'function') throw new Error('CJS buffBlueprint 导出缺失');
+if (typeof prefabs.layoutRooms !== 'function' || typeof prefabs.renderAsciiMap !== 'function') throw new Error('CJS 房间/地图导出缺失');
+if (typeof prefabs.MapCommand !== 'object' || typeof prefabs.VisitationSystem !== 'object') throw new Error('CJS 地图命令/系统导出缺失');
 if (typeof prefabs.Health.create !== 'function') throw new Error('CJS 无法构造');
 console.log('CJS 契约 ✓');
 `,
@@ -218,7 +243,10 @@ console.log('CJS 契约 ✓');
     join(consumer, 'usage.ts'),
     `
 import { World, trait } from '@mud/ecs-engine';
-import { Health, Position, MovementSystem, GoCommand, buffBlueprint } from '@mud/prefabs';
+import {
+  Health, Position, MovementSystem, GoCommand, buffBlueprint,
+  defineRoom, layoutRooms, renderAsciiMap,
+} from '@mud/prefabs';
 // trait 定义类型可用
 const hp = Health.create();
 const p: number = hp.current;
@@ -235,6 +263,13 @@ const bp = buffBlueprint({
   lasts: 5000,
 });
 void bp;
+// v0.8 房间定义 + 布局 + 渲染类型可用
+const layout = layoutRooms(
+  [defineRoom({ id: 'r1', name: '一', description: '', exits: { east: 'r2' } })],
+  { entry: 'r1' },
+);
+const mapStr: string = renderAsciiMap(layout.rooms, { visited: ['r1'] });
+void mapStr;
 // 类型错误必须被捕获（此文件不应出现编译错误）
 export const _check: number = p;
 `,

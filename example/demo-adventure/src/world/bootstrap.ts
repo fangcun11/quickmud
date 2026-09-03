@@ -24,10 +24,10 @@ import {
   LootSystem,
   NpcWanderSystem,
   QuestSystem,
+  VisitationSystem,
   Health,
   Position,
   Description,
-  Exits,
   Portable,
   Weapon,
   Located,
@@ -35,6 +35,7 @@ import {
   Loot,
   QuestGiver,
   QuestLog,
+  Visited,
   GoCommand,
   createDirectionCommand,
   LookCommand,
@@ -45,6 +46,11 @@ import {
   AttackCommand,
   QuestCommand,
   TurnInCommand,
+  MapCommand,
+  defineRoom,
+  layoutRooms,
+  buildRooms,
+  markVisited,
 } from '@mud/prefabs';
 import { HelpCommand } from '../commands/help';
 import { BarkeepDialogue } from './dialogue';
@@ -71,6 +77,7 @@ export function bootstrap(): BootstrapResult {
     DeathSystem,
     NpcWanderSystem,
     QuestSystem,
+    VisitationSystem,
     DialogueSystem,
     BarkeepEffectsSystem,
   );
@@ -88,6 +95,7 @@ export function bootstrap(): BootstrapResult {
     AttackCommand,
     QuestCommand,
     TurnInCommand,
+    MapCommand,
     HelpCommand,
     createDirectionCommand('north', ['north', 'n', '北']),
     createDirectionCommand('south', ['south', 's', '南']),
@@ -95,41 +103,44 @@ export function bootstrap(): BootstrapResult {
     createDirectionCommand('west', ['west', 'w', '西']),
   );
 
-  // 创建玩家（QuestLog 是参与任务的前提：系统不能替玩家补组件）
+  // 创建房间（v0.8：defineRoom + 入口锚定 + 坐标自动推断）
+  const layout = layoutRooms(
+    [
+      defineRoom({
+        id: 'town_square',
+        name: '城镇广场',
+        aliases: ['广场'],
+        description: '你站在城镇广场上。北面是酒馆，东面是铁匠铺。广场中央有一口古井。',
+        exits: { north: 'tavern', east: 'smithy' },
+      }),
+      defineRoom({
+        id: 'tavern',
+        name: '酒馆',
+        aliases: ['酒吧'],
+        description: '你走进了热闹的酒馆。空气中弥漫着麦酒的香气。吧台后面站着一位酒保。',
+        exits: { south: 'town_square' },
+      }),
+      defineRoom({
+        id: 'smithy',
+        name: '铁匠铺',
+        aliases: ['锻造坊'],
+        description: '你走进了铁匠铺。炉火熊熊燃烧，铁锤敲击铁砧的声音不绝于耳。铁匠正在工作。',
+        exits: { west: 'town_square' },
+      }),
+    ],
+    { entry: 'town_square' },
+  );
+  buildRooms(world, layout);
+
+  // 创建玩家（QuestLog 是参与任务的前提：系统不能替玩家补组件；
+  // Visited 挂上 = 地图带迷雾）
   const playerId = world.entities.create();
   world.entities.addComponent(playerId, Health, { current: 100, max: 100 });
-  world.entities.addComponent(playerId, Position, { roomId: 'town_square' });
+  world.entities.addComponent(playerId, Position, { roomId: layout.entry });
   world.entities.addComponent(playerId, Name, { text: '冒险者' });
   world.entities.addComponent(playerId, QuestLog);
-
-  // 创建房间
-  const rooms = [
-    {
-      id: 'town_square',
-      name: { text: '城镇广场', aliases: ['广场'] },
-      desc: { text: '你站在城镇广场上。北面是酒馆，东面是铁匠铺。广场中央有一口古井。' },
-      exits: { north: 'tavern', east: 'smithy' } as Record<string, string>,
-    },
-    {
-      id: 'tavern',
-      name: { text: '酒馆', aliases: ['酒吧'] },
-      desc: { text: '你走进了热闹的酒馆。空气中弥漫着麦酒的香气。吧台后面站着一位酒保。' },
-      exits: { south: 'town_square' } as Record<string, string>,
-    },
-    {
-      id: 'smithy',
-      name: { text: '铁匠铺', aliases: ['锻造坊'] },
-      desc: { text: '你走进了铁匠铺。炉火熊熊燃烧，铁锤敲击铁砧的声音不绝于耳。铁匠正在工作。' },
-      exits: { west: 'town_square' } as Record<string, string>,
-    },
-  ];
-
-  for (const room of rooms) {
-    const roomId = world.entities.createWithId(room.id);
-    world.entities.addComponent(roomId, Name, room.name);
-    world.entities.addComponent(roomId, Description, room.desc);
-    world.entities.addComponent(roomId, Exits, room.exits);
-  }
+  world.entities.addComponent(playerId, Visited);
+  markVisited(world, playerId); // seed 入口（初始位置没有 Moved 事件可订阅）
 
   // 创建物品实体（0.3-C 容器模型：Located 单源位置，物品真实存在于世界）
   const sword = world.entities.createWithId('sword');

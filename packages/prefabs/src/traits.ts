@@ -189,3 +189,20 @@ export const Duration = trait('duration', () => ({ lasts: 5000 }));
 
 /** Duration 组件数据类型 */
 export type DurationData = { lasts: number };
+
+/**
+ * 房间坐标（v0.8-A）：二维平面位置，由 `Exits` 拓扑**派生**
+ *
+ * 单一真相是 `Exits`——坐标在定义期（`layoutRooms`）一次性算好写入，
+ * 运行时不推断。跨层/非欧连接（up/down 等）可达的房间没有坐标
+ * （二维平面装不下它），地图渲染跳过。
+ */
+export const Coordinates = trait('coordinates', () => ({ x: 0, y: 0 }));
+
+/**
+ * 探索记录（v0.8-B）：挂玩家（或有探索概念的实体），记录去过的房间
+ *
+ * 纯数据数组（可 JSON、进快照）。挂了它 = 内容声明"这个世界的地图要迷雾"；
+ * 没挂 → 地图命令渲染全图。
+ */
+export const Visited = trait('visited', () => ({ rooms: [] as string[] }));
