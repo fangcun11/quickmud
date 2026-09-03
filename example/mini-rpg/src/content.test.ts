@@ -52,8 +52,8 @@ beforeAll(() => {
 
 describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
   it('第一幕：村长挂赏，森林杀狼收狼皮', async () => {
-    // 出生点只见过村庄 → 地图只有自己（迷雾：未探明区域不显示）
-    expect(await run('map')).toBe('@\n图例：@ 当前位置 · 已探明（未探明区域留白）');
+    // 出生点只见过村庄 → 区域地图只有自己（迷雾：未探明区域不显示）
+    expect(await run('map')).toBe('【村庄】\n@\n图例：@ 当前位置 · 已探明（未探明区域留白）');
 
     // 村庄里能看到两条任务
     const board = await run('quests');
@@ -81,7 +81,7 @@ describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
     expect(hp()).toBe(100); // 徒手猎狼无伤
   });
 
-  it('第二幕：沼泽毒雾缠身', async () => {
+  it('第二幕：沼泽毒雾缠身（v0.9：毒雾是沼泽房间的 on.enter）', async () => {
     const enter = await run('south'); // 森林 → 沼泽
     expect(enter).toContain('毒雾无声无息地缠了上来');
 
@@ -89,8 +89,10 @@ describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
     expect(buffCount()).toBe(1);
 
     // 未经结算就离开沼泽 → 毒还跟着你（区域效果的一次性触发）
-    await run('east'); // 沼泽 → 蛛巢洞穴
+    const east = await run('east'); // 沼泽 → 蛛巢洞穴
     expect(buffCount()).toBe(1);
+    // 蛛巢的 firstEnter：只在该实体第一次进入时播报
+    expect(east).toContain('你第一次踏进这里');
   });
 
   it('第三幕：蛛巢 boss 战——反咬与毒攻', async () => {
@@ -111,6 +113,12 @@ describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
 
     const take = await run('take 平安玉佩');
     expect(take).toContain('平安玉佩');
+
+    // 房间命令 search：state 组件记账（搜过就没有了），spawn 出来的铜币真捡得走
+    const found = await run('search');
+    expect(found).toContain('旧铜币');
+    expect(await run('search')).toContain('翻了个底朝天');
+    expect(await run('take 旧铜币')).toContain('旧铜币');
   });
 
   it('第四幕：毒发与消退——定时效果的完整生命周期', async () => {
@@ -157,10 +165,15 @@ describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
     expect(board).toContain('狼皮褥子（已交付）');
   });
 
-  it('第七幕：踏遍四境，地图展开为全图', async () => {
-    // 已走过 village/forest/swamp/cave 全部房间 → 迷雾全亮，坐标布局正确：
-    //   village(0,0) — forest(1,0)；forest ↓ swamp(1,1) — cave(2,1)
-    const map = await run('map');
-    expect(map).toBe(['@—·', '  │', '  ·—·', '图例：@ 当前位置 · 已探明（未探明区域留白）'].join('\n'));
+  it('第七幕：区域地图只画当前区域，世界地图画区域拓扑', async () => {
+    // 踏遍四境后：房间地图（迷雾全亮）只画**村庄区域**；
+    // 世界地图画三个区域的连接 village -east-> wilds -east-> lair
+    expect(await run('map')).toBe('【村庄】\n@\n图例：@ 当前位置 · 已探明（未探明区域留白）');
+    expect(await run('worldmap')).toBe(
+      '@—·—·\n图例：@ 当前位置 · 已探明区域（未探明区域留白）',
+    );
+
+    // 房间命令的位置校验：search 是蛛巢的动词，在村庄里就是"听不懂"
+    expect(await run('search')).toBe('我不明白你的意思。');
   });
 });

@@ -15,7 +15,8 @@ import {
   Position,
   Visited,
 } from './index.js';
-import { defineRoom, layoutRooms, buildRooms, renderAsciiMap, markVisited } from './room.js';
+import { defineRoom } from './behavior.js';
+import { layoutRooms, buildRooms, renderAsciiMap, markVisited } from './room.js';
 
 const r = (id: string, exits: Record<string, string> = {}) =>
   defineRoom({ id, name: id, description: `${id}`, exits });
@@ -109,7 +110,7 @@ describe('探索记录（Visited / VisitationSystem）', () => {
     expect(w.entities.getComponent(player, Visited)!.rooms).toEqual(['a']);
   });
 
-  it('移动后记入目标房间（用 Exits[方向] 反查，与注册顺序无关）', async () => {
+  it('移动后记入目标房间（Moved.to 就是房间 id，与注册顺序无关）', async () => {
     const { w, player } = world();
     await w.execute('east', player);
     expect(w.entities.getComponent(player, Visited)!.rooms).toEqual(['a', 'b']);

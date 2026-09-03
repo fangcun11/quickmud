@@ -1,6 +1,6 @@
 {
   "name": "@mud/prefabs",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "MUD 引擎开箱即用的领域预制件：移动/房间、查看/描述、物品/背包、状态",
   "repository": {
     "type": "git",
@@ -39,12 +39,12 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
-    "typescript": "^5.3.3",
-    "vitest": "^1.2.1",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
     "esbuild": "^0.19.12",
     "eslint": "^8.56.0",
-    "@typescript-eslint/eslint-plugin": "^6.19.0",
-    "@typescript-eslint/parser": "^6.19.0"
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
   },
   "engines": {
     "node": ">=18.0.0"

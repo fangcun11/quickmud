@@ -2,6 +2,70 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.9.0] - 2026-09-04
+
+主题：**区域（Area）+ 自包含房间模块**——房间之上补上 MUD 经典分层缺失的
+"区域"层，房间本身从"静态数据块"升级为"自包含内容模块"（`@mud/prefabs` 0.7.0；
+`@mud/ecs-engine` **连续三版停在 0.6.0**）。无 breaking。
+
+### 新增（@mud/prefabs）
+
+- **语义拆分：`MoveRequested` vs `Moved`**（正确性的地基）：命令只发**意图**
+  `MoveRequested { entity, to: 方向 }`，`MovementSystem` 落位后才发**结果**
+  `Moved { entity, from, to: 房间id, direction? }`。v0.8 的 `Moved.to` 是方向的
+  陷阱到此为止——行为系统不会再把"想去"当"到了"
+- **区域层**：`defineArea` + `layoutWorld` + `buildAreas`
+  - 每个区域是**一张独立二维平面**（自己的坐标系）：跨层空间（塔顶/洞穴）各自
+    成区域，v0.8"非四方向出口拿不到坐标"的边界自然消失
+  - **单一真相**：房间声明 `area`，区域不抄 rooms 反表；区域出口由**跨区域
+    房间出口反推**（改房间忘改区域这种事在结构上不可能发生）；区域坐标与房间
+    同款 BFS（`inferPlane` 复用，房间图与区域图同构）
+  - **区域是实体不是标签**（`area:` 前缀实体 id）：能挂天气/危险度等自己的
+    组件，进快照 / fork / 回滚
+  - 校验 fail-fast：区域不存在 / 空区域 / 孤岛区域 / 区内孤岛（多半是 `area`
+    标错了）/ 区域出口冲突（同方向通向两个区域）/ 入口锚不了坐标系
+  - `MapCommand` 自动按当前区域过滤（两套坐标系不相撞，抬头带【区域名】）；
+    新增 `WorldMapCommand`（worldmap/wmap/世界地图）：区域之间的连接图，
+    战争迷雾口径 = 区域内去过任意一间房；无区域世界向后兼容 v0.8 行为
+- **自包含房间模块**：`defineRoom` 扩展 `state` / `on` / `commands`
+  - `on.canEnter` / `canLeave`：**同步守卫**——拒绝 = 不落位、不记 `Visited`、
+    无 enter、输出理由（事件泵无取消语义，守卫必须在 MovementSystem 提交前
+    同步查询，这是 `MoveRequested`/`Moved` 拆分的直接收益）
+  - `on.enter` / `leave` / `firstEnter` / `look` / `every`：生命周期在**真正
+    落位后**触发；`firstEnter` 的账由 prefabs 记（`RoomEnterLog`），不污染内容
+    state；`every` 是世界时间驱动的房间心跳（间隔必须是 tick 间隔的整数倍，
+    定义期 fail-fast；`RoomClock` 记账，drift-free）
+  - `state` 组件：房间状态进快照 / fork / 回滚；**闭包变量才是快照的敌人**——
+    未声明 state 却摸 `ctx.state` 会直接报一句人话
+  - `commands`：房间命令 = 纯翻译层（位置校验 + 发 `RoomCommandInvoked`）+
+    派发器在事件泵内以系统特权执行（spawn/destroy/output），**"命令不改状态"
+    铁律对翻译层依然成立**；动词冲突 fail-fast；spawn 出来的东西真捡得走
+  - **派发是查表不是一房一系统**：`RoomEventSystem` / `RoomTickSystem` 两对
+    共享派发器服务所有房间（`RoomBehaviorRef` 索引指向模块级行为注册表，
+    函数不进快照）；`onError: 'skip'`——故障域 = 单房间，一个房间的 bug
+    不连坐全世界
+
+### 变更（example/mini-rpg 迁移）
+
+- 沼泽毒雾从"独立系统硬编码房间 id + `Exits` 反查"改写为沼泽房间的
+  `on.enter`——**本方案价值的直接演示**（机制与房间同住，删房间即删机制）
+- 蛛巢洞穴改用 `state` 组件 + 房间命令实现一次性 `search`（搜出旧铜币可拾取）
+- 世界三区域化（村庄/野地/蛛巢），`help` 补 `worldmap` 条目、`map` 语义更新
+  为"当前区域"；content.test 扩到区域地图 / 世界地图 / 房间命令 / firstEnter 断言
+
+### 测试与文档
+
+- prefabs 新增 `behavior.test.ts`（24 例：生命周期 / 守卫 / state 快照与回滚 /
+  fork 状态隔离 / 房间命令特权 / 派发架构 / 确定性）+ `area.test.ts`
+  （23 例：独立坐标系 / 出口反推 / up-down 跨层 / 全套 fail-fast / entryArea
+  回退 / 区域过滤 / 世界地图迷雾）；`Moved` 语义修正相关用例同步改写
+- 契约测试补 v0.9 链路：ESM（区域出口反推 + 守卫 + 房间命令 + worldmap）、
+  CJS（区域/房间行为导出）、TS strict（`ctx.state` 类型推导）
+- 新增 `docs/examples/06-area-room-behavior.mts`（区域 + 房间模块 + 守卫 +
+  生命周期 + `every`），纳入 strict tsc + 运行双验证
+- prefabs README 增「区域与世界地图 + 自包含房间行为（v0.9）」章节
+- 设计定稿与实现记录见 `docs/roadmap-0.9.md`
+
 ## [0.8.0] - 2026-09-03
 
 主题：**房间定义封装 + 隐式坐标 + ASCII 地图**（`@mud/prefabs` 0.6.0；`@mud/ecs-engine`

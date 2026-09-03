@@ -1,17 +1,23 @@
 /**
- * 房间定义与坐标推断（v0.8-A）
+ * 房间布局、坐标推断与地图渲染（v0.8-A，v0.9-B 抽出可复用的平面推断）
  *
- * 房间是最后一个没有 `define*` 封装的领域对象——本模块补上：
- * - `defineRoom`：纯数据定义（可 JSON、进快照）
  * - `layoutRooms`：**定义期**从 `Exits` 拓扑推断二维坐标，冲突一律 fail-fast
- * - `buildRooms`：注入世界（Name/Description/Exits/Coordinates）
+ * - `buildRooms`：注入世界（Name/Description/Exits/Coordinates/Area）
+ * - `inferPlane`：把一张「节点 + 出口」图铺进二维平面的通用 BFS
+ *   （房间图与区域图同构，所以只写一次——见 `area.ts` 的 `layoutWorld`）
+ * - `renderAsciiMap`：ASCII 地图（纯函数，逐行可断言）
  *
  * 单一真相铁律：`Exits` 是拓扑真相，坐标是**派生产物**。
  * 推断在定义期完成而非运行时——冲突在启动阶段就炸，运行时零开销、零非确定性。
+ *
+ * 房间**模块定义**（`defineRoom`、`RoomDef`）在 `behavior.ts`：一个房间是
+ * 数据 + 行为，两边合起来才是 v0.9 的房间。
  */
 import type { World, EntityId } from '@mud/ecs-engine';
 import { Name } from '@mud/ecs-engine';
-import { Exits, Description, Coordinates, Position, Visited } from './traits.js';
+import { Exits, Description, Coordinates, Position, Visited, Area, areaEntityId } from './traits.js';
+import type { RoomDef } from './behavior.js';
+
 
 /** 四方向偏移（屏幕坐标系：north 为 y-1） */
 const DIRS: Record<string, { x: number; y: number }> = {
@@ -29,15 +35,151 @@ const OPPOSITE: Record<string, string> = {
   west: 'east',
 };
 
-export interface RoomDef {
+export { DIRS as DIRECTION_OFFSETS, OPPOSITE as OPPOSITE_DIRECTION };
+
+export type { RoomDef };
+
+/** 平面推断的节点：id + 出口 + 可选显式坐标 */
+export interface PlaneNode {
   id: string;
-  name: string;
-  aliases?: string[];
-  description: string;
-  /** 方向 → 房间 id（拓扑的唯一真相） */
   exits: Record<string, string>;
-  /** 可选：显式钉住坐标（非欧空间 escape hatch），必须与推断一致 */
   coords?: { x: number; y: number };
+}
+
+export interface InferPlaneOptions {
+  /** 锚点节点 id（坐标系原点） */
+  entry: string;
+  /** 锚点坐标，默认 (0,0) */
+  entryCoords?: { x: number; y: number };
+  /** 反向出口自洽检查，默认 true */
+  checkReverseExits?: boolean;
+  /** 报错文案里的对象名（"房间"/"区域"），让错误信息读得懂 */
+  label: string;
+  /** 参与推断的节点集合（必须与 `entry` 同图；用于反向出口检查时查表） */
+  nodes: PlaneNode[];
+}
+
+/**
+ * 平面推断：BFS 从锚点铺开，为四方向可达的节点算出二维坐标
+ *
+ * 房间图与区域图**同构**（都是「节点 + 方向出口」），所以这段 BFS 只写一次。
+ * 冲突全部 fail-fast（带节点 id 的明确错误）——静默兜底会让作者在画到第十个
+ * 房间时才发现地图像鬼画符。
+ *
+ * 非四方向边（up/down/enter 之类）只参与可达性，不参与坐标推断：
+ * 二维平面装不下它们（它们正是"该另开一个区域"的信号，见 `layoutWorld`）。
+ *
+ * @returns 节点 id → 坐标（只有四方向可达的节点在内）
+ */
+export function inferPlane(
+  nodes: PlaneNode[],
+  opts: InferPlaneOptions,
+): Map<string, { x: number; y: number }> {
+  const byId = new Map<string, PlaneNode>();
+  for (const node of nodes) {
+    byId.set(node.id, node);
+  }
+  if (!byId.has(opts.entry)) {
+    throw new Error(`inferPlane: ${opts.label}锚点不存在：${opts.entry}`);
+  }
+
+  const entryCoords = opts.entryCoords ?? { x: 0, y: 0 };
+  const checkReverse = opts.checkReverseExits ?? true;
+  const L = opts.label;
+
+  // 钉住显式坐标（含锚点）
+  const coords = new Map<string, { x: number; y: number }>();
+  const explicit = new Set<string>();
+  /** 格子占用表："x,y" → 节点 id（图必须能嵌入平面：一格只能一个节点） */
+  const occupied = new Map<string, string>();
+  const key = (c: { x: number; y: number }) => `${c.x},${c.y}`;
+  const pin = (id: string, c: { x: number; y: number }) => {
+    const owner = occupied.get(key(c));
+    if (owner) {
+      throw new Error(
+        `inferPlane: ${L}显式坐标重叠：${owner} 与 ${id} 都在 (${c.x},${c.y})`,
+      );
+    }
+    occupied.set(key(c), id);
+    coords.set(id, { ...c });
+    explicit.add(id);
+  };
+
+  const entryNode = byId.get(opts.entry)!;
+  if (
+    entryNode.coords &&
+    (entryNode.coords.x !== entryCoords.x || entryNode.coords.y !== entryCoords.y)
+  ) {
+    throw new Error(
+      `inferPlane: ${L}显式坐标与推断不一致：锚点 ${opts.entry} 声明 ` +
+        `(${entryNode.coords.x},${entryNode.coords.y})，entryCoords 为 (${entryCoords.x},${entryCoords.y})`,
+    );
+  }
+  pin(opts.entry, entryCoords);
+  for (const node of nodes) {
+    if (node.id === opts.entry) continue;
+    if (node.coords) pin(node.id, node.coords);
+  }
+
+  // BFS：所有边参与可达性，仅四方向边参与坐标推断
+  const reached = new Set<string>([opts.entry]);
+  const queue: string[] = [opts.entry];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    const curNode = byId.get(cur)!;
+    const curCoords = coords.get(cur); // undefined：非四方向可达、无坐标
+
+    for (const [dir, target] of Object.entries(curNode.exits)) {
+      const opposite = OPPOSITE[dir];
+      if (checkReverse && opposite) {
+        const back = Object.entries(byId.get(target)?.exits ?? {})
+          .filter(([d, t]) => t === cur && OPPOSITE[d])
+          .map(([d]) => d);
+        if (back.length > 0 && !back.includes(opposite)) {
+          throw new Error(
+            `inferPlane: ${L}反向出口不自洽：${cur} -${dir}-> ${target}，` +
+              `但 ${target} 用 ${back.map((d) => `-${d}->`).join('')} 指回 ${cur}` +
+              `（应为 -${opposite}->）`,
+          );
+        }
+      }
+
+      const d = DIRS[dir];
+      if (d && curCoords) {
+        const next = { x: curCoords.x + d.x, y: curCoords.y + d.y };
+        const known = coords.get(target);
+        if (known === undefined) {
+          const owner = occupied.get(key(next));
+          if (owner && owner !== target) {
+            throw new Error(
+              `inferPlane: ${L}坐标冲突：${cur} -${dir}-> ${target} 落在 (${next.x},${next.y})，` +
+                `但该坐标已被 ${owner} 占用（图无法嵌入平面）`,
+            );
+          }
+          occupied.set(key(next), target);
+          coords.set(target, next);
+        } else if (known.x !== next.x || known.y !== next.y) {
+          if (explicit.has(target)) {
+            throw new Error(
+              `inferPlane: ${L}显式坐标与推断不一致：${target} 声明 (${known.x},${known.y})，` +
+                `但从 ${cur} -${dir}-> 推断为 (${next.x},${next.y})`,
+            );
+          }
+          throw new Error(
+            `inferPlane: ${L}坐标冲突：${cur} -${dir}-> ${target} 推断为 (${next.x},${next.y})，` +
+              `而 ${target} 已定为 (${known.x},${known.y})`,
+          );
+        }
+      }
+
+      if (!reached.has(target)) {
+        reached.add(target);
+        queue.push(target);
+      }
+    }
+  }
+
+  return coords;
 }
 
 export interface LayoutOptions {
@@ -52,6 +194,8 @@ export interface LayoutOptions {
 export interface LayoutRoom extends RoomDef {
   /** 推断结果；跨层/非欧可达的房间没有坐标（二维平面装不下） */
   coords?: { x: number; y: number };
+  /** 归属区域（v0.9-B；无区域的世界为 undefined） */
+  area?: string;
 }
 
 export interface LayoutResult {
@@ -60,25 +204,11 @@ export interface LayoutResult {
   rooms: LayoutRoom[];
 }
 
-/** 房间定义：校验 + 返回纯数据 */
-export function defineRoom(def: RoomDef): RoomDef {
-  if (!def.id) throw new Error('defineRoom: 房间 id 不能为空');
-  if (!def.name) throw new Error('defineRoom: 房间 name 不能为空');
-  return {
-    id: def.id,
-    name: def.name,
-    aliases: def.aliases,
-    description: def.description,
-    exits: { ...def.exits },
-    coords: def.coords ? { ...def.coords } : undefined,
-  };
-}
-
 /**
  * 布局：BFS 从入口铺开，为四方向可达的房间推断坐标
  *
- * 冲突全部 fail-fast（带房间 id 的明确错误）——静默兜底会让作者
- * 在画到第十个房间时才发现地图像鬼画符。
+ * 平面推断本身在 `inferPlane`（区域图复用同一段 BFS），这里只做房间的
+ * 前置校验：重复定义、悬空出口、孤岛房间。
  */
 export function layoutRooms(defs: RoomDef[], opts: LayoutOptions): LayoutResult {
   const byId = new Map<string, RoomDef>();
@@ -96,103 +226,16 @@ export function layoutRooms(defs: RoomDef[], opts: LayoutOptions): LayoutResult 
     }
   }
 
-  const entryCoords = opts.entryCoords ?? { x: 0, y: 0 };
-  const checkReverse = opts.checkReverseExits ?? true;
-
-  // 钉住显式坐标（含入口）
-  const coords = new Map<string, { x: number; y: number }>();
-  const explicit = new Set<string>();
-  /** 格子占用表："x,y" → 房间 id（图必须能嵌入平面：一格只能一个房间） */
-  const occupied = new Map<string, string>();
-  const key = (c: { x: number; y: number }) => `${c.x},${c.y}`;
-  const pin = (id: string, c: { x: number; y: number }) => {
-    const owner = occupied.get(key(c));
-    if (owner) {
-      throw new Error(`layoutRooms: 显式坐标重叠：${owner} 与 ${id} 都在 (${c.x},${c.y})`);
-    }
-    occupied.set(key(c), id);
-    coords.set(id, { ...c });
-    explicit.add(id);
-  };
-
-  const entryDef = byId.get(opts.entry)!;
-  if (
-    entryDef.coords &&
-    (entryDef.coords.x !== entryCoords.x || entryDef.coords.y !== entryCoords.y)
-  ) {
-    throw new Error(
-      `layoutRooms: 显式坐标与推断不一致：入口 ${opts.entry} 声明 ` +
-        `(${entryDef.coords.x},${entryDef.coords.y})，entryCoords 为 (${entryCoords.x},${entryCoords.y})`,
-    );
-  }
-  pin(opts.entry, entryCoords);
-  for (const def of defs) {
-    if (def.id === opts.entry) continue;
-    if (def.coords) pin(def.id, def.coords);
-  }
-
-  // BFS：所有边参与可达性，仅四方向边参与坐标推断
-  const reached = new Set<string>([opts.entry]);
-  const queue: string[] = [opts.entry];
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    const curDef = byId.get(cur)!;
-    const curCoords = coords.get(cur); // undefined：非四方向可达、无坐标
-
-    for (const [dir, target] of Object.entries(curDef.exits)) {
-      // 反向出口自洽：对端若声明了指回本房间的**四方向**边，方向必须是 opposite。
-      // （只看 opposite 一个方向抓不住「A east→B，B 也 east→A」这种写反的手滑）
-      const opposite = OPPOSITE[dir];
-      if (checkReverse && opposite) {
-        const back = Object.entries(byId.get(target)!.exits)
-          .filter(([d, t]) => t === cur && OPPOSITE[d])
-          .map(([d]) => d);
-        if (back.length > 0 && !back.includes(opposite)) {
-          throw new Error(
-            `layoutRooms: 反向出口不自洽：${cur} -${dir}-> ${target}，` +
-              `但 ${target} 用 ${back.map((d) => `-${d}->`).join('')} 指回 ${cur}` +
-              `（应为 -${opposite}->）`,
-          );
-        }
-      }
-
-      const d = DIRS[dir];
-      if (d && curCoords) {
-        const next = { x: curCoords.x + d.x, y: curCoords.y + d.y };
-        const known = coords.get(target);
-        if (known === undefined) {
-          const owner = occupied.get(key(next));
-          if (owner && owner !== target) {
-            throw new Error(
-              `layoutRooms: 坐标冲突：${cur} -${dir}-> ${target} 落在 (${next.x},${next.y})，` +
-                `但该坐标已被 ${owner} 占用（图无法嵌入平面）`,
-            );
-          }
-          occupied.set(key(next), target);
-          coords.set(target, next);
-        } else if (known.x !== next.x || known.y !== next.y) {
-          if (explicit.has(target)) {
-            throw new Error(
-              `layoutRooms: 显式坐标与推断不一致：${target} 声明 (${known.x},${known.y})，` +
-                `但从 ${cur} -${dir}-> 推断为 (${next.x},${next.y})`,
-            );
-          }
-          throw new Error(
-            `layoutRooms: 坐标冲突：${cur} -${dir}-> ${target} 推断为 (${next.x},${next.y})，` +
-              `而 ${target} 已定为 (${known.x},${known.y})`,
-          );
-        }
-      }
-
-      if (!reached.has(target)) {
-        reached.add(target);
-        queue.push(target);
-      }
-    }
-  }
+  const coords = inferPlane(defs, {
+    entry: opts.entry,
+    entryCoords: opts.entryCoords,
+    checkReverseExits: opts.checkReverseExits,
+    label: '房间',
+    nodes: defs,
+  });
 
   for (const def of defs) {
-    if (!reached.has(def.id)) {
+    if (!isReachable(defs, opts.entry, def.id)) {
       throw new Error(`layoutRooms: 孤岛房间：${def.id}（从入口 ${opts.entry} 不可达）`);
     }
   }
@@ -206,8 +249,32 @@ export function layoutRooms(defs: RoomDef[], opts: LayoutOptions): LayoutResult 
   };
 }
 
-/** 把布局注入世界：每个房间成为一个实体（Name/Description/Exits/Coordinates） */
-export function buildRooms(world: World, layout: LayoutResult): void {
+/** 可达性（所有边都算，含 up/down 这类非四方向边） */
+export function isReachable(nodes: PlaneNode[], from: string, to: string): boolean {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  if (!byId.has(from) || !byId.has(to)) return false;
+  const seen = new Set<string>([from]);
+  const queue = [from];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    if (cur === to) return true;
+    for (const target of Object.values(byId.get(cur)?.exits ?? {})) {
+      if (!seen.has(target)) {
+        seen.add(target);
+        queue.push(target);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * 把布局注入世界：每个房间成为一个实体（Name/Description/Exits/Coordinates/Area）
+ *
+ * 房间有 `area` 时挂上 `Area` 组件（`layoutWorld` 会填它）——区域是实体，
+ * 所以能带自己的状态（天气、危险度、封禁）并进快照/fork/回滚。
+ */
+export function buildRooms(world: World, layout: { rooms: LayoutRoom[] }): void {
   for (const room of layout.rooms) {
     const id = world.entities.createWithId(room.id as EntityId);
     world.entities.addComponent(id, Name, { text: room.name, aliases: room.aliases ?? [] });
@@ -215,6 +282,9 @@ export function buildRooms(world: World, layout: LayoutResult): void {
     world.entities.addComponent(id, Exits, { ...room.exits });
     if (room.coords) {
       world.entities.addComponent(id, Coordinates, { ...room.coords });
+    }
+    if (room.area) {
+      world.entities.addComponent(id, Area, { id: areaEntityId(room.area) });
     }
   }
 }

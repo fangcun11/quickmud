@@ -3,9 +3,9 @@
  *
  * 命令只翻译输入并 emit 事件，状态改动由对应系统完成（三条铁律）。
  */
-import { defineCommand } from '@mud/ecs-engine';
+import { defineCommand, Name } from '@mud/ecs-engine';
 import type { AnyCommand } from '@mud/ecs-engine';
-import { Moved, Look, ItemTaken, ItemDropped, Attack, QuestTurnedIn } from './events.js';
+import { MoveRequested, Look, ItemTaken, ItemDropped, Attack, QuestTurnedIn } from './events.js';
 import {
   Position,
   Health,
@@ -14,8 +14,10 @@ import {
   Coordinates,
   Visited,
   Exits,
+  Area,
 } from './traits.js';
 import { renderAsciiMap } from './room.js';
+import { renderAsciiWorldMap, roomsOfArea } from './area.js';
 import {
   itemsInContainer,
   resolveInContainer,
@@ -47,7 +49,8 @@ export const GoCommand = defineCommand({
     const pos = world.getComponent(player, Position);
     if (!pos) return '你不在任何地方。';
 
-    world.emit(Moved, { entity: player, from: pos.roomId, to: normalizedDir });
+    // 只 emit 意图：出不去、被拦下，都由 MovementSystem 判断
+    world.emit(MoveRequested, { entity: player, to: normalizedDir });
     return null;
   },
 });
@@ -59,7 +62,7 @@ export function createDirectionCommand(direction: string, verbs: string[]): AnyC
     handle({ player, world }) {
       const pos = world.getComponent(player, Position);
       if (!pos) return '你不在任何地方。';
-      world.emit(Moved, { entity: player, from: pos.roomId, to: direction });
+      world.emit(MoveRequested, { entity: player, to: direction });
       return null;
     },
   });
@@ -224,19 +227,25 @@ export const AttackCommand = defineCommand({
 });
 
 /**
- * 地图命令：map/地图 <绘制 ASCII 地图>
+ * 区域地图命令：map/地图 <绘制**当前区域**的 ASCII 地图>
  *
  * 只读查询（与 inventory/quests 同款）。是否迷雾由玩家挂不挂 `Visited` 决定：
  * 挂了 → 只画已探明区域；没挂 → 内容没声明探索，渲染全图。
- * 入口标记 `S` 不在命令里用——世界不存"谁是入口"，需要时由内容层自己调
- * `renderAsciiMap(rooms, { entry })`。
+ *
+ * 为什么要按区域过滤（v0.9-B）：每个区域有**自己的坐标系**，把两个区域
+ * 的房间画到同一张平面上是坐标撞车的鬼画符。没挂 `Area` 的房间按 v0.8
+ * 行为全画（无区域世界 = 一张平面）。
  */
 export const MapCommand = defineCommand({
   verbs: ['map', '地图'],
   handle({ player, world }) {
+    const pos = world.getComponent(player, Position);
+    const areaId = pos ? world.getComponent(pos.roomId, Area)?.id : undefined;
+
     const rooms = world
       .findByComponent(Coordinates)
       .filter((id) => world.getComponent(id, Exits))
+      .filter((id) => areaId === undefined || world.getComponent(id, Area)?.id === areaId)
       .map((id) => ({
         id,
         coords: world.getComponent(id, Coordinates)!,
@@ -245,13 +254,55 @@ export const MapCommand = defineCommand({
 
     if (rooms.length === 0) return '这里没有可绘制的地图。';
 
-    const pos = world.getComponent(player, Position);
     const visited = world.getComponent(player, Visited);
     const map = renderAsciiMap(rooms, {
       current: pos?.roomId,
       visited: visited?.rooms,
     });
 
-    return `${map}\n图例：@ 当前位置 · 已探明（未探明区域留白）`;
+    const title = areaId ? world.getComponent(areaId, Name)?.text : undefined;
+    const header = title ? `【${title}】\n` : '';
+    return `${header}${map}\n图例：@ 当前位置 · 已探明（未探明区域留白）`;
+  },
+});
+
+/**
+ * 世界地图命令：worldmap/世界地图 <绘制区域之间的连接图>
+ *
+ * 区域图与房间图同构，所以渲染复用 `renderAsciiMap`。
+ * 迷雾口径：一个区域里**去过任意一间房**就算探明（配合房间地图的迷雾，
+ * 玩家看到的是"我知道有这么个地方"，细节靠走进去填）。
+ */
+export const WorldMapCommand = defineCommand({
+  verbs: ['worldmap', 'wmap', '世界地图', '区域地图'],
+  handle({ player, world }) {
+    const areas = world
+      .findByComponent(Coordinates)
+      .filter((id) => world.getComponent(id, Exits))
+      // 区域实体与房间实体都带 Coordinates/Exits；用"有没有房间用 Area 指着他"区分
+      .filter((id) => roomsOfArea(world, id).length > 0)
+      .map((id) => ({
+        id,
+        coords: world.getComponent(id, Coordinates)!,
+        exits: world.getComponent(id, Exits)!,
+      }));
+
+    if (areas.length === 0) return '这个世界还没有划分区域。';
+
+    const pos = world.getComponent(player, Position);
+    const currentArea = pos ? world.getComponent(pos.roomId, Area)?.id : undefined;
+    const visited = world.getComponent(player, Visited)?.rooms;
+
+    const explored = visited
+      ? areas
+          .filter((a) => roomsOfArea(world, a.id).some((room) => visited.includes(room)))
+          .map((a) => a.id)
+      : undefined;
+    if (explored && currentArea && !explored.includes(currentArea)) {
+      explored.push(currentArea);
+    }
+
+    const map = renderAsciiWorldMap(areas, { current: currentArea, visited: explored });
+    return `${map}\n图例：@ 当前位置 · 已探明区域（未探明区域留白）`;
   },
 });

@@ -254,6 +254,81 @@ markVisited(world, player);         // seed 出生房间（初始位置没有 Mo
 房间才发现地图像鬼画符）、运行时零推断开销、快照里坐标只是普通数据。
 `Coordinates` 是 `Exits` 的**派生产物**，不是第二份真相——拓扑改了地图跟着变。
 
+## 区域与世界地图 + 自包含房间行为（v0.9）
+
+两个升级一次到位：**房间之上有了"区域"这一级**（每个区域是一张独立平面），
+**房间从静态数据块升级为自包含内容模块**（守卫 / 生命周期 / 房间命令 / 自己的状态）：
+
+```ts
+import { trait, blueprint } from '@mud/ecs-engine';
+import {
+  defineRoom, defineArea, layoutWorld, buildRooms, buildAreas, buildRoomBehaviors,
+  WorldMapCommand, MapCommand,
+} from '@mud/prefabs';
+
+const HayState = trait('hay_state', () => ({ searched: false }));
+
+const rooms = [
+  defineRoom({
+    id: 'square', name: '村口广场', description: '…', area: 'village',
+    exits: { east: 'path' },
+    state: HayState,                        // 房间状态走组件：进快照、可回滚
+    commands: [{                            // 房间命令：动词只在身处该房间时生效
+      verbs: ['search'],
+      handle(ctx) {
+        if (ctx.state.searched) return '干草堆已经被你翻遍了。';
+        ctx.state.searched = true;
+        ctx.spawn(blueprint({ components: [[Name, { text: '火把' }], [Located, { at: ctx.roomId }], [Portable]] }));
+        return '你从干草堆里翻出一支火把。';
+      },
+    }],
+  }),
+  defineRoom({
+    id: 'path', name: '荒野小径', description: '…', area: 'wilds',
+    exits: { west: 'square', south: 'mire' },
+  }),
+  defineRoom({
+    id: 'mire', name: '毒雾泥沼', description: '…', area: 'wilds',
+    exits: { north: 'path' },
+    on: {
+      canEnter(ctx) {                       // 守卫：同步查询，返回理由 = 拦下并输出
+        return hasTorch(ctx) ? undefined : '泥沼入口漆黑一片，没有火把寸步难行。';
+      },
+      enter(ctx) {                          // 生命周期：真正落位后触发
+        ctx.output.narrative('毒雾无声无息地缠了上来……');
+      },
+      every: { ms: 2000, handle(ctx) { /* 房间心跳：世界时间驱动，drift-free */ } },
+    },
+  }),
+];
+
+const layout = layoutWorld(rooms, {
+  entry: 'square', entryArea: 'village',
+  areas: [defineArea({ id: 'village', name: '村庄' }), defineArea({ id: 'wilds', name: '荒野' })],
+});
+buildRooms(world, layout);
+buildAreas(world, layout);          // 区域是实体：能挂天气/危险度等自己的组件，进快照
+buildRoomBehaviors(world, rooms);   // 行为注册（必须在 buildRooms 之后）
+world.registerCommands(MapCommand, WorldMapCommand); // map=当前区域 / worldmap=区域之间
+```
+
+| 规则 | 说明 |
+| --- | --- |
+| 区域 = 一张平面 | 每个区域有自己的坐标系；塔顶、洞穴各自成区域——v0.8"非四方向出口拿不到坐标"的边界自然消失 |
+| 单一真相 | 房间声明 `area`，区域**不抄** rooms 反表；区域出口由**跨区域房间出口反推**（改房间忘改区域不可能发生） |
+| 生命周期 | `on.enter` / `leave` / `firstEnter` / `look` / `every`；`Moved` 是**结果**不是意图：守卫拒绝时不落位、不记账、不触发 enter |
+| 房间状态 | `state` 组件（进快照 / fork / 回滚）；**闭包变量不进快照**——未声明 state 却摸 `ctx.state` 会直接报人话错误 |
+| 房间命令 | 纯翻译层 + 事件派发；处理器有系统特权（spawn/destroy/output），spawn 出的东西真捡得走；动词冲突定义期 fail-fast |
+| 派发架构 | 所有房间由同一对系统查表服务（不是一房一系统）；故障域 = 单房间，一个房间的 bug 不连坐全世界 |
+| `every` | 间隔必须是 tick 间隔的整数倍（定义期 fail-fast），`RoomClock` 记账，drift-free |
+| 校验 | 空区域 / 孤岛区域 / 区内孤岛（多半是 `area` 标错了）/ 区域出口冲突（同方向通向两个区域）——全部定义期 fail-fast |
+| 地图 | `map` 自动按当前区域过滤（两套坐标系不相撞，抬头带【区域名】）；`worldmap` 战争迷雾口径 = 区域内去过任意一间房 |
+
+**为什么房间行为是"代码 + 组件"而不是把一切塞进快照**：函数进不了快照
+（`structuredClone` 直接抛 DataCloneError），把行为藏进闭包等于告别存档。
+`defineRoom` 的答案是：**行为是代码（回滚后重新可用），状态是数据（`state`
+组件，随快照走）**。跨房间的机制不要塞给单个房间——那是区域或全局系统的职责。
+
 ## 开发
 
 ```bash

@@ -59,13 +59,14 @@ try {
   await writeFile(
     join(consumer, 'smoke.mjs'),
     `
-import { World, Name } from '@mud/ecs-engine';
+import { World, Name, trait, blueprint } from '@mud/ecs-engine';
 import {
   MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem,
   BuffSystem, BuffCleanupSystem,
   Health, Position, Exits, Description, Located, Portable, Loot, QuestGiver, QuestLog,
   Afflicted, buffBlueprint, Visited, VisitationSystem, MapCommand, Coordinates,
   defineRoom, layoutRooms, buildRooms, renderAsciiMap, markVisited,
+  defineArea, layoutWorld, buildAreas, buildRoomBehaviors, WorldMapCommand,
   GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
   TakeCommand, DropCommand, LookCommand, AttackCommand, QuestCommand, TurnInCommand,
 } from '@mud/prefabs';
@@ -201,6 +202,59 @@ if (!mapOut.includes('·—·') || !mapOut.includes('图例')) throw new Error('
 // 迷雾：只画去过的房间
 const fog = renderAsciiMap(layout.rooms, { visited: ['plaza'] });
 if (fog !== '·') throw new Error('ESM renderAsciiMap 迷雾契约失败: ' + fog);
+// v0.9 区域 + 自包含房间行为：区域出口反推、守卫拦截、房间命令（state 记账 + spawn 可拾取）
+const HayStateC = trait('hay_state_c', () => ({ searched: false }));
+const w2 = new World();
+w2.register(MovementSystem, VisitationSystem, ItemSystem);
+w2.registerCommands(
+  GoCommand, TakeCommand, WorldMapCommand,
+  createDirectionCommand('east', ['east']), createDirectionCommand('west', ['west']),
+);
+const areaRooms = [
+  defineRoom({
+    id: 'plaza2', name: '广场2', description: '', area: 'cv', exits: { east: 'glade' },
+    state: HayStateC,
+    commands: [{
+      verbs: ['search'],
+      handle(ctx) {
+        if (ctx.state.searched) return '翻遍了。';
+        ctx.state.searched = true;
+        ctx.spawn(blueprint({ components: [[Name, { text: '蜡烛' }], [Located, { at: ctx.roomId }], [Portable]] }));
+        return '翻出一支蜡烛。';
+      },
+    }],
+  }),
+  defineRoom({
+    id: 'glade', name: '林间空地', description: '', area: 'cw', exits: { west: 'plaza2' },
+    on: { canEnter: () => '空地入口被荆棘封死了。' },
+  }),
+];
+const layout2 = layoutWorld(areaRooms, {
+  entry: 'plaza2', entryArea: 'cv',
+  areas: [defineArea({ id: 'cv', name: '村2' }), defineArea({ id: 'cw', name: '林2' })],
+});
+if (layout2.areas[0]?.exits.east !== 'cw') throw new Error('ESM 区域出口反推契约失败');
+if (layout2.areas[0]?.coords?.x !== 0 || layout2.areas[1]?.coords?.x !== 1) {
+  throw new Error('ESM 区域坐标推断契约失败');
+}
+buildRooms(w2, layout2);
+buildAreas(w2, layout2);
+buildRoomBehaviors(w2, areaRooms);
+const p2 = w2.entities.createWithId('p2');
+w2.entities.addComponent(p2, Position, { roomId: 'plaza2' });
+// 守卫同步拦截：不落位
+await w2.execute('east', p2);
+if (w2.entities.getComponent(p2, Position)?.roomId !== 'plaza2') throw new Error('ESM 守卫契约失败');
+// 房间命令：state 记账 + spawn 的东西真捡得走
+await w2.execute('search', p2);
+await w2.execute('take 蜡烛', p2);
+if (!w2.entities.findByComponent(Located).some((id) => w2.entities.getComponent(id, Located)?.at === p2)) {
+  throw new Error('ESM 房间命令 spawn 契约失败');
+}
+await w2.execute('search', p2); // 第二次搜空（state 持久），不应报错
+// worldmap：区域图渲染
+const wm = await w2.execute('worldmap', p2);
+if (!wm.includes('图例')) throw new Error('ESM worldmap 契约失败: ' + wm);
 console.log('ESM 契约 ✓');
 `,
   );
@@ -217,6 +271,8 @@ if (!prefabs.Health || !prefabs.MovementSystem || !prefabs.GoCommand) throw new 
 if (typeof prefabs.buffBlueprint !== 'function') throw new Error('CJS buffBlueprint 导出缺失');
 if (typeof prefabs.layoutRooms !== 'function' || typeof prefabs.renderAsciiMap !== 'function') throw new Error('CJS 房间/地图导出缺失');
 if (typeof prefabs.MapCommand !== 'object' || typeof prefabs.VisitationSystem !== 'object') throw new Error('CJS 地图命令/系统导出缺失');
+if (typeof prefabs.defineArea !== 'function' || typeof prefabs.layoutWorld !== 'function' || typeof prefabs.buildAreas !== 'function' || typeof prefabs.buildRoomBehaviors !== 'function') throw new Error('CJS 区域/房间行为导出缺失');
+if (typeof prefabs.WorldMapCommand !== 'object') throw new Error('CJS 世界地图命令导出缺失');
 if (typeof prefabs.Health.create !== 'function') throw new Error('CJS 无法构造');
 console.log('CJS 契约 ✓');
 `,
@@ -246,6 +302,7 @@ import { World, trait } from '@mud/ecs-engine';
 import {
   Health, Position, MovementSystem, GoCommand, buffBlueprint,
   defineRoom, layoutRooms, renderAsciiMap,
+  defineArea, layoutWorld, buildAreas, buildRoomBehaviors,
 } from '@mud/prefabs';
 // trait 定义类型可用
 const hp = Health.create();
@@ -270,6 +327,28 @@ const layout = layoutRooms(
 );
 const mapStr: string = renderAsciiMap(layout.rooms, { visited: ['r1'] });
 void mapStr;
+// v0.9 区域 + 房间行为类型可用（ctx.state 类型推导自 defineRoom 的 state trait）
+const CandleC = trait('candle_c', () => ({ fuel: 2 }));
+const areaLayout = layoutWorld(
+  [
+    defineRoom({
+      id: 'a1', name: '甲', description: '', area: 'ax', exits: { east: 'b1' },
+      state: CandleC,
+      commands: [{ verbs: ['knock'], handle(ctx) { ctx.state.fuel -= 1; return '咚咚'; } }],
+    }),
+    defineRoom({ id: 'b1', name: '乙', description: '', area: 'bx', exits: { west: 'a1' } }),
+  ],
+  {
+    entry: 'a1', entryArea: 'ax',
+    areas: [defineArea({ id: 'ax', name: 'A区' }), defineArea({ id: 'bx', name: 'B区' })],
+  },
+);
+const areaExits: Record<string, string> = areaLayout.areas[0]!.exits;
+void areaExits;
+buildAreas(w, areaLayout);
+buildRoomBehaviors(w, areaLayout.rooms);
+const shrine = w.entities.getComponent('a1', CandleC);
+void shrine;
 // 类型错误必须被捕获（此文件不应出现编译错误）
 export const _check: number = p;
 `,

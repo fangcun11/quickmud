@@ -3,7 +3,8 @@
  *
  * 约定：
  * - 移动：`Position.roomId` 指向房间实体 id；房间实体带 `Exits`（方向→房间 id）；
- *   MovementSystem 校验出口，合法才落位并输出目标房间名与描述
+ *   命令 emit `MoveRequested`（意图）→ MovementSystem 校验出口与守卫，
+ *   合法才落位、输出房间名与描述，最后 emit `Moved`（结果）
  * - 查看：DescriptionSystem 输出所在房间的 Name/Description，并列出地上可拾取物
  * - 物品：物品实体带 `Located { at }`（单源位置）。take/drop 只改 at——
  *   房间/玩家/箱子都是普通实体，均可作容器
@@ -20,6 +21,7 @@ import type {
 } from '@mud/ecs-engine';
 import {
   Moved,
+  MoveRequested,
   Look,
   ItemTaken,
   ItemDropped,
@@ -58,15 +60,34 @@ import {
   occupantsIn,
   containerOf,
 } from './queries.js';
+import { queryRoomGate } from './behavior.js';
 
-/** 处理实体移动（出口校验 + 落位 + 描述） */
+/**
+ * 移动系统（v0.9-A 重写）：`MoveRequested` 的**唯一**订阅者
+ *
+ * 管线（同步、不可中断）：
+ * ```
+ * 出口存在？否 → "你不能往X走。"
+ * canLeave（出发房间）→ 有理由 → 输出理由，不动
+ * canEnter（目标房间）→ 有理由 → 输出理由，不动
+ * 落位 pos.roomId = 目标
+ * 输出房间名 + 描述
+ * emit Moved（结果，to = 房间 id）
+ * ```
+ *
+ * 守卫为什么是**同步查询**而不是"高优先级系统否决"：引擎的事件泵没有取消机制
+ * （`EventContext` 只暴露 emit），事件一旦入队就必然跑完。所以"拦截"只能发生在
+ * 落位之前、由本系统自己问。
+ *
+ * 也正因为如此，`Moved` 必须是**结果**而不是意图：守卫放行前 emit 的任何
+ * "到达"都会让 `Visited` 误记、房间 `enter` 幽灵触发。
+ */
 export const MovementSystem = defineSystem<{
   entity: EntityId;
-  from: string;
   to: string;
 }>({
   name: 'prefab.movement',
-  on: [Moved],
+  on: [MoveRequested],
   priority: 0,
   handle(event, ctx) {
     const { entity, to } = event.data;
@@ -74,18 +95,34 @@ export const MovementSystem = defineSystem<{
     const pos = ctx.getComponent(entity, Position);
     if (!pos) return;
 
-    // 从当前所在房间的出口中查找目标房间
-    const exits = ctx.getComponent(pos.roomId, Exits);
+    const from = pos.roomId;
+
+    // 1. 出口存在性（拓扑真相来自 Exits）
+    const exits = ctx.getComponent(from, Exits);
     const targetRoomId = exits?.[to];
-    if (!exits || !targetRoomId) {
+    if (!targetRoomId) {
       ctx.output.narrative(`你不能往${to}走。`);
       return;
     }
 
-    // 更新位置（唯一改状态处）
+    // 2. 出发房间的离开守卫
+    const leave = queryRoomGate(ctx, from, 'canLeave', entity, to);
+    if (leave !== undefined) {
+      ctx.output.narrative(leave);
+      return;
+    }
+
+    // 3. 目标房间的进入守卫（守卫跑在落位之前，所以拒绝时不留任何副作用）
+    const enter = queryRoomGate(ctx, targetRoomId, 'canEnter', entity, to);
+    if (enter !== undefined) {
+      ctx.output.narrative(enter);
+      return;
+    }
+
+    // 4. 落位（唯一改状态处）
     pos.roomId = targetRoomId;
 
-    // 输出目标房间的标题与描述
+    // 5. 输出目标房间的标题与描述
     const roomName = ctx.getComponent(targetRoomId, Name);
     const desc = ctx.getComponent(targetRoomId, Description);
     ctx.output.narrative([
@@ -94,30 +131,34 @@ export const MovementSystem = defineSystem<{
     if (desc) {
       ctx.output.narrative(desc.text);
     }
+
+    // 6. 广播"人真的到了"——探索记账、房间 enter/leave/firstEnter 都挂在这上面
+    ctx.emit(Moved, { entity, from, to: targetRoomId, direction: to });
   },
 });
 
 /**
  * 探索记录系统（v0.8-B）：把去过的房间写进 `Visited`
  *
- * 顺序陷阱（与 v0.7 沼泽毒雾同款）：`Moved.to` 是**方向**不是房间 id，
- * 所以从出发房间的 `Exits` 反查目标——读 `Position` 也能拿到落位后的房间，
- * 但那要求本系统注册在 `MovementSystem` 之后（依赖注册顺序）。
- * 出口校验失败（撞墙）时没有落位，不记账。
+ * v0.9 起 `Moved.to` 就是房间 id，v0.8 那段"从出发房间 Exits 反查目标"的
+ * 绕路（以及随之而来的注册顺序依赖）彻底消失。
+ *
+ * 没挂 `Visited` 的实体不参与记账（系统不能替内容补组件）。
  */
-export const VisitationSystem = defineSystem<{ entity: EntityId; from: string; to: string }>({
+export const VisitationSystem = defineSystem<{
+  entity: EntityId;
+  from: EntityId;
+  to: EntityId;
+}>({
   name: 'prefab.visitation',
   on: [Moved],
   priority: 0,
   handle(event, ctx) {
-    const { entity, from, to } = event.data;
+    const { entity, to } = event.data;
     const visited = ctx.getComponent(entity, Visited);
-    if (!visited) return; // 没挂 Visited = 这个实体不参与探索记录
+    if (!visited) return;
 
-    const target = ctx.getComponent(from as EntityId, Exits)?.[to];
-    if (!target) return;
-
-    if (!visited.rooms.includes(target)) visited.rooms.push(target);
+    if (!visited.rooms.includes(to)) visited.rooms.push(to);
   },
 });
 

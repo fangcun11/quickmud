@@ -1,9 +1,10 @@
 /**
- * mini-rpg 内容系统（v0.7-B）——「纯内容」的示范核心
+ * mini-rpg 内容系统（v0.9）——「纯内容」的示范核心
  *
  * 全部能力来自 @mud/ecs-engine + @mud/prefabs 的公开 API，零源码侵入：
  *
- * - SwampMiasmaSystem  订阅 `Moved`：进沼泽 → spawn 毒雾 buff（区域效果，不分敌我）
+ * - 沼泽毒雾     不再是全局系统——它就是沼泽这个房间的 `on.enter`（v0.9 起
+ *   房间行为由 `defineRoom` 自包含，见 bootstrap.ts）
  * - SpiderRevengeSystem 订阅 `Attack`：巨蛛被打 → **emit 标准 Attack 反咬**（走
  *   CombatSystem 正常结算，死亡管线全生效）——纯内容实现的 boss AI
  * - SpiderVenomSystem  订阅 `Attack`：巨蛛咬人 → 给受害者 spawn 蛛毒 buff
@@ -17,16 +18,12 @@
 import { defineSystem, DialogueChoiceMade } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 import {
-  Moved,
   Attack,
   QuestTurnedIn,
   Health,
-  Exits,
   Located,
   buffBlueprint,
 } from '@mud/prefabs';
-
-type MovedPayload = { entity: EntityId; from: string; to: string };
 type AttackPayload = { attacker: EntityId; target: EntityId };
 type ChoicePayload = {
   player: EntityId;
@@ -42,33 +39,9 @@ const SPIDER = 'spider' as EntityId;
 /**
  * 沼泽毒雾：进入沼泽的活物都会缠上毒雾（lasts 8s，每 2s -3 → 共 -9）
  *
- * 不区分玩家与 NPC——狼游进沼泽照样中毒（毒雾不分敌我，内容自洽）。
- * 无 `source`：天灾无毒杀归属。
- *
- * 判定细节：`Moved.to` 是**方向**而非房间 id（MovementSystem 的契约），
- * 所以用「from 房间的出口表里 to 方向指向 swamp」来判定"真的走进了沼泽"——
- * 出口校验失败（撞墙）不会误触发，也不依赖系统注册顺序。
+ * v0.9 起这段逻辑**搬进了沼泽房间的 `on.enter`**（bootstrap.ts）——
+ * "进这个房间会发生什么"属于房间自己，不再是一个满世界 if 的全局系统。
  */
-export const SwampMiasmaSystem = defineSystem<MovedPayload>({
-  name: 'mini-rpg.swamp-miasma',
-  on: [Moved],
-  priority: 0,
-  handle(event, ctx) {
-    const { entity, from, to } = event.data;
-    const exits = ctx.getComponent(from as EntityId, Exits);
-    if (exits?.[to] !== ('swamp' as EntityId)) return;
-    if (!ctx.getComponent(entity, Health)) return; // 毒雾只缠活物
-
-    ctx.spawn(
-      buffBlueprint({
-        victim: entity,
-        effect: { type: 'damage', amount: 3, every: 2000 },
-        lasts: 8000,
-      }),
-    );
-    ctx.output.narrative('沼泽的毒雾无声无息地缠了上来……（每隔一会儿 -3 生命，持续一阵子）');
-  },
-});
 
 /**
  * 巨蛛反击：被玩家攻击时反咬一口

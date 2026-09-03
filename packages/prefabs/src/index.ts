@@ -10,7 +10,9 @@
  */
 export * from './traits.js';
 export * from './events.js';
+export * from './behavior.js';
+export * from './room.js';
+export * from './area.js';
 export * from './systems.js';
 export * from './commands.js';
 export * from './queries.js';
-export * from './room.js';

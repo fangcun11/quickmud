@@ -9,7 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import { World, Name } from '@mud/ecs-engine';
 import { Exits, Description, Coordinates } from './traits.js';
-import { defineRoom, layoutRooms, buildRooms } from './room.js';
+import { defineRoom } from './behavior.js';
+import { layoutRooms, buildRooms } from './room.js';
 
 function room(id: string, exits: Record<string, string> = {}, coords?: { x: number; y: number }) {
   return defineRoom({ id, name: id.toUpperCase(), description: `${id} 的描述`, exits, coords });

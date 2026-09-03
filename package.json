@@ -1,6 +1,6 @@
 {
   "name": "mud-engine",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "description": "MUD文字游戏引擎 - 单机、事件驱动、ECS的文字MUD游戏引擎库",
   "license": "MIT",

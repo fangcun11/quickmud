@@ -1,14 +1,58 @@
 /**
  * @mud/prefabs 事件（0.3 toolkit）—— 移动与查看的官方事件
+ *
+ * 移动有两个事件，**语义不同、不可混用**（v0.9-A 拆分）：
+ * - `MoveRequested`：意图。命令 emit，`MovementSystem` 是它的唯一订阅者
+ * - `Moved`：结果。`MovementSystem` 校验通过并落位后才 emit
+ *
+ * 拆分前只有一个 `Moved`（to = 方向），于是"撞墙"和"到达"共用同一个事件，
+ * 订阅者只能从出发房间的出口表反查目标房间——一旦引入 `canEnter/canLeave`
+ * 守卫（守卫放行前不能算到达），这套反查会同时误记 `Visited` 并幽灵触发
+ * 房间 `enter`。**这不是风格选择，是正确性的前提。**
  */
 import { defineEvent } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 
-/** 实体移动事件：{ entity, from 房间, to 方向 }（MovementSystem 校验出口并落位） */
+/**
+ * 移动**意图**（v0.9-A）：{ entity, to = 方向 }
+ *
+ * 由移动命令 emit，`MovementSystem` 是唯一订阅者。
+ * 注意没有 `from`——出发房间由系统从 `Position` 读出，命令不该抄状态。
+ */
+export const MoveRequested = defineEvent('move_requested')<{
+  entity: EntityId;
+  /** 方向（north/south/east/west/……） */
+  to: string;
+}>();
+
+/**
+ * 移动**结果**（v0.9-A 起 `to` 是房间 id，不再是方向）
+ *
+ * 只在 `MovementSystem` 真正落位后 emit——一切"人真的到了"才该发生的事
+ * （探索记账、房间 enter/leave/firstEnter、区域效果）都挂在这里。
+ * `direction` 便于房间写出"你从北面走进来"这类文案。
+ */
 export const Moved = defineEvent('moved')<{
   entity: EntityId;
-  from: string;
-  to: string;
+  from: EntityId;
+  to: EntityId;
+  /** 走的是哪个方向（可选：非移动触发的 Moved 没有方向） */
+  direction?: string;
+}>();
+
+/**
+ * 房间命令被触发（v0.9-A）：{ player, roomId, verb }
+ *
+ * 房间专属动词的**翻译层**：全局注册的房间命令只做"玩家在不在那个房间"的
+ * 校验并 emit 本事件，真正的命令逻辑由 `RoomEventSystem` 在事件泵内派发——
+ * 所以房间命令处理器与房间事件处理器同级，拥有系统特权（spawn/destroy），
+ * 而"命令不改状态"的铁律对翻译层依然成立。
+ */
+export const RoomCommandInvoked = defineEvent('room_command_invoked')<{
+  player: EntityId;
+  roomId: EntityId;
+  /** 命令的主动词（verbs[0]，归一化用） */
+  verb: string;
 }>();
 
 /** 查看事件：{ entity, target? }（DescriptionSystem 输出当前位置描述） */

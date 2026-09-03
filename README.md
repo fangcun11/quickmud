@@ -40,12 +40,18 @@ quickmud 的解法是把游戏拆成一条**单向流水线**，并让整条流�
 你拿起了「狼皮」。
 
 > map
+【野地】
 ·—@
 图例：@ 当前位置 · 已探明（未探明区域留白）
+
+> worldmap
+·—@
+图例：@ 当前位置 · 已探明区域（未探明区域留白）
 ```
 
 地图不是画出来的，是**从房间的出口拓扑自动推断**的——你只写"森林在村庄东边"，
-坐标和连线由 `layoutRooms()` 算出来，迷雾由 `Visited` 组件决定。
+坐标和连线由 `layoutWorld()` 算出来；每个区域是一张独立平面，`map` 画当前区域、
+`worldmap` 画区域之间的连接，迷雾由 `Visited` 组件决定。
 
 ---
 
@@ -183,6 +189,8 @@ buildRooms(world, layout);
 | | 世界分叉 | `world.fork()` 试跑 NPC 决策、技能预演，主世界不受影响 |
 | | 可控时钟 | `every` 周期系统 + `ctx.after` 延时，测试里 `clock.advance()` 真实驱动 |
 | 领域 | 房间与地图 | `defineRoom` + 坐标自动推断 + ASCII 地图 + 迷雾 |
+| | 区域与世界 | `defineArea` + 区域出口自动反推 + 每区域独立坐标系 + `worldmap` 区域迷雾 |
+| | 自包含房间 | 守卫（canEnter/canLeave）、生命周期（enter/firstEnter/every）、房间命令、`state` 组件——行为是代码，状态是数据 |
 | | 物品与容器 | `Located` 单源位置（房间/背包/箱子同一套语义） |
 | | 战斗与掉落 | 伤害结算 → 死亡事件 → 掉落结算 → 清场，各阶段独立可插拔 |
 | | 任务 | 进度追踪 + 交付发奖，事件驱动 |
@@ -197,9 +205,9 @@ buildRooms(world, layout);
 | [新手指南](./docs/guide.md) | 从零搭出可存档游戏的完整教程（文中代码全部经过实测） |
 | [引擎 README](./packages/engine/README.md) | 引擎 API 与测试支持 |
 | [预制件 README](./packages/prefabs/README.md) | 领域件用法与已知边界 |
-| [文档示例](./docs/examples) | 5 个可运行示例，`strict` 类型检查 + 运行双验证 |
+| [文档示例](./docs/examples) | 6 个可运行示例，`strict` 类型检查 + 运行双验证 |
 | [CHANGELOG](./CHANGELOG.md) | 逐版本变更明细 |
-| [路线图](./docs) | `roadmap-0.6` ~ `roadmap-0.8` 的设计定稿与实现记录 |
+| [路线图](./docs) | `roadmap-0.6` ~ `roadmap-0.9` 的设计定稿与实现记录 |
 
 ## 设计取舍
 

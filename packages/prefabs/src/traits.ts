@@ -206,3 +206,57 @@ export const Coordinates = trait('coordinates', () => ({ x: 0, y: 0 }));
  * 没挂 → 地图命令渲染全图。
  */
 export const Visited = trait('visited', () => ({ rooms: [] as string[] }));
+
+/**
+ * 区域归属（v0.9-B）：挂**房间**，指向它所属的区域实体 id
+ *
+ * 单一真相铁律（与 Coordinates 同款）：房间声明 `area`，区域**不**维护
+ * `rooms` 数组——"这个区域有哪些房间"永远是查询出来的，不是抄出来的。
+ * 区域的出口拓扑同样由跨区域的房间出口反推（`layoutWorld`），不手写。
+ *
+ * 房间没有本组件 = 它不属于任何区域（无区域的世界，或内容作者没标）。
+ */
+export const Area = trait('area', () => ({ id: '' as EntityId }));
+
+/**
+ * 区域实体 id：`area:<区域 id>`
+ *
+ * 房间与区域在引擎里共用**同一个实体 id 命名空间**，内容作者随手写个
+ * `village` 区域、又有个 `village` 房间，就会在 `createWithId` 上撞个正着。
+ * 用确定性前缀把两个命名空间分开——作者面向的 id（`room.area: 'wilds'`）
+ * 保持原样，实体层自动加前缀，不需要任何人记着"起名要避开"。
+ */
+export function areaEntityId(areaId: string): EntityId {
+  return `area:${areaId}` as EntityId;
+}
+
+/**
+ * 房间周期时钟（v0.9-A）：挂**房间**，记录该房间上次触发 `every` 的世界时间
+ *
+ * 为什么必须是组件而不是闭包变量：闭包捕获的状态不进快照，fork 出去的世界
+ * 会与主世界脱钩、回滚会错乱。时间账本走组件 ⇒ 快照/回滚/fork 天然一致。
+ */
+export const RoomClock = trait('room_clock', () => ({ lastTickedAt: 0 }));
+
+/**
+ * 首次进入账本（v0.9-A）：挂**房间**，记录进过这个房间的实体
+ *
+ * 由 prefabs 内部维护（`RoomEventSystem` 在调 `firstEnter` 后记账），
+ * **不污染内容层的 `state`**——"谁来过"是引擎的账，不是房间的内容状态。
+ * 也不复用 `Visited`：那是地图迷雾的声明，语义不同（没挂 Visited 的 NPC
+ * 也该有 firstEnter）。
+ *
+ * 出生就在这间房的实体没有 `Moved` 事件可订阅 → 不会触发 `firstEnter`
+ * （与 `markVisited` 需要 seed 同一个道理）。
+ */
+export const RoomEnterLog = trait('room_enter_log', () => ({ entities: [] as string[] }));
+
+/**
+ * 房间行为槽位（v0.9-A）：挂**房间**，是房间实体 → 行为定义的**间接层**
+ *
+ * 为什么存下标而不是直接存行为对象：行为里全是函数，函数不能进组件
+ * （快照走 structuredClone，遇函数直接 DataCloneError）。存一个整数下标，
+ * 函数本体留在模块级的 `BEHAVIORS` 表里——组件里只有可 JSON 的数字，
+ * 每个世界各自持有自己的下标，多世界/多快照互不串台。
+ */
+export const RoomBehaviorRef = trait('room_behavior_ref', () => ({ index: -1 }));
