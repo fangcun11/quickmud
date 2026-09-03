@@ -1,13 +1,25 @@
 {
   "name": "mud-engine",
-  "version": "0.1.0",
+  "version": "0.8.0",
   "private": true,
   "description": "MUD文字游戏引擎 - 单机、事件驱动、ECS的文字MUD游戏引擎库",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fangcun11/quickmud.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fangcun11/quickmud/issues"
+  },
+  "homepage": "https://github.com/fangcun11/quickmud#readme",
   "scripts": {
     "dev": "pnpm --filter demo-adventure dev",
+    "dev:rpg": "pnpm --filter mini-rpg dev",
     "build": "pnpm --filter @mud/ecs-engine build && pnpm --filter @mud/prefabs build",
     "test": "pnpm --filter @mud/ecs-engine test && pnpm --filter @mud/prefabs test && pnpm --filter mini-rpg test",
-    "test:contract": "pnpm --filter @mud/ecs-engine test:contract && pnpm --filter @mud/prefabs test:contract"
+    "test:contract": "pnpm --filter @mud/ecs-engine test:contract && pnpm --filter @mud/prefabs test:contract",
+    "test:docs": "node docs/examples/verify-doc-examples.mjs",
+    "lint": "pnpm --filter @mud/ecs-engine lint && pnpm --filter @mud/prefabs lint"
   },
   "engines": {
     "node": ">=18.0.0"
