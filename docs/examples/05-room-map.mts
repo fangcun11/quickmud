@@ -80,14 +80,14 @@ assert.throws(
 // ---- 3. 全图渲染（纯函数，可逐行断言）----
 assert.equal(
   renderAsciiMap(layout.rooms, { current: 'cave' }),
-  ['村庄 ─── 森林小径', '             │', '         沼泽     ─── 蛛巢洞穴(你)'].join('\n'),
+  ['村庄 ─── 森林小径', '             │', '           沼泽   ─── 蛛巢洞穴(你)'].join('\n'),
   '全图应地名直书、连线表方位、(你) 标当前位置',
 );
 
 // ---- 4. 迷雾：只画去过的房间，且连线两端都探明才画 ----
 assert.equal(
   renderAsciiMap(layout.rooms, { visited: ['village', 'forest', 'swamp'] }),
-  ['村庄 ─── 森林小径', '             │', '         沼泽    ──'].join('\n'),
+  ['村庄 ─── 森林小径', '             │', '           沼泽  ──'].join('\n'),
   '未探明的洞穴不露名字，沼泽朝它的出口画断线',
 );
 

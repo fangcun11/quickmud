@@ -355,11 +355,11 @@ const V_LINE = '│';
  * 探明时画实线；指向未探明/图外（含跨区域）的出口画一小段**断线**——
  * 告诉玩家"这边还有路"，但看不清通向哪里。
  *
- * 布局：同一 x 坐标的节点共享一列（列宽 = 列上最宽名字，中文名按显示宽
- * 2 列计），同一 y 坐标共享一行；行块之间夹一行放垂直连线。垂直线锚定
- * **名字主体的中心**（不含 `(你)` 标注——标注不参与对齐，否则带标注的
- * 格子会把指示符带偏）。坐标是全图定 bounds 的（相对位置固定，地图不随
- * 探索跳动）。
+ * 布局：同一 x 坐标的节点共享一列，列内**每个名字以裸名（不含标注）
+ * 中心统一对齐**（锚点 = colX + 最大左伸，列宽 = 左伸 + 右伸的内容跨度，
+ * 中文名按显示宽 2 列计），同一 y 坐标共享一行；行块之间夹一行放垂直
+ * 连线。垂直线画在锚点上，列内所有名字都精确对准。坐标是全图定 bounds
+ * 的（相对位置固定，地图不随探索跳动）。
  */
 export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): string {
   const placed = nodes.filter((node) => node.coords);
@@ -373,33 +373,39 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
   const at = (x: number, y: number): MapNode | undefined =>
     placed.find((n) => visible.has(n.id) && n.coords!.x === x && n.coords!.y === y);
 
-  // ---- 列宽与列起点：同一 x 的格子等宽对齐；垂直线锚名字主体中心 ----
+  // ---- 列布局：裸名中心统一对齐 ----
+  // 每个格子以自身裸名（不含 `(你)` 标注）的中心放置，同列共用一个锚点：
+  // 锚点 = colX + L，其中 L = 列内最大左伸（max floor(裸名宽/2)），
+  // 列宽 = L + R（R = 列内最大右伸 = max (label宽 − floor(裸名宽/2))）。
+  // 这样名字长短不一、带不带标注，裸名中心都精确落在锚点上——
+  // 垂直线只画一处，列内每个名字都对得齐。
   const xs = [...new Set(placed.map((n) => n.coords!.x))].sort((a, b) => a - b);
   const ys = [...new Set(placed.map((n) => n.coords!.y))].sort((a, b) => a - b);
-  const colW = new Map<number, number>();
+  const colL = new Map<number, number>();
+  const colR = new Map<number, number>();
   for (const x of xs) {
-    let w = 0;
+    let l = 0;
+    let r = 0;
     for (const y of ys) {
       const n = at(x, y);
-      if (n) w = Math.max(w, displayWidth(label(n)));
+      if (!n) continue;
+      const half = Math.floor(bareW(n) / 2);
+      l = Math.max(l, half);
+      r = Math.max(r, displayWidth(label(n)) - half);
     }
-    colW.set(x, w);
+    colL.set(x, l);
+    colR.set(x, r);
   }
+  const colW = new Map<number, number>();
+  for (const x of xs) colW.set(x, colL.get(x)! + colR.get(x)!);
   const colX = new Map<number, number>();
   let acc = 0;
   for (const x of xs) {
     colX.set(x, acc);
     acc += colW.get(x)! + H_GAP;
   }
-  // 垂直线锚点：名字主体（裸名）的中心——`(你)` 标注不参与对齐
-  const vertAnchor = (x: number) => {
-    let w = 0;
-    for (const y of ys) {
-      const n = at(x, y);
-      if (n) w = Math.max(w, bareW(n));
-    }
-    return colX.get(x)! + Math.floor(w / 2);
-  };
+  // 垂直线锚点：列内所有裸名中心的公共位置
+  const vertAnchor = (x: number) => colX.get(x)! + colL.get(x)!;
 
   // ---- 行画布：视觉列 → 字符（宽字符占 2 格，第二格写空串占位）----
   const newRow = (): Map<number, string> => new Map();
@@ -427,10 +433,12 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
   const topRow = newRow();
   const bottomRow = newRow();
 
-  // ---- 名字 ----
+  // ---- 名字：以裸名中心对齐锚点放置（`(你)` 标注向右悬挂）----
   for (const n of placed) {
     if (!visible.has(n.id)) continue;
-    writeText(blockRow(n.coords!.y), colX.get(n.coords!.x)!, label(n));
+    const x = n.coords!.x;
+    const start = vertAnchor(x) - Math.floor(bareW(n) / 2);
+    writeText(blockRow(n.coords!.y), start, label(n));
   }
 
   // ---- 连线判定：存在任一方向的出口边使两格坐标相邻 ----
