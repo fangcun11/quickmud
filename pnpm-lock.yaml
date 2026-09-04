@@ -89,6 +89,9 @@ importers:
       '@mud/prefabs':
         specifier: workspace:*
         version: link:../../packages/prefabs
+      '@mud/web-client':
+        specifier: workspace:*
+        version: link:../../packages/web-client
     devDependencies:
       '@types/node':
         specifier: ^20.11.5

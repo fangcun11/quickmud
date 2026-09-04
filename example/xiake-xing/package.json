@@ -7,11 +7,13 @@
   "scripts": {
     "dev": "tsx src/main.ts",
     "walk": "tsx src/walk.ts",
+    "build": "node ../../packages/engine/scripts/build-html.js src/main-web.ts dist/game.html",
     "test": "vitest run"
   },
   "dependencies": {
     "@mud/ecs-engine": "workspace:*",
-    "@mud/prefabs": "workspace:*"
+    "@mud/prefabs": "workspace:*",
+    "@mud/web-client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
