@@ -1,0 +1,129 @@
+/**
+ * 侠客行 · 修炼（M1 内功根基）
+ *
+ * 打坐是内力的唯一来源：玩家出生即预挂 `Cultivating`，打坐时 `on` 置位，每 tick 由 MeditationSystem
+ * 结算回复；移动、受击自动打断（InterruptSystem）。「状态」命令是属性
+ * 一览，替换 prefabs 的 ScoreCommand（那是 demo 件，只报生命和房间 id）。
+ *
+ * 命令不改状态（引擎铁律）：打坐/停只发意图事件，挂/摘 Cultivating
+ * 由 CultivationToggleSystem 落地。
+ */
+import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
+import { Health, Position, Moved, displayName } from '@mud/prefabs';
+import { Energy, Stats, Cultivating } from './traits';
+import { Attacked, MeditateRequested, StopRequested } from './events';
+
+/** 每 tick 吐纳回复的内力（打坐 5 tick 内从 20 回满 100） */
+export const MEDITATE_GAIN = 20;
+
+// ---------------------------------------------------------------- 命令 --
+
+/** 打坐/meditate：发打坐意图（on 翻转由系统落地） */
+export const MeditateCommand = defineCommand({
+  verbs: ['meditate', '打坐', '运功'],
+  handle({ player, world }) {
+    if (!world.getComponent(player, Energy)) return '你还没有内力可修。';
+    if (world.getComponent(player, Cultivating)?.on) return '你已在打坐中。';
+    world.emit(MeditateRequested, { entity: player });
+    return null;
+  },
+});
+
+/** 停/stop：发收功意图 */
+export const StopCommand = defineCommand({
+  verbs: ['stop', '停', '收功'],
+  handle({ player, world }) {
+    if (!world.getComponent(player, Cultivating)?.on) return '你并没有在打坐。';
+    world.emit(StopRequested, { entity: player });
+    return null;
+  },
+});
+
+/** 状态/stats：生命/内力/三围一览（替换 prefabs ScoreCommand 的注册位） */
+export const StatusCommand = defineCommand({
+  verbs: ['stats', '状态', '属性'],
+  handle({ player, world }) {
+    const hp = world.getComponent(player, Health);
+    const energy = world.getComponent(player, Energy);
+    const stats = world.getComponent(player, Stats);
+    const pos = world.getComponent(player, Position);
+    const roomName = pos ? world.getComponent(pos.roomId, Name) : undefined;
+
+    const lines: string[] = [];
+    if (hp) lines.push(`生命：${hp.current}/${hp.max}`);
+    if (energy) {
+      lines.push(
+        `内力：${energy.current}/${energy.max}${world.getComponent(player, Cultivating)?.on ? '（打坐中）' : ''}`,
+      );
+    }
+    if (stats) lines.push(`攻击 ${stats.atk} · 防御 ${stats.def} · 身法 ${stats.dodge}`);
+    if (roomName) lines.push(`位置：${roomName.text}`);
+    return lines.join('\n') || '你还没有任何属性。';
+  },
+});
+
+// ---------------------------------------------------------------- 系统 --
+
+/** 打坐/收功意图落地：翻转 Cultivating.on（预挂组件，与 VerboseSystem 同款） */
+export const CultivationToggleSystem = defineSystem({
+  name: 'xk.meditation-toggle',
+  on: [MeditateRequested, StopRequested],
+  handle(event, ctx) {
+    const c = ctx.getComponent(event.data.entity, Cultivating);
+    if (!c) return; // 没预挂的世界没有打坐（静默忽略）
+    if (event.token === MeditateRequested.token) {
+      c.on = true;
+      ctx.output.narrative('你盘膝坐下，凝神静气，开始吐纳运功。');
+    } else {
+      c.on = false;
+      ctx.output.narrative('你缓缓收功，睁开双眼。');
+    }
+  },
+});
+
+/**
+ * 吐纳结算（every 1000，与 world.tickInterval 对齐）：
+ * 每个打坐中的实体内力 +MEDITATE_GAIN，封顶 max。
+ *
+ * 引擎的 every 时相本身是 drift-free 固定网格（k × every），
+ * `Cultivating.lastTickedAt` 记录上次结算时间，为快照/回滚后的一致性兜底。
+ */
+export const MeditationSystem = defineSystem({
+  name: 'xk.meditation',
+  every: 1000,
+  handle(payload, ctx) {
+    const time = payload.data.time;
+    for (const id of ctx.findByComponent(Cultivating)) {
+      const c = ctx.getComponent(id, Cultivating)!;
+      if (!c.on) continue; // 预挂但未在打坐
+      if (c.lastTickedAt === time) continue; // 同一网格只结算一次
+      c.lastTickedAt = time;
+      const energy = ctx.getComponent(id, Energy);
+      if (!energy) continue; // 组件不全 → 静默跳过
+      if (energy.current >= energy.max) continue; // 已满：保持打坐状态，不再回复
+      energy.current = Math.min(energy.max, energy.current + MEDITATE_GAIN);
+      ctx.output.narrative(`你吐纳一轮，内力增至 ${energy.current}/${energy.max}。`);
+    }
+  },
+});
+
+/**
+ * 打断（on Attacked / Moved）：
+ * - 移动 → 「收功起身」（逃跑成功撤退也一样，语义自然成立）
+ * - 被命中 → 「被打得气血翻涌」——注意打断的是**被打者**的修炼
+ */
+export const InterruptSystem = defineSystem({
+  name: 'xk.interrupt',
+  on: [Moved, Attacked],
+  handle(event, ctx) {
+    const [id, who] =
+      event.token === Moved.token
+        ? [event.data.entity, '你收功起身。']
+        : [event.data.target, null];
+    const c = ctx.getComponent(id, Cultivating);
+    if (c?.on) {
+      c.on = false;
+      ctx.output.narrative(who ?? `${displayName(ctx, id)}被打得气血翻涌，收功护体！`);
+    }
+  },
+});

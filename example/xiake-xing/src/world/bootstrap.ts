@@ -1,10 +1,10 @@
 /**
- * 侠客行 · 世界装配（M0 骨架 v0.1.0）
+ * 侠客行 · 世界装配（M1 内功根基 v0.2.0）
  *
  * 三区域 12 房：**青石镇**（安全区，出生点）→ **终南山道**（过渡）→
- * **野狼林**（野怪区，M1 的野狼住这儿）。本期只搭骨架：只注册 prefabs
- * 基础系统与移动/查看/地图命令，零新组件、零新系统——先把世界铺出来，
- * 让 M1 的打坐与战斗、M2 的武学秘籍有地方落。
+ * **野狼林**（野怪区）。M0 铺世界，M1 上内功与战斗：打坐回气（打坐/
+ * 停/状态）、武侠战斗内核（attack/逃，纯公式三态判定）、野狼×3
+ * （会还手、掉狼皮）——「练功 → 打怪」循环的第一次落地。
  *
  * 区域排布（区域图从北往南一条线，跨区域出口都是 south/north）：
  *
@@ -27,17 +27,26 @@ import {
   DescriptionSystem,
   VisitationSystem,
   VerboseSystem,
+  ItemSystem,
+  LootSystem,
+  DeathSystem,
   // 命令
   GoCommand,
   LookCommand,
   MapCommand,
   WorldMapCommand,
   VerboseCommand,
+  TakeCommand,
+  InventoryCommand,
+  AttackCommand,
   createDirectionCommand,
   // 组件
   Position,
   Visited,
   Verbose,
+  Health,
+  Description,
+  Loot,
   // 房间与区域
   defineRoom,
   defineArea,
@@ -48,6 +57,22 @@ import {
   markVisited,
 } from '@mud/prefabs';
 import { HelpCommand, QuitHintCommand } from '../commands/help';
+import { Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag } from '../traits';
+import {
+  MeditateCommand,
+  StopCommand,
+  StatusCommand,
+  CultivationToggleSystem,
+  MeditationSystem,
+  InterruptSystem,
+} from '../cultivation';
+import {
+  FleeCommand,
+  WuxiaCombatSystem,
+  NpcRetaliateSystem,
+  FleeSystem,
+  TrailSystem,
+} from '../combat';
 
 export interface BootstrapResult {
   world: World;
@@ -60,8 +85,23 @@ export function bootstrap(): BootstrapResult {
     maxEventsPerCommand: 1000,
   });
 
-  // M0 只注册 prefabs 基础件；M1 起再上修炼/战斗/系统
-  world.register(MovementSystem, DescriptionSystem, VisitationSystem, VerboseSystem);
+  // 基础件 + 死亡管线（掉落/清场），战斗内核换成武侠版（不用 prefabs CombatSystem）
+  world.register(
+    MovementSystem,
+    DescriptionSystem,
+    VisitationSystem,
+    VerboseSystem,
+    ItemSystem,
+    LootSystem,
+    DeathSystem,
+    MeditationSystem,
+    CultivationToggleSystem,
+    InterruptSystem,
+    WuxiaCombatSystem,
+    NpcRetaliateSystem,
+    FleeSystem,
+    TrailSystem,
+  );
   // RoomEventSystem / RoomTickSystem 由 buildRoomBehaviors 幂等注册
 
   // 开发者套件一步注册：命令 + 效果系统（/tp /heal 等调试件）
@@ -73,6 +113,13 @@ export function bootstrap(): BootstrapResult {
     MapCommand,
     WorldMapCommand,
     VerboseCommand,
+    TakeCommand,
+    InventoryCommand,
+    AttackCommand,
+    MeditateCommand,
+    StopCommand,
+    StatusCommand, // 替换 prefabs ScoreCommand（demo 件只报生命和房间 id）
+    FleeCommand,
     HelpCommand,
     QuitHintCommand,
     // 口语方向别名：中文玩家不会先想到敲 north——往东/向东/东边都能走
@@ -214,9 +261,44 @@ export function bootstrap(): BootstrapResult {
   const playerId = world.entities.create();
   world.addComponent(playerId, Position, { roomId: layout.entry });
   world.addComponent(playerId, Name, { text: '少年侠客' });
+  world.addComponent(playerId, PlayerTag); // 战斗文案的视角标记
   world.addComponent(playerId, Visited);
   world.addComponent(playerId, Verbose, { on: false }); // 预挂详略开关（详细/verbose 命令用）
+  world.addComponent(playerId, Health, { current: 100, max: 100 });
+  world.addComponent(playerId, Energy, { current: 20, max: 100 }); // 打坐 4 tick 回满
+  world.addComponent(playerId, Stats, { atk: 5, def: 2, dodge: 2 });
+  world.addComponent(playerId, Cultivating, { on: false, lastTickedAt: 0 }); // 打坐开关（预挂，Verbose 同款）
+  world.addComponent(playerId, Trail, { roomId: layout.entry }); // 逃跑的"来路"
   markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
+
+  // ---- 野狼×3（野怪区，M1 的沙包）----
+  // 数值 { hp 25, atk 6, def 1, dodge 2 }：玩家 atk5 打它 4 伤 7 击倒，
+  // 它反咬 4 伤——7 击挨 24 点，100 血的新手死不了，但知道疼。
+  const wolves = [
+    { id: 'wolf-1', roomId: 'thicket' },
+    { id: 'wolf-2', roomId: 'den' },
+    { id: 'wolf-3', roomId: 'den' },
+  ];
+  for (const w of wolves) {
+    const id = world.entities.createWithId(w.id);
+    world.addComponent(id, Name, { text: '野狼', aliases: ['狼', 'wolf'] });
+    world.addComponent(id, Description, {
+      text: '一头精瘦的灰狼，绿油油的眼睛盯着你，喉咙里滚出低低的呜声。',
+    });
+    world.addComponent(id, Position, { roomId: w.roomId });
+    world.addComponent(id, Health, { current: 25, max: 25 });
+    world.addComponent(id, Stats, { atk: 6, def: 1, dodge: 2 });
+    world.addComponent(id, Retaliate); // 被打自动还手一击
+    world.addComponent(id, Loot, {
+      drops: [
+        {
+          name: '狼皮',
+          aliases: ['皮', 'wolf skin'],
+          description: '一张带腥味的狼皮，毛色油亮。杂货铺掌柜说过这玩意能换碎银。',
+        },
+      ],
+    });
+  }
 
   return { world, playerId };
 }

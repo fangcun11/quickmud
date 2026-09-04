@@ -136,3 +136,178 @@ describe('侠客行 M0 · 三区域骨架', () => {
     );
   });
 });
+
+// ============================================================
+// M1 · 内功根基：打坐回气、武侠战斗内核（纯公式三态）、野狼×3
+// 每用例独立世界（三态要按场景构造身法，不能共享状态）
+// ============================================================
+import { Name } from '@mud/ecs-engine';
+import { Health, itemsInContainer } from '@mud/prefabs';
+import { Energy, Stats, Cultivating, Retaliate } from './traits';
+
+function fresh(): void {
+  const b = bootstrap();
+  world = b.world;
+  player = b.playerId;
+  world.output.clear();
+}
+
+/** 从客栈一路走到野狼林（thicket）：e e s s s s s */
+async function gotoWolves(): Promise<void> {
+  for (const dir of ['e', 'e', 's', 's', 's', 's', 's']) await run(dir);
+  expect(pos()).toBe('thicket');
+}
+
+function energy(): { current: number; max: number } {
+  return world.getComponent(player, Energy)!;
+}
+
+function hp(): number {
+  return world.getComponent(player, Health)!.current;
+}
+
+describe('侠客行 M1 · 内功根基', () => {
+  it('打坐回气：每息 +20，4 息回满（5 tick 内达标），封顶不溢出', async () => {
+    fresh();
+    expect(energy().current).toBe(20);
+
+    expect(await run('打坐')).toContain('盘膝坐下');
+    expect(world.getComponent(player, Cultivating)!.on).toBe(true);
+
+    for (let i = 0; i < 4; i++) world.tick();
+    drain();
+    expect(energy().current).toBe(100); // 20 → 40 → 60 → 80 → 100
+
+    world.tick();
+    drain();
+    expect(energy().current).toBe(100); // 满了不再涨
+  });
+
+  it('移动自动收功：打坐中挪窝，内力停止回复', async () => {
+    fresh();
+    await run('打坐');
+    world.tick();
+    drain();
+    expect(energy().current).toBe(40);
+
+    expect(await run('e')).toContain('收功起身'); // 挪出客栈
+    expect(world.getComponent(player, Cultivating)!.on).toBe(false);
+
+    world.tick();
+    drain();
+    expect(energy().current).toBe(40); // 已收功，不再回气
+  });
+
+  it('收功命令：主动停，内力保留', async () => {
+    fresh();
+    await run('打坐');
+    world.tick();
+    drain();
+    expect(await run('停')).toContain('缓缓收功');
+    expect(world.getComponent(player, Cultivating)!.on).toBe(false);
+    expect(energy().current).toBe(40);
+  });
+
+  it('状态命令：生命/内力/三围/位置一览（替换 ScoreCommand）', async () => {
+    fresh();
+    const out = await run('状态');
+    expect(out).toContain('生命：100/100');
+    expect(out).toContain('内力：20/100');
+    expect(out).toContain('攻击 5 · 防御 2 · 身法 2');
+    expect(out).toContain('位置：悦来客栈');
+  });
+
+  it('战斗三态（纯公式）：身法差决定 命中/格挡/闪避', async () => {
+    // 差 +2 → 命中全额 4 伤（atk5 − def1）
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Stats)!.dodge = 4;
+    const hit = await run('attack 野狼');
+    expect(hit).toContain('一击命中');
+    expect(hit).toContain('造成 4 点伤害');
+
+    // 差 0 → 格挡：round(4 × 0.7) = 3 伤；狼还手同样被格挡（3 伤，被动视角）
+    fresh();
+    await gotoWolves();
+    const blocked = await run('attack 野狼');
+    expect(blocked).toContain('格挡');
+    expect(blocked).toContain('只造成 3 点伤害');
+    expect(blocked).toContain('挡下了「野狼」的攻击');
+    expect(hp()).toBe(97); // 100 − 3
+
+    // 差 −2 → 被闪避：零伤；但狼察觉攻击仍会反咬（差 +2 → 咬实 4 伤）
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Stats)!.dodge = 0;
+    const dodged = await run('attack 野狼');
+    expect(dodged).toContain('闪过');
+    expect(hp()).toBe(96);
+  });
+
+  it('NPC 还手：打狼一拳，狼自动咬回来（走同一结算内核）', async () => {
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Stats)!.dodge = 4; // 狼差 2−4=−2 → 还手被闪掉
+    await run('attack 野狼');
+    expect(hp()).toBe(100);
+
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Stats)!.dodge = 3; // 狼差 2−3=−1 → 还手被格挡，3 伤
+    await run('attack 野狼');
+    expect(hp()).toBe(97);
+  });
+
+  it('击杀与掉落：狼倒下掉狼皮，捡进背包，尸体清场', async () => {
+    fresh();
+    await gotoWolves();
+    const stats = world.getComponent(player, Stats)!;
+    stats.atk = 25; // 一击 24 伤（25−1），两击倒
+    stats.dodge = 4; // 狼的还手全被闪掉
+
+    const hit1 = await run('attack 野狼');
+    const hit2 = await run('attack 野狼');
+    const out = hit1 + hit2;
+    expect(out).toContain('惨嚎一声');
+    expect(out).toContain('掉了狼皮');
+
+    // 尸体清场：thicket 的狼被 DeathSystem 销毁
+    const wolvesLeft = world.findByComponent(Retaliate).filter((id) => {
+      const p = world.getComponent(id, Position);
+      return p?.roomId === 'thicket';
+    });
+    expect(wolvesLeft).toHaveLength(0);
+
+    // 拾取：掉落物是真实体，look 看得见、take 拿得走
+    expect(await run('take 狼皮')).toContain('狼皮');
+    const inv = itemsInContainer(world, player);
+    expect(inv).toHaveLength(1);
+    expect(world.getComponent(inv[0]!, Name)!.text).toBe('狼皮');
+  });
+
+  it('逃跑：身法够高退回来路（thicket 的来路是林口），不够原地挨一击', async () => {
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Stats)!.dodge = 4; // 差 +2 → 逃掉
+    expect(await run('逃')).toContain('一口气退回');
+    expect(pos()).toBe('woodsgate'); // Trail 记录的来路
+
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Stats)!.dodge = 0; // 差 −2 → 逃不掉，挨一击（4 伤）
+    expect(await run('逃')).toContain('没能脱身');
+    expect(pos()).toBe('thicket');
+    expect(hp()).toBe(96);
+  });
+
+  it('受击打断：打坐中被咬，收功护体', async () => {
+    fresh();
+    await gotoWolves();
+    await run('打坐');
+    expect(world.getComponent(player, Cultivating)!.on).toBe(true);
+
+    const out = await run('attack 野狼'); // 狼还手 → Attacked(target=玩家) → 打断
+    expect(world.getComponent(player, Cultivating)!.on).toBe(false);
+    expect(out).toContain('收功护体');
+  });
+});
