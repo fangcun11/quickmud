@@ -122,8 +122,21 @@
 | `defineArea({ id, name })` / `layoutWorld(rooms, opts)` / `buildAreas` | 区域层 | [09](./09-areas-behaviors.md) |
 | `layoutRooms(rooms, { entry })` / `buildRooms` / `buildRoomBehaviors` | 坐标推断 / 注入 / 行为注册 | [08](./08-rooms-maps.md) |
 | `renderAsciiMap(rooms, opts)` / `markVisited(world, player)` | 纯函数渲染 / seed 探索 | [08](./08-rooms-maps.md) |
-| `directionLabel(dir)` | 方向 id → 中文标签（撞墙文案） | — |
+| `directionLabel(dir)` / `DIRECTION_LABELS` | 方向 id → 中文标签（撞墙文案） | — |
 | `buffBlueprint({ victim, effect, lasts, source? })` | Buff 实体蓝图 | [10](./10-items-combat-quests.md) |
+
+### 容器查询（queries）
+
+`WorldQuery` 型工具函数——"容器里有什么 / 谁在房间里"的官方解法，自己手写
+`findByComponent(...).filter(...)` 之前先看这里：
+
+| API | 说明 | 详 |
+| --- | --- | --- |
+| `itemsInContainer(q, container)` | 容器（房间/玩家/箱子）里的物品 | [10](./10-items-combat-quests.md) |
+| `occupantsIn(q, room)` | 房间里的活物 | [10](./10-items-combat-quests.md) |
+| `containerOf(q, entity)` | 实体所在的容器 → `EntityId \| undefined` | [10](./10-items-combat-quests.md) |
+| `resolveInContainer(q, container, name)` / `resolveOccupantIn(q, room, name)` | 按名字在容器/房间内解析实体 | — |
+| `displayName(q, id)` | 实体展示名（Name 优先，退回 id） | — |
 
 ---
 
