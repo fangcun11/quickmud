@@ -29,8 +29,9 @@
 | `entities.create()` / `entities.createWithId(id)` | 创建实体（`entities` 只管实体存取） | [03](./03-entities-components.md) |
 | `world.getComponent(id, comp)` | 读组件 → `T \| undefined`（0.13 起顶层统一入口） | [03](./03-entities-components.md) |
 | `world.addComponent(id, comp, data?)` / `world.removeComponent(id, comp)` | 挂 / 摘组件 | [03](./03-entities-components.md) |
-| `world.hasComponent(id, comp)` / `world.findByComponent(comp)` / `world.updateComponent(id, comp, updater)` | 存在性 / 按组件查询 / 函数式更新 | [03](./03-entities-components.md) |
-| `entities.has(id)` / `entities.delete(id)` | 实体存在性 / 删除 | [03](./03-entities-components.md) |
+| `world.hasComponent(id, comp)` / `world.findByComponent(comp)` / `world.updateComponent(id, comp, updater)` | 存在性 / 按组件查询（0.14 起走反查索引）/ 函数式更新 | [03](./03-entities-components.md) |
+| `world.each([CompA, CompB], (id, a, b) => {})` | 多组件联合迭代（内连接，0.14；`ctx.each` / 命令侧同名） | [03](./03-entities-components.md) |
+| `entities.has(id)` / `entities.delete(id)` | 实体存在性 / 删除（成功即发 `entity_destroyed`，0.14） | [03](./03-entities-components.md) |
 | `trait(name, defaults?)` / `relation(name)` | 组件 / 关系（ID 碰撞 fail-fast） | [03](./03-entities-components.md) |
 | `blueprint({ components: [...] })` | 实体蓝图 | [09](./09-areas-behaviors.md) |
 
@@ -41,6 +42,7 @@
 | `defineEvent(name)<T>()` | 事件定义（柯里化：名字字面量 → 载荷） | [04](./04-events.md) |
 | `defineSystem({ name?, on?, priority?, every?, onError?, handle })` | 系统定义（on 传事件定义 → 类型贯通） | [05](./05-systems.md) |
 | `ctx.after(delayMs, defOrToken, data)` → `ScheduledEventHandle` / `ctx.cancel(handle)` | 延时调度与幂等取消（0.12 起） | [05](./05-systems.md) |
+| `EntityDestroyed` | 引擎合成事件：实体被删时发射 `{ id }`（clear/回滚静默，0.14） | [03](./03-entities-components.md) |
 | `defineCommand({ verbs, abbrev?, args?, handle })` | 命令定义（args 类型自动推导） | [06](./06-commands.md) |
 | `registerDeveloperKit(world)` | 开发者套件一步注册：命令 + 效果系统（0.12 起） | [06](./06-commands.md) |
 | `createDeveloperCommands()` | 仅命令组（效果系统不注册时状态不落） | [06](./06-commands.md) |

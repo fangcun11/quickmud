@@ -2,6 +2,55 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.14.0] - 2026-09-04
+
+主题：**吸取 Bevy / flecs 的三项底层设计**（纯增量，零 breaking，
+`@mud/prefabs` 无需变更）。组件反查索引（flecs query cache 最小版）、
+`entity_destroyed` 合成事件（Observer 思想翻译成 quickmud 的事件语言）、
+`each` 多组件联合迭代（flecs `each()`）——三者共用一条设计原则：
+**不加新机制，只把既有概念补齐**。
+
+### 组件反查索引（@mud/ecs-engine 0.10.0）
+
+- `EntityManager` 内置 `ComponentId -> Set<EntityId>` 反查索引：挂/摘/删/
+  实体删除全部增量维护，快照恢复（`clear()` + `createWithId`/`restoreComponent`）
+  路径随数据自动重建，无需手动失效
+- `findByComponent` / `findByComponents` 从 O(n) 全表扫描降为 O(k) 候选 +
+  O(k log k) 保序排序（k 为命中数）；`findByComponents` 以候选集最小的
+  组件为主扫描集，其余做存在性验证
+- **语义零变化**：输出恒为实体**创建序**（索引候选集无序，由内部创建序号
+  排序保证；恢复序 = 快照序 = 原创建序），与 0.13 及之前的契约逐点一致
+
+### entity_destroyed 合成事件（@mud/ecs-engine 0.10.0）
+
+- 新增引擎合成事件 `EntityDestroyed`（token `entity_destroyed`，载荷
+  `{ id }`）：`entities.delete(id)` / `ctx.destroy(id)` 成功删除时由引擎
+  自动发射——"删除不级联"从已知边界升级为**可订阅契约**，死亡清场、
+  引用清扫、UI 移除有了官方挂点
+- **静默路径铁律**：`clear()`（回滚 / fork / 读档的实体重建）绝不误发——
+  状态恢复不是"销毁"，观察者不应感知
+- 事件分发时实体已亡：处理器中 `getComponent(id)` 返回 `undefined`
+  （与 Bevy `Despawned` 只带 entity 的最小载荷语义一致）
+- 删除风暴受既有 `maxEventsPerCommand` 预算约束（每次删除消耗 1 预算）
+
+### each 多组件联合迭代（@mud/ecs-engine 0.10.0）
+
+- 新增 `world.each([CompA, CompB], (id, a, b) => {})`：内连接语义，缺任一
+  组件的实体跳过；回调按传入顺序收到各组件**活引用**，原地改即生效；
+  迭代顺序为创建序
+- **类型体操**：组件元组自动映射为数据元组（`ComponentDataTuple`），回调
+  参数类型随组件列表贯通，无需断言；`ComponentDataTuple` 类型公开导出
+- 三层同名：`world.each` / `ctx.each`（系统侧）/ `world.each`（命令侧，
+  只读惯例）——与组件访问六件套同构
+- 底层走反查索引，替代手写 `findByComponent(...).filter(...)` 双重循环
+
+### 测试与文档
+
+- 新增 22 例：索引与全表扫描参照实现逐点对照（含 1000 实体随机挂/摘/删
+  压测）、回滚/fork 不误发销毁事件、each 内连接/保序/类型贯通/三层入口
+- guide 03 新增"按组件查询"小节与 `EntityDestroyed` 订阅示例（已知边界
+  → 可订阅契约）、05 新增"批量迭代"小节、16 速查表补三行
+
 ## [0.13.0] - 2026-09-04
 
 主题：**组件访问收权——World 顶层统一入口**（API 审查之外的独立改进，

@@ -131,11 +131,34 @@ v0.11 起 `SystemErrorRecord.cause` 保留原始错误对象——调 bug 时拿
 // 掉落/产出/刷怪：从蓝图现造一个实体（确定性：同蓝图 ⇒ 同组件）
 const drop = ctx.spawn(CoinBp, { patch: { located: { at: roomId } } });
 
-// 死亡清场等
+// 死亡清场等（删除成功即发射引擎合成事件 entity_destroyed，可订阅做清扫）
 ctx.destroy(target);
 ```
 
 > 注意：destroy 不级联清理其他实体的引用（如 `Located` 指向被删容器会悬挂）。
+> 但删除本身**可订阅**——订阅 `EntityDestroyed`（v0.14）在这里放清扫逻辑；
+> 回滚 / fork / 读档的实体重建不会误发它。
+
+## 批量迭代：ctx.each（v0.14）
+
+遍历"同时拥有这组组件"的实体（内连接，缺任一跳过），组件元组自动映射为
+数据元组——`ctx.each` / `world.each` / 命令侧 `world.each` 三层同名：
+
+```ts
+const PoisonTick = defineSystem({
+  name: 'poison-tick',
+  every: 1000,
+  handle(_payload, ctx) {
+    ctx.each([Health, Poisoned], (id, hp, poison) => {
+      hp.current -= poison.damage;      // 活引用，原地改即生效
+      if (hp.current <= 0) ctx.destroy(id);
+    });
+  },
+});
+```
+
+底层走组件反查索引（以候选集最小的组件为主扫描），大世界比手写
+`findByComponent(...).filter(...)` 快且意图直白。
 
 ---
 

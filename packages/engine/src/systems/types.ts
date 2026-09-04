@@ -1,4 +1,4 @@
-import type { EventToken, Entity, EntityId, ComponentDefinition } from '../core/types';
+import type { EventToken, Entity, EntityId, ComponentDefinition, ComponentDataTuple } from '../core/types';
 import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
 import type { ScheduledEventHandle } from '../events/event-pump';
 import type { Segment } from '../output/types';
@@ -59,6 +59,15 @@ export interface SystemContext {
   getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) => T | undefined;
   /** 按组件查询实体（容器查询等场景；返回拥有该组件的实体 id，创建序） */
   findByComponent: <T>(component: ComponentDefinition<T>) => EntityId[];
+  /**
+   * 多组件联合迭代（0.14，flecs each 思想）：内连接语义，缺任一组件
+   * 的实体跳过；回调按传入顺序收到各组件数据（活引用，系统侧可原地改）。
+   * 组件元组自动映射为数据元组，无需断言。
+   */
+  each: <T extends readonly ComponentDefinition<unknown>[]>(
+    components: T,
+    callback: (id: EntityId, ...data: ComponentDataTuple<T>) => void
+  ) => void;
   /**
    * 从蓝图创建实体（系统内造物：掉落、对话产出、刷怪）。
    * 命令仍应只 emit 事件——这是系统的特权（唯一改状态的手）。

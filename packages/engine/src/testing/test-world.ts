@@ -160,11 +160,9 @@ export class TestWorld {
               }
             } else {
               // 哈希形态（兼容旧写法）：按确定性 id 直存
+              // restoreComponent 与快照恢复同路径（深拷贝 + 反查索引维护）
               for (const [componentId, data] of Object.entries(entityDef.components)) {
-                const entity = this.world.entities.get(id);
-                if (entity) {
-                  entity.components.set(componentId, data);
-                }
+                this.world.entities.restoreComponent(id, componentId, data);
               }
             }
           }

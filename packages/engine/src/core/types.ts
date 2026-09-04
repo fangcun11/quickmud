@@ -33,3 +33,13 @@ export interface ComponentDefinition<T = unknown> {
   /** 默认数据工厂/模板的产物副本（每次调用返回独立实例） */
   create: () => T;
 }
+
+/**
+ * 组件定义元组 -> 数据元组（0.14，world.each 回调 rest 参数类型）
+ *
+ * `[ComponentDefinition<Pos>, ComponentDefinition<Health>]` 映射为
+ * `[Pos, Health]`，回调参数随组件列表自动获得精确类型。
+ */
+export type ComponentDataTuple<T extends readonly ComponentDefinition<unknown>[]> = {
+  [K in keyof T]: T[K] extends ComponentDefinition<infer D> ? D : never;
+};

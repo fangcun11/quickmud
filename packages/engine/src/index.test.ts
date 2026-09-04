@@ -93,11 +93,8 @@ describe('MUD Engine', () => {
 
     // 创建实体
     const entityId = w.entities.create();
-    const entity = w.entities.get(entityId);
-    if (entity) {
-      entity.components.set('health', { current: 50, max: 100 });
-      entity.components.set('position', { roomId: 'test_room' });
-    }
+    w.entities.restoreComponent(entityId, 'health', { current: 50, max: 100 });
+    w.entities.restoreComponent(entityId, 'position', { roomId: 'test_room' });
 
     // 创建快照
     const snapshot = w.world.createSnapshot();

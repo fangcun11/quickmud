@@ -3,10 +3,50 @@ import { deepClone } from '../internal/clone';
 
 /**
  * 实体管理器 - 管理游戏世界中的所有实体
+ *
+ * 内部机制（0.13 起实体存储职责，组件访问的公开入口在 World 顶层）：
+ * - componentIndex：组件反查索引（0.14，flecs query cache 最小版）——
+ *   ComponentId -> 拥有该组件的实体 id 集合。挂/摘/删全部增量维护，
+ *   findByComponent 从 O(n) 全表扫描降为 O(k log k)（k 为命中数，
+ *   log k 来自保序排序）；快照恢复走 createWithId/restoreComponent，
+ *   索引随数据自动重建。
+ * - creationOrder：实体创建序号。索引候选集是无序 Set，输出按此
+ *   排序以保持 findByComponent 的**创建序**契约（Map 迭代序不可查询，
+ *   需要独立的序号载体）。恢复路径按快照序重建，相对序与原世界一致。
  */
 export class EntityManager {
   private entities = new Map<EntityId, Entity>();
   private idCounter = 0;
+  private componentIndex = new Map<ComponentId, Set<EntityId>>();
+  private creationOrder = new Map<EntityId, number>();
+  private creationSeq = 0;
+  /**
+   * 实体销毁通知（0.14）：delete() 成功时回调（clear() 静默——回滚/
+   * fork/读档的重建路径不走 delete）。World 注入以发射 entity_destroyed。
+   */
+  onDestroyed?: (id: EntityId) => void;
+
+  /** 维护反查索引：实体获得某组件时挂入候选集 */
+  private indexAdd(componentId: ComponentId, entityId: EntityId): void {
+    let set = this.componentIndex.get(componentId);
+    if (!set) {
+      set = new Set();
+      this.componentIndex.set(componentId, set);
+    }
+    set.add(entityId);
+  }
+
+  /** 维护反查索引：实体失去某组件时摘出候选集 */
+  private indexRemove(componentId: ComponentId, entityId: EntityId): void {
+    this.componentIndex.get(componentId)?.delete(entityId);
+  }
+
+  /** 索引候选集按创建序输出（保序的核心） */
+  private sortByCreation(ids: Iterable<EntityId>): EntityId[] {
+    return [...ids].sort(
+      (a, b) => this.creationOrder.get(a)! - this.creationOrder.get(b)!
+    );
+  }
 
   /**
    * 获取当前 ID 计数器（快照用——"下一个 create() 返回什么"必须可由快照决定，
@@ -39,6 +79,7 @@ export class EntityManager {
       components: new Map()
     };
     this.entities.set(id, entity);
+    this.creationOrder.set(id, ++this.creationSeq);
     return id;
   }
 
@@ -57,6 +98,7 @@ export class EntityManager {
       components: new Map()
     };
     this.entities.set(entityId, entity);
+    this.creationOrder.set(entityId, ++this.creationSeq);
     return entityId;
   }
 
@@ -80,11 +122,25 @@ export class EntityManager {
 
   /**
    * 删除实体
+   *
+   * 0.14 起成功删除会触发 onDestroyed 回调（World 借此发射
+   * entity_destroyed 事件）。注意 clear() 不触发——回滚/fork/读档
+   * 的实体重建走 clear()，绝不能误发销毁事件。
+   *
    * @param id - 实体ID
    * @returns 是否删除成功
    */
   delete(id: EntityId): boolean {
-    return this.entities.delete(id);
+    const entity = this.entities.get(id);
+    if (!entity) return false;
+    // 从该实体拥有的所有组件的反查索引中摘除
+    for (const componentId of entity.components.keys()) {
+      this.indexRemove(componentId, id);
+    }
+    this.entities.delete(id);
+    this.creationOrder.delete(id);
+    this.onDestroyed?.(id);
+    return true;
   }
 
   /**
@@ -112,7 +168,9 @@ export class EntityManager {
     }
 
     const componentData = data ?? component.create();
+    const had = entity.components.has(component.id);
     entity.components.set(component.id, componentData);
+    if (!had) this.indexAdd(component.id, entityId);
   }
 
   /**
@@ -191,7 +249,9 @@ export class EntityManager {
       return false;
     }
 
-    return entity.components.delete(component.id);
+    const removed = entity.components.delete(component.id);
+    if (removed) this.indexRemove(component.id, entityId);
+    return removed;
   }
 
   /**
@@ -209,49 +269,80 @@ export class EntityManager {
     if (!entity) {
       throw new Error(`Entity ${entityId} not found`);
     }
+    const had = entity.components.has(componentId);
     entity.components.set(componentId, deepClone(data));
+    if (!had) this.indexAdd(componentId, entityId);
   }
 
   /**
    * 查找拥有特定组件的所有实体
+   *
+   * 0.14 起走反查索引：O(k) 候选 + O(k log k) 保序排序
+   * （k 为命中数，此前是 O(n) 全表扫描）。输出仍为**创建序**，
+   * 与 0.13 及之前的语义一致。
+   *
    * @param component - 组件定义
-   * @returns 实体ID数组
+   * @returns 实体ID数组（创建序）
    */
   findByComponent<T>(component: ComponentDefinition<T>): EntityId[] {
-    const result: EntityId[] = [];
-    for (const [id, entity] of this.entities) {
-      if (entity.components.has(component.id)) {
-        result.push(id);
-      }
-    }
-    return result;
+    const candidates = this.componentIndex.get(component.id);
+    if (!candidates || candidates.size === 0) return [];
+    return this.sortByCreation(candidates);
   }
 
   /**
    * 查找同时拥有多个组件的所有实体
+   *
+   * 0.14 起走反查索引：以候选集最小的组件为主扫描集，
+   * 其余组件做存在性验证。输出为**创建序**。
+   * 空参数保持既有语义：返回所有实体。
+   *
    * @param components - 组件定义数组
-   * @returns 实体ID数组
+   * @returns 实体ID数组（创建序）
    */
   findByComponents<T extends ComponentDefinition<unknown>[]>(
     ...components: T
   ): EntityId[] {
-    const componentIds = components.map(c => c.id);
+    if (components.length === 0) {
+      return this.getAll().map((entity) => entity.id);
+    }
+
+    // 取候选集最小的组件做主扫描（内连接的最优扫描顺序）
+    let smallest: Set<EntityId> | undefined;
+    let smallestId: ComponentId | undefined;
+    for (const component of components) {
+      const set = this.componentIndex.get(component.id);
+      if (!set || set.size === 0) return [];
+      if (!smallest || set.size < smallest.size) {
+        smallest = set;
+        smallestId = component.id;
+      }
+    }
+
+    const otherIds = components
+      .map((c) => c.id)
+      .filter((id) => id !== smallestId);
     const result: EntityId[] = [];
-    
-    for (const [id, entity] of this.entities) {
-      if (componentIds.every(id => entity.components.has(id))) {
+    for (const id of smallest!) {
+      const entity = this.entities.get(id);
+      if (!entity) continue; // 索引脏数据防御（正常路径不会发生）
+      if (otherIds.every((cid) => entity.components.has(cid))) {
         result.push(id);
       }
     }
-    
-    return result;
+
+    return this.sortByCreation(result);
   }
 
   /**
-   * 清空所有实体
+   * 清空所有实体（静默：不触发 onDestroyed——回滚/fork/读档的重建路径）
    */
   clear(): void {
     this.entities.clear();
+    this.componentIndex.clear();
+    this.creationOrder.clear();
+    // creationSeq 不重置：实体 id 可能被读档复用（碰撞保护会跳号），
+    // 但 creationOrder 是新起的一轮，序号只要单调即可，无需与历史对齐
   }
 
   /**

@@ -30,6 +30,25 @@ if (hp) hp.current -= 10;                      // 直接改，引擎不做代理
 > `ctx.getComponent` 同名同签名）；`world.entities` 只管实体的创建与销毁
 > （`create / createWithId / has / delete`）。
 
+## 按组件查询：findByComponent 与 each（v0.14）
+
+```ts
+// 查出所有拥有某组件的实体（输出恒为**创建序**）
+const bearers = world.findByComponent(Torch); // → EntityId[]
+
+// 多组件联合迭代（内连接：缺任一组件的实体跳过）
+world.each([Position, Health], (id, pos, hp) => {
+  if (hp.current <= 0) pos.roomId = 'morgue';
+});
+```
+
+- `each` 的组件元组会**自动映射为数据元组**——`(id, pos, hp)` 的类型直接
+  对上 `[Position, Health]`，无需断言；回调拿到的是活引用（系统侧可原地改）。
+- 系统内用 `ctx.each`，命令内用 `world.each`（命令侧只读）——与组件访问
+  一样，三层同名。
+- v0.14 起查询走**组件反查索引**（挂/摘/删增量维护，快照恢复自动重建）：
+  大世界里的查询从全表扫描降为按命中数取候选，语义与之前完全一致。
+
 ## 实体：只是一张"身份证"
 
 ```ts
@@ -70,7 +89,23 @@ assert.strictEqual(trait('comp_1r_x', { x: 1 }).id, trait('comp_1r_x', { x: 2 })
 - `deepClone` 组件默认值是深拷贝——组件数据里放函数会在快照时丢失（函数进不了 JSON）。
   数据归组件，函数归系统/蓝图行为。
 - 删除实体不级联清理其他实体对它的引用（详见 [10 物品](./10-items-combat-quests.md)
-  的容器边界说明）。
+  的容器边界说明）。但**删除本身可订阅**（v0.14）：
+
+```ts
+import { EntityDestroyed } from '@mud/ecs-engine';
+
+defineSystem({
+  name: 'reaper',
+  on: [EntityDestroyed],          // 引擎合成事件：delete / ctx.destroy 成功时发射
+  handle(event, ctx) {
+    // event.data.id —— 实体已亡，getComponent 拿不到了；
+    // 清理墓碑、扫引用、移除 UI……在这里做
+  },
+});
+```
+
+> 注意：回滚 / fork / 读档的实体重建走 `clear()`，**不会**误发 `entity_destroyed`——
+> 状态恢复不是"销毁"。
 
 ---
 

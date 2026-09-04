@@ -5,9 +5,10 @@ import { Name } from './name';
 import { deepClone } from '../internal/clone';
 import { TICK_TOKEN } from '../events/tick';
 import { EventPump } from '../events/event-pump';
+import { EntityDestroyed } from '../events/entity-destroyed';
 import { OutputCollector } from '../output/output-collector';
 import { ENGINE_VERSION } from '../version';
-import type { EntityId, ComponentDefinition, EventToken } from './types';
+import type { EntityId, ComponentDefinition, ComponentDataTuple, EventToken } from './types';
 import type { SystemDefinition, SystemContext } from '../systems/types';
 import type { SystemErrorRecord } from '../events/event-pump';
 
@@ -61,6 +62,11 @@ export class World {
 
   constructor(config?: WorldConfig) {
     this.entities = new EntityManager();
+    // entity_destroyed 合成事件（0.14）：删除成功时由 EntityManager 通知，
+    // World 统一发射。clear() 静默——回滚/fork/读档的重建不误发。
+    this.entities.onDestroyed = (id) => {
+      this.eventPump.emit(EntityDestroyed.token, { id });
+    };
     this.eventPump = new EventPump({
       maxEventsPerCommand: config?.maxEventsPerCommand,
       // 事件 timestamp 统一为入队时的世界时间（0.12 起）；
@@ -122,6 +128,7 @@ export class World {
         this.entities.getComponent(id, component),
       findByComponent: <T>(component: ComponentDefinition<T>) =>
         this.entities.findByComponent(component),
+      each: (components, callback) => this.each(components, callback),
       spawn: (bp, opts) => this.spawn(bp, opts),
       destroy: (id) => this.entities.delete(id),
       output: this.makeOutputView(),
@@ -295,6 +302,7 @@ export class World {
           this.entities.getComponent(id, component),
         findByComponent: <T>(component: ComponentDefinition<T>) =>
           this.entities.findByComponent(component),
+        each: (components, callback) => this.each(components, callback),
         findEntity: (name: string) => this.findEntityByName(name),
       },
     };
@@ -545,6 +553,33 @@ export class World {
   /** 按组件查询实体（创建序；容器查询等场景） */
   findByComponent<T>(component: ComponentDefinition<T>): EntityId[] {
     return this.entities.findByComponent(component);
+  }
+
+  /**
+   * 多组件联合迭代（0.14，flecs each 思想）
+   *
+   * 内连接语义：只迭代**同时拥有**全部列出的组件的实体，缺任一即跳过。
+   * 回调按传入顺序收到各组件数据（活引用，可原地改——系统侧特权），
+   * 迭代顺序为实体创建序（与 findByComponent 一致）。
+   *
+   * 类型上组件元组自动映射为数据元组：
+   * ```ts
+   * world.each([Position, Health], (id, pos, hp) => { ... });
+   * // pos: PositionData, hp: HealthData —— 无需断言
+   * ```
+   *
+   * 底层走反查索引（以候选集最小的组件为主扫描），规模大时显著快于
+   * findByComponent 手写双重循环。
+   */
+  each<T extends readonly ComponentDefinition<unknown>[]>(
+    components: T,
+    callback: (id: EntityId, ...data: ComponentDataTuple<T>) => void
+  ): void {
+    for (const id of this.entities.findByComponents(...components)) {
+      const datas = components.map((c) => this.entities.getComponent(id, c));
+      // 内连接保证全存在；类型收敛点：ComponentDataTuple 已在签名侧保证
+      (callback as (id: EntityId, ...data: unknown[]) => void)(id, ...datas);
+    }
   }
 
   /**

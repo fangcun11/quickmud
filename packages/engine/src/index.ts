@@ -12,7 +12,7 @@ export type {
 } from './core/blueprint';
 export { Name } from './core/name';
 export { ENGINE_VERSION } from './version';
-export type { Entity, EntityId, ComponentDefinition, ComponentId, EventToken } from './core/types';
+export type { Entity, EntityId, ComponentDefinition, ComponentId, ComponentDataTuple, EventToken } from './core/types';
 
 // 事件
 export { defineEvent } from './events/define-event';
@@ -50,6 +50,7 @@ export type { SnapshotData, SnapshotMigration, SaveBackend } from './persistence
 export { createTestWorld, TestWorld, ManualClock } from './testing/index';
 export { record, replay, verifyReplay, WorldRecorder, firstDiff } from './debug/recorder';
 export { TICK_TOKEN } from './core/world';
+export { EntityDestroyed } from './events/entity-destroyed';
 export type { Recording, RecordedOp, ReplayResult } from './debug/recorder';
 
 // 对话与 NPC（0.3-B）

@@ -1,4 +1,4 @@
-import type { EntityId, Entity, ComponentDefinition } from '../core/types';
+import type { EntityId, Entity, ComponentDefinition, ComponentDataTuple } from '../core/types';
 import type { TypedEmit } from '../events/types';
 import type { OutputView } from '../systems/types';
 
@@ -89,6 +89,14 @@ export interface CommandContext<
     getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) => T | undefined;
     /** 按组件查询实体（容器查询等场景） */
     findByComponent: <T>(component: ComponentDefinition<T>) => EntityId[];
+    /**
+     * 多组件联合迭代（0.14，flecs each 思想）：内连接语义，缺任一组件
+     * 的实体跳过。命令侧铁律仍是只读——回调中禁止改组件数据。
+     */
+    each: <T extends readonly ComponentDefinition<unknown>[]>(
+      components: T,
+      callback: (id: EntityId, ...data: ComponentDataTuple<T>) => void
+    ) => void;
     findEntity: (name: string) => EntityId | undefined;
   };
 }
