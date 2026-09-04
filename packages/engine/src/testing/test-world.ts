@@ -4,6 +4,7 @@ import { OutputCollector } from '../output/output-collector';
 import type { SystemDefinition } from '../systems/types';
 import type { AnyCommand } from '../commands/types';
 import type { ComponentDefinition, EntityId, EventToken } from '../core/types';
+import type { RelationDefinition } from '../core/trait';
 import type { EventDefinition } from '../events/types';
 
 /**
@@ -308,6 +309,28 @@ export class TestWorld {
 
   findByComponent<T>(component: ComponentDefinition<T>): EntityId[] {
     return this.world.findByComponent(component);
+  }
+
+  // ---------- 关系转发（0.15，与组件六件套同构） ----------
+
+  addRelation(id: EntityId, rel: RelationDefinition, target: EntityId): void {
+    this.world.addRelation(id, rel, target);
+  }
+
+  removeRelation(id: EntityId, rel: RelationDefinition, target: EntityId): boolean {
+    return this.world.removeRelation(id, rel, target);
+  }
+
+  getRelations(id: EntityId, rel: RelationDefinition): EntityId[] {
+    return this.world.getRelations(id, rel);
+  }
+
+  hasRelation(id: EntityId, rel: RelationDefinition, target: EntityId): boolean {
+    return this.world.hasRelation(id, rel, target);
+  }
+
+  findRelated(rel: RelationDefinition, target: EntityId): EntityId[] {
+    return this.world.findRelated(rel, target);
   }
 
   /**

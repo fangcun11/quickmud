@@ -1,4 +1,5 @@
 import type { EntityId, Entity, ComponentDefinition, ComponentDataTuple } from '../core/types';
+import type { RelationDefinition } from '../core/trait';
 import type { TypedEmit } from '../events/types';
 import type { OutputView } from '../systems/types';
 
@@ -97,6 +98,13 @@ export interface CommandContext<
       components: T,
       callback: (id: EntityId, ...data: ComponentDataTuple<T>) => void
     ) => void;
+    // ---------- 关系（0.15）：命令侧只读三件（写走系统特权） ----------
+    /** 该实体的全部关系目标（拷贝） */
+    getRelations: (id: EntityId, rel: RelationDefinition) => EntityId[];
+    /** 是否建立了指向 target 的关系 */
+    hasRelation: (id: EntityId, rel: RelationDefinition, target: EntityId) => boolean;
+    /** 反查"谁指向 target"（索引，创建序） */
+    findRelated: (rel: RelationDefinition, target: EntityId) => EntityId[];
     findEntity: (name: string) => EntityId | undefined;
   };
 }

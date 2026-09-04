@@ -9,6 +9,7 @@ import { EntityDestroyed } from '../events/entity-destroyed';
 import { OutputCollector } from '../output/output-collector';
 import { ENGINE_VERSION } from '../version';
 import type { EntityId, ComponentDefinition, ComponentDataTuple, EventToken } from './types';
+import type { RelationDefinition } from './trait';
 import type { SystemDefinition, SystemContext } from '../systems/types';
 import type { SystemErrorRecord } from '../events/event-pump';
 
@@ -128,8 +129,13 @@ export class World {
         this.entities.getComponent(id, component),
       findByComponent: <T>(component: ComponentDefinition<T>) =>
         this.entities.findByComponent(component),
-      each: (components, callback) => this.each(components, callback),
-      spawn: (bp, opts) => this.spawn(bp, opts),
+        each: (components, callback) => this.each(components, callback),
+        addRelation: (id, rel, target) => this.entities.addRelation(id, rel, target),
+        removeRelation: (id, rel, target) => this.entities.removeRelation(id, rel, target),
+        getRelations: (id, rel) => this.entities.getRelations(id, rel),
+        hasRelation: (id, rel, target) => this.entities.hasRelation(id, rel, target),
+        findRelated: (rel, target) => this.entities.findRelated(rel, target),
+        spawn: (bp, opts) => this.spawn(bp, opts),
       destroy: (id) => this.entities.delete(id),
       output: this.makeOutputView(),
       after: (delayMs, definitionOrToken, data) => {
@@ -303,6 +309,9 @@ export class World {
         findByComponent: <T>(component: ComponentDefinition<T>) =>
           this.entities.findByComponent(component),
         each: (components, callback) => this.each(components, callback),
+        getRelations: (id, rel) => this.entities.getRelations(id, rel),
+        hasRelation: (id, rel, target) => this.entities.hasRelation(id, rel, target),
+        findRelated: (rel, target) => this.entities.findRelated(rel, target),
         findEntity: (name: string) => this.findEntityByName(name),
       },
     };
@@ -476,6 +485,7 @@ export class World {
     this.tickCount = snapshot.tickCount;
     this.timeMs = snapshot.worldTime ?? 0;
     this.entities.setIdCounter(snapshot.idCounter ?? 0);
+    this.entities.rebuildRelationIndex(); // 关系索引恢复路径不增量维护，全量重建
     this.eventPump.restoreScheduled(snapshot.scheduler?.pendingEvents ?? []);
   }
 
@@ -552,6 +562,39 @@ export class World {
   /** 按组件查询实体（创建序；容器查询等场景） */
   findByComponent<T>(component: ComponentDefinition<T>): EntityId[] {
     return this.entities.findByComponent(component);
+  }
+
+  // ---------- 关系（0.15） ----------
+  //
+  // 关系 = 多目标组件（数据 `{ targets: EntityId[] }`）+ 二级反查索引。
+  // 与组件访问同构：写走系统特权，读三层同名。
+
+  /**
+   * 建立一条关系（幂等：已存在同目标 no-op）。
+   * 目标必须是活实体，否则抛错（fail-fast）。
+   */
+  addRelation(id: EntityId, rel: RelationDefinition, target: EntityId): void {
+    this.entities.addRelation(id, rel, target);
+  }
+
+  /** 移除一条关系（最后一条时关系组件自动摘除） */
+  removeRelation(id: EntityId, rel: RelationDefinition, target: EntityId): boolean {
+    return this.entities.removeRelation(id, rel, target);
+  }
+
+  /** 该实体的全部关系目标（拷贝——写走 add/removeRelation） */
+  getRelations(id: EntityId, rel: RelationDefinition): EntityId[] {
+    return this.entities.getRelations(id, rel);
+  }
+
+  /** 是否建立了指向 target 的关系 */
+  hasRelation(id: EntityId, rel: RelationDefinition, target: EntityId): boolean {
+    return this.entities.hasRelation(id, rel, target);
+  }
+
+  /** 反查"谁指向 target"（索引，创建序）。目标被删后条目悬挂保留（删除不级联） */
+  findRelated(rel: RelationDefinition, target: EntityId): EntityId[] {
+    return this.entities.findRelated(rel, target);
   }
 
   /**

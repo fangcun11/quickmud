@@ -1,4 +1,5 @@
 import type { EventToken, Entity, EntityId, ComponentDefinition, ComponentDataTuple } from '../core/types';
+import type { RelationDefinition } from '../core/trait';
 import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
 import type { ScheduledEventHandle } from '../events/event-pump';
 import type { Segment } from '../output/types';
@@ -68,6 +69,17 @@ export interface SystemContext {
     components: T,
     callback: (id: EntityId, ...data: ComponentDataTuple<T>) => void
   ) => void;
+  // ---------- 关系（0.15）：多目标组件 + 反查索引，与组件访问同构 ----------
+  /** 建立一条关系（幂等；目标必须是活实体，否则抛错） */
+  addRelation: (id: EntityId, rel: RelationDefinition, target: EntityId) => void;
+  /** 移除一条关系（最后一条时关系组件自动摘除） */
+  removeRelation: (id: EntityId, rel: RelationDefinition, target: EntityId) => boolean;
+  /** 该实体的全部关系目标（拷贝） */
+  getRelations: (id: EntityId, rel: RelationDefinition) => EntityId[];
+  /** 是否建立了指向 target 的关系 */
+  hasRelation: (id: EntityId, rel: RelationDefinition, target: EntityId) => boolean;
+  /** 反查"谁指向 target"（索引，创建序） */
+  findRelated: (rel: RelationDefinition, target: EntityId) => EntityId[];
   /**
    * 从蓝图创建实体（系统内造物：掉落、对话产出、刷怪）。
    * 命令仍应只 emit 事件——这是系统的特权（唯一改状态的手）。

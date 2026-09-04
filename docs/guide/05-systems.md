@@ -133,11 +133,15 @@ const drop = ctx.spawn(CoinBp, { patch: { located: { at: roomId } } });
 
 // 死亡清场等（删除成功即发射引擎合成事件 entity_destroyed，可订阅做清扫）
 ctx.destroy(target);
+
+// 建立关系（0.15）：写特权五件 addRelation / removeRelation /
+// getRelations / hasRelation / findRelated（读三件命令侧也可用）
+ctx.addRelation(killer, Kills, victim);
 ```
 
 > 注意：destroy 不级联清理其他实体的引用（如 `Located` 指向被删容器会悬挂）。
 > 但删除本身**可订阅**——订阅 `EntityDestroyed`（v0.14）在这里放清扫逻辑；
-> 回滚 / fork / 读档的实体重建不会误发它。
+> 回滚 / fork / 读档的实体重建不会误发它。关系同样悬挂保留，不级联。
 
 ## 批量迭代：ctx.each（v0.14）
 

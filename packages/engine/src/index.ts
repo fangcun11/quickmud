@@ -2,6 +2,7 @@
 export { EntityManager } from './core/entity';
 export { World } from './core/world';
 export { trait, relation, deterministicId } from './core/trait';
+export type { RelationDefinition, RelationData } from './core/trait';
 export { blueprint, spawnBlueprint } from './core/blueprint';
 export type {
   EntityBlueprint,

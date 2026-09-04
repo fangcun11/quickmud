@@ -114,7 +114,7 @@ describe('D2 世界分叉（fork）', () => {
     expect(times).toEqual([500, 500]);
   });
 
-  it('性能基线：1000 实体 fork < 100ms（无 COW 的已知限制）', () => {    const main = new World();
+  it('性能基线：1000 实体 fork < 150ms（无 COW 的已知限制）', () => {    const main = new World();
     for (let i = 0; i < 1000; i++) {
       const id = main.entities.createWithId(`e-${i}`);
       main.addComponent(id, Health, { current: i % 100, max: 100 });
@@ -127,7 +127,9 @@ describe('D2 世界分叉（fork）', () => {
     // eslint-disable-next-line no-restricted-syntax
     const elapsed = performance.now() - start;
     expect(forked.entities.getAll()).toHaveLength(1000);
-    expect(elapsed).toBeLessThan(100);
+    // 150ms：实测 16~100ms 区间（0.15 起含关系索引重建扫描），
+    // 上限守护"无 COW 的量级约束"——退化到数百毫秒级才是回归信号
+    expect(elapsed).toBeLessThan(150);
   });
 
   it('R1: fork 继承实体 ID 计数器（删除实体后下一次 create() 与主世界一致）', () => {

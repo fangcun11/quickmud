@@ -1,4 +1,4 @@
-import type { ComponentDefinition, ComponentId } from './types';
+import type { ComponentDefinition, ComponentId, EntityId } from './types';
 import { deepClone } from '../internal/clone';
 
 /**
@@ -68,20 +68,55 @@ export function trait<T extends Record<string, unknown>>(
 }
 
 /**
- * 创建关系定义
- * @param name - 关系名称
- * @returns 关系定义对象
+ * 关系组件数据形状（0.15）
+ *
+ * 内部契约：targets 只应通过 World/EntityManager 的 addRelation /
+ * removeRelation 维护——直接改数组会绕过关系反查索引，导致 findRelated
+ * 静默漏报。getRelations 返回的是拷贝，正常使用不可能踩到。
  */
-export function relation(name: string): ComponentDefinition<{
-  target: string;
-  type: string;
-}> {
+export interface RelationData {
+  targets: EntityId[];
+}
+
+/** 关系定义：普通组件定义 + 品牌标记（类型层防与普通 trait 混用） */
+export interface RelationDefinition extends ComponentDefinition<RelationData> {
+  readonly __relation: true;
+}
+
+/**
+ * 关系 ID 注册表：快照/回滚/fork 恢复后重建关系索引时，
+ * 用它识别"哪些组件 id 是关系组件"（与 trait 的"先定义后恢复"契约一致：
+ * 读档前必须先 import 内容包触发 relation() 注册）。
+ */
+const relationIds = new Set<ComponentId>();
+
+/** 供引擎内部判断某组件 id 是否为关系组件（恢复路径用） */
+export function isRelationId(id: ComponentId): boolean {
+  return relationIds.has(id);
+}
+
+/**
+ * 创建关系定义（0.15 重设计）
+ *
+ * 关系 = 多目标组件：一个实体对同一关系可指向多个目标，
+ * 数据形状为 `{ targets: EntityId[] }`（确定性、纯 JSON、进快照零格式变化）。
+ * 反查（"谁指向 X"）由引擎内置的二级索引支撑，O(k) 候选 + 创建序输出。
+ *
+ * 设计取舍：
+ * - 单目标关系**不需要** relation——用普通组件（如 prefabs 的 `Located { at }`）
+ * - 删除不级联：目标被删后指向它的关系悬挂，靠 `EntityDestroyed` 订阅清扫
+ *
+ * @param name - 关系名称（确定性 ID，与 trait 同表查重，碰撞 fail-fast）
+ */
+export function relation(name: string): RelationDefinition {
   const id = deterministicId(name);
   registerId(id, name);
+  relationIds.add(id);
 
   return {
     id,
     name,
-    create: () => ({ target: '', type: name }),
+    __relation: true,
+    create: () => ({ targets: [] }),
   };
 }

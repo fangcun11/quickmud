@@ -49,6 +49,33 @@ world.each([Position, Health], (id, pos, hp) => {
 - v0.14 起查询走**组件反查索引**（挂/摘/删增量维护，快照恢复自动重建）：
   大世界里的查询从全表扫描降为按命中数取候选，语义与之前完全一致。
 
+## 关系：一个实体指向多个实体（v0.15）
+
+一个实体对同一关系可以指向多个目标（"A 的孩子有 B、C"），用 `relation()`
+定义、专用 API 维护、反查索引支撑"谁指向 X"：
+
+```ts
+import { relation } from '@mud/ecs-engine';
+
+const ChildOf = relation('child_of');
+
+world.addRelation(child, ChildOf, parent);       // 加一条（幂等；目标必须是活实体）
+world.hasRelation(child, ChildOf, parent);       // → true
+world.getRelations(child, ChildOf);              // → [parent]（拷贝，写走专用 API）
+world.removeRelation(child, ChildOf, parent);    // 删一条（最后一条时组件自动摘）
+
+const children = world.findRelated(ChildOf, parent); // 反查：谁指向 parent（创建序）
+```
+
+- **数据真相是普通组件**：关系数据就是 `{ targets: EntityId[] }` 的组件，
+  进快照零格式变化——回滚 / fork / 读档天然一致（索引自动重建）。
+- **写走系统特权**：`addRelation / removeRelation` 系统侧 `ctx` 同名可用，
+  命令侧只有只读三件（`getRelations / hasRelation / findRelated`）。
+- **单目标关系不需要 relation**：指一个地方的（在哪个房间、装备在哪格）
+  用普通组件（prefabs 的 `Located { at }` 就是现役正解）。
+- **删除不级联**：目标被删后指向它的关系悬挂保留，靠 `EntityDestroyed`
+  订阅清扫（见下方已知边界）。
+
 ## 实体：只是一张"身份证"
 
 ```ts

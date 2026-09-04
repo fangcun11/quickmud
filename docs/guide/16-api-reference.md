@@ -43,6 +43,9 @@
 | `defineSystem({ name?, on?, priority?, every?, onError?, handle })` | 系统定义（on 传事件定义 → 类型贯通） | [05](./05-systems.md) |
 | `ctx.after(delayMs, defOrToken, data)` → `ScheduledEventHandle` / `ctx.cancel(handle)` | 延时调度与幂等取消（0.12 起） | [05](./05-systems.md) |
 | `EntityDestroyed` | 引擎合成事件：实体被删时发射 `{ id }`（clear/回滚静默，0.14） | [03](./03-entities-components.md) |
+| `relation(name)` | 关系定义（多目标组件，0.15 重设计：数据 `{ targets }`） | [03](./03-entities-components.md) |
+| `addRelation / removeRelation` | 建立 / 移除一条关系（幂等；目标必须活实体）——写特权 | [03](./03-entities-components.md) |
+| `getRelations / hasRelation / findRelated` | 关系读三件（三层同名；`findRelated` 反查"谁指向 X"，创建序） | [03](./03-entities-components.md) |
 | `defineCommand({ verbs, abbrev?, args?, handle })` | 命令定义（args 类型自动推导） | [06](./06-commands.md) |
 | `registerDeveloperKit(world)` | 开发者套件一步注册：命令 + 效果系统（0.12 起） | [06](./06-commands.md) |
 | `createDeveloperCommands()` | 仅命令组（效果系统不注册时状态不落） | [06](./06-commands.md) |

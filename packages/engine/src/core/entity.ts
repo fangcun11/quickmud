@@ -1,4 +1,6 @@
 import type { Entity, EntityId, ComponentId, ComponentDefinition } from './types';
+import type { RelationData, RelationDefinition } from './trait';
+import { isRelationId } from './trait';
 import { deepClone } from '../internal/clone';
 
 /**
@@ -13,6 +15,11 @@ import { deepClone } from '../internal/clone';
  * - creationOrder：实体创建序号。索引候选集是无序 Set，输出按此
  *   排序以保持 findByComponent 的**创建序**契约（Map 迭代序不可查询，
  *   需要独立的序号载体）。恢复路径按快照序重建，相对序与原世界一致。
+ * - relationIndex：关系二级索引（0.15，flecs pair 反查的关系版）——
+ *   关系ID -> (目标实体 -> 指向它的实体集合)，支撑 findRelated 的
+ *   "谁指向 X" O(k) 查询。数据真相仍是关系组件的 `{ targets }` 数组
+ *   （进快照零格式变化），索引只是加速。恢复路径**不**增量维护——
+ *   rollbackWorld 末尾调 rebuildRelationIndex 全量重建（冷路径）。
  */
 export class EntityManager {
   private entities = new Map<EntityId, Entity>();
@@ -20,6 +27,7 @@ export class EntityManager {
   private componentIndex = new Map<ComponentId, Set<EntityId>>();
   private creationOrder = new Map<EntityId, number>();
   private creationSeq = 0;
+  private relationIndex = new Map<ComponentId, Map<EntityId, Set<EntityId>>>();
   /**
    * 实体销毁通知（0.14）：delete() 成功时回调（clear() 静默——回滚/
    * fork/读档的重建路径不走 delete）。World 注入以发射 entity_destroyed。
@@ -127,15 +135,27 @@ export class EntityManager {
    * entity_destroyed 事件）。注意 clear() 不触发——回滚/fork/读档
    * 的实体重建走 clear()，绝不能误发销毁事件。
    *
+   * 关系语义（0.15）：该实体作为关系**来源**的条目随组件一并清除；
+   * 作为**目标**的条目保留（删除不级联——别的实体仍指向它，悬挂
+   * 引用靠 EntityDestroyed 订阅清扫）。
+   *
    * @param id - 实体ID
    * @returns 是否删除成功
    */
   delete(id: EntityId): boolean {
     const entity = this.entities.get(id);
     if (!entity) return false;
-    // 从该实体拥有的所有组件的反查索引中摘除
+    // 从该实体拥有的所有组件的反查索引中摘除（关系组件额外清 source 条目）
     for (const componentId of entity.components.keys()) {
       this.indexRemove(componentId, id);
+      if (isRelationId(componentId)) {
+        const data = entity.components.get(componentId) as RelationData | undefined;
+        if (data) {
+          for (const target of data.targets) {
+            this.relationIndex.get(componentId)?.get(target)?.delete(id);
+          }
+        }
+      }
     }
     this.entities.delete(id);
     this.creationOrder.delete(id);
@@ -250,7 +270,17 @@ export class EntityManager {
     }
 
     const removed = entity.components.delete(component.id);
-    if (removed) this.indexRemove(component.id, entityId);
+    if (removed) {
+      this.indexRemove(component.id, entityId);
+      // 摘的是关系组件：清掉该实体作为关系来源的全部索引条目
+      // （数据已删，直接扫该关系的所有目标集合——O(t)，t 为不同目标数）
+      if (isRelationId(component.id)) {
+        const byTarget = this.relationIndex.get(component.id);
+        if (byTarget) {
+          for (const sources of byTarget.values()) sources.delete(entityId);
+        }
+      }
+    }
     return removed;
   }
 
@@ -334,12 +364,130 @@ export class EntityManager {
     return this.sortByCreation(result);
   }
 
+  // ---------- 关系（0.15）：多目标组件 + 二级反查索引 ----------
+  //
+  // 数据真相是关系组件的 `{ targets: EntityId[] }`（进快照零格式变化），
+  // relationIndex 只是加速。全部写操作走这里——直接改 targets 数组会
+  // 绕过索引，导致 findRelated 静默漏报（getRelations 返回拷贝防误踩）。
+
+  /** 建立一条关系（幂等：已存在同目标则 no-op；目标必须是活实体，fail-fast） */
+  addRelation(entityId: EntityId, rel: RelationDefinition, target: EntityId): void {
+    const entity = this.entities.get(entityId);
+    if (!entity) {
+      throw new Error(`Entity ${entityId} not found`);
+    }
+    if (!this.entities.has(target)) {
+      throw new Error(
+        `Relation "${rel.name}" target ${target} does not exist（关系目标必须是活实体）`
+      );
+    }
+
+    let data = entity.components.get(rel.id) as RelationData | undefined;
+    if (!data) {
+      data = rel.create();
+      entity.components.set(rel.id, data);
+      this.indexAdd(rel.id, entityId);
+    }
+    if (data.targets.includes(target)) return; // 幂等
+
+    data.targets.push(target);
+    let byTarget = this.relationIndex.get(rel.id);
+    if (!byTarget) {
+      byTarget = new Map();
+      this.relationIndex.set(rel.id, byTarget);
+    }
+    let sources = byTarget.get(target);
+    if (!sources) {
+      sources = new Set();
+      byTarget.set(target, sources);
+    }
+    sources.add(entityId);
+  }
+
+  /**
+   * 移除一条关系
+   *
+   * 最后一条关系移除时组件整个摘掉——组件存在性 = 至少一条关系。
+   * @returns 是否确实移除了
+   */
+  removeRelation(entityId: EntityId, rel: RelationDefinition, target: EntityId): boolean {
+    const entity = this.entities.get(entityId);
+    if (!entity) return false;
+    const data = entity.components.get(rel.id) as RelationData | undefined;
+    if (!data) return false;
+    const idx = data.targets.indexOf(target);
+    if (idx === -1) return false;
+
+    data.targets.splice(idx, 1);
+    this.relationIndex.get(rel.id)?.get(target)?.delete(entityId);
+    if (data.targets.length === 0) {
+      entity.components.delete(rel.id);
+      this.indexRemove(rel.id, entityId);
+    }
+    return true;
+  }
+
+  /** 读取某实体的全部关系目标（**拷贝**——改它不会生效，写走 add/removeRelation） */
+  getRelations(entityId: EntityId, rel: RelationDefinition): EntityId[] {
+    const entity = this.entities.get(entityId);
+    if (!entity) return [];
+    const data = entity.components.get(rel.id) as RelationData | undefined;
+    return data ? [...data.targets] : [];
+  }
+
+  /** 是否建立了指向 target 的关系 */
+  hasRelation(entityId: EntityId, rel: RelationDefinition, target: EntityId): boolean {
+    const entity = this.entities.get(entityId);
+    if (!entity) return false;
+    const data = entity.components.get(rel.id) as RelationData | undefined;
+    return data?.targets.includes(target) ?? false;
+  }
+
+  /** 反查"谁指向 target"（走二级索引，O(k) 候选，创建序输出） */
+  findRelated(rel: RelationDefinition, target: EntityId): EntityId[] {
+    const sources = this.relationIndex.get(rel.id)?.get(target);
+    if (!sources || sources.size === 0) return [];
+    return this.sortByCreation(sources);
+  }
+
+  /**
+   * 全量重建关系索引（快照/回滚/fork 恢复后调用）
+   *
+   * 恢复路径不增量维护 restoreComponent 的关系数据——恢复是冷路径，
+   * 全量重建 O(实体×组件) 换实现简单。前提：relation() 注册已就绪
+   * （读档前必须先 import 内容包——与 trait 的"先定义后恢复"契约一致）。
+   */
+  rebuildRelationIndex(): void {
+    this.relationIndex.clear();
+    for (const [id, entity] of this.entities) {
+      for (const [componentId, data] of entity.components) {
+        if (!isRelationId(componentId)) continue;
+        const targets = (data as RelationData).targets;
+        if (!Array.isArray(targets)) continue; // 形状防御
+        let byTarget = this.relationIndex.get(componentId);
+        if (!byTarget) {
+          byTarget = new Map();
+          this.relationIndex.set(componentId, byTarget);
+        }
+        for (const target of targets) {
+          let sources = byTarget.get(target);
+          if (!sources) {
+            sources = new Set();
+            byTarget.set(target, sources);
+          }
+          sources.add(id);
+        }
+      }
+    }
+  }
+
   /**
    * 清空所有实体（静默：不触发 onDestroyed——回滚/fork/读档的重建路径）
    */
   clear(): void {
     this.entities.clear();
     this.componentIndex.clear();
+    this.relationIndex.clear();
     this.creationOrder.clear();
     // creationSeq 不重置：实体 id 可能被读档复用（碰撞保护会跳号），
     // 但 creationOrder 是新起的一轮，序号只要单调即可，无需与历史对齐
