@@ -71,7 +71,7 @@ describe('renderAsciiMap · 全图', () => {
     );
     // 只探明 b、c ⇒ a 那行纯空（a—b 的连线也不画，两端必须都探明），
     // 若不裁首部，地图头顶挂两行空白
-    expect(renderAsciiMap(layout.rooms, { visited: ['b', 'c'], current: 'c' })).toBe('│\nb\n│\nc(你)');
+    expect(renderAsciiMap(layout.rooms, { visited: ['b', 'c'], current: 'c' })).toBe('  │\n  b\n  │\nc(你)');
     // 全部探明 ⇒ 首行有字形，什么都不裁
     expect(renderAsciiMap(layout.rooms)).toBe('a\n│\nb\n│\nc');
   });
@@ -171,7 +171,7 @@ describe('MapCommand', () => {
     markVisited(w, player);
 
     const out = await w.execute('map', player);
-    expect(out).toBe('a(你)──\n│');
+    expect(out).toBe('a(你)──\n  │');
 
     await w.execute('east', player);
     const out2 = await w.execute('map', player);
@@ -192,6 +192,6 @@ describe('MapCommand', () => {
     w.addComponent(player, Position, { roomId: 'a' });
 
     const out = await w.execute('map', player);
-    expect(out).toBe('a(你) ─── b\n│\nc');
+    expect(out).toBe('a(你) ─── b\n  │\n  c');
   });
 });

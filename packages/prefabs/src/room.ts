@@ -356,10 +356,11 @@ const V_LINE = '│';
  * 告诉玩家"这边还有路"，但看不清通向哪里。
  *
  * 布局是**约束排版**而非坐标网格：位置只由可见格子互相约束——同一 x 的
- * 格子共享中心（垂直线才能是一条直线），同一行相邻排布的两格之间至少留
- * ` ─── ` 的连线位；连线与东西断线**点对点贴着名字两端**画。迷雾外的
- * 格子不占位，地图随探索长出。行块之间夹一行放垂直连线；中文名按显示
- * 宽 2 列计。
+ * 格子共享中心（垂直线才能是一条直线），且每个格子以自己**完整显示名**
+ * （含 `(你)` 标注）的中心对齐锚点，方向指示符相对玩家看到的整个名字
+ * 居中；同一行相邻排布的两格之间至少留 ` ─── ` 的连线位；连线与东西
+ * 断线**点对点贴着名字两端**画。迷雾外的格子不占位，地图随探索长出。
+ * 行块之间夹一行放垂直连线；中文名按显示宽 2 列计。
  */
 export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): string {
   const placed = nodes.filter((node) => node.coords);
@@ -368,7 +369,6 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
   const visible = opts.visited ? new Set(opts.visited) : new Set(placed.map((n) => n.id));
   const vis = placed.filter((n) => visible.has(n.id));
   const label = (n: MapNode): string => (n.id === opts.current ? `${n.name ?? n.id}(你)` : n.name ?? n.id);
-  const bareW = (n: MapNode): number => displayWidth(n.name ?? n.id); // 裸名宽（不含标注）
 
   // 可见格查询（迷雾外的房间对布局/连线/断线完全隐形）
   const at = (x: number, y: number): MapNode | undefined =>
@@ -402,11 +402,12 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
   const topRow = newRow();
   const bottomRow = newRow();
 
-  // ---- 约束排版：格子以裸名中心放在列锚点上，`(你)` 标注向右悬挂 ----
+  // ---- 约束排版：格子以**完整显示名**（含 `(你)` 标注）的中心放在列锚点上 ----
   // 同一 x 的格子共享中心（垂直线才能是一条直线）；同一行排布相邻的两
-  // 格之间至少留 ` ─── ` 的连线位。名字长短只影响自己，不撑大"整列"。
+  // 格之间至少留 ` ─── ` 的连线位。方向指示符相对玩家看到的整个名字
+  // 居中；名字长短只影响自己，不撑大"整列"。
   const geo = (n: MapNode) => {
-    const half = Math.floor(bareW(n) / 2);
+    const half = Math.floor(displayWidth(label(n)) / 2);
     return { left: half, right: displayWidth(label(n)) - half };
   };
 
