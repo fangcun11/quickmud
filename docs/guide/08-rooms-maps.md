@@ -93,19 +93,20 @@ assert.throws(
 ## 渲染与迷雾
 
 `renderAsciiMap` 是**纯函数**（坐标 → 字符串），测试可直接逐行断言；
-迷雾只画已探明房间，且**连线两端都探明才画**（不泄漏邻接信息）：
+每个地点画自己的名字，当前所在的名字前标 `★`。迷雾只画已探明房间——
+指向未探明/图外的出口画一小段**断线**（暗示这边有路，不剧通向哪）：
 
 ```ts
-// 全图渲染：S 入口 / · 已探明 / @ 当前位置
+// 全图渲染：地名直书，★ 标当前位置
 assert.equal(
-  renderAsciiMap(layout.rooms, { entry: 'village', current: 'cave' }),
-  ['S—·', '  │', '  ·—@'].join('\n'),
+  renderAsciiMap(layout.rooms, { current: 'cave' }),
+  ['村庄 ─── 森林小径', '             │', '         沼泽     ─── ★蛛巢洞穴'].join('\n'),
 );
 
-// 迷雾：没探明的洞穴不出现
+// 迷雾：没探明的洞穴不出现，但沼泽东侧画断线暗示洞口方向
 assert.equal(
   renderAsciiMap(layout.rooms, { visited: ['village', 'forest', 'swamp'] }),
-  ['·—·', '  │', '  ·'].join('\n'),
+  ['村庄 ─── 森林小径', '             │', '         沼泽    ──'].join('\n'),
 );
 ```
 
@@ -129,13 +130,16 @@ markVisited(w, player); // seed 出生房间（初始位置没有 Moved 事件�
 // 出生点：地图只有自己
 assert.equal(
   await w.execute('map', player),
-  '@\n图例：@ 当前位置 · 已探明（未探明区域留白）',
+  '★村庄──',
 );
 
 await w.execute('east', player); // 森林
 await w.execute('south', player); // 沼泽
 const explored = (await w.execute('map', player))!;
-assert.ok(explored.startsWith('·—·\n  │\n  @'), '探索过森林与沼泽后地图应展开，当前在沼泽');
+assert.ok(
+  explored.startsWith('村庄 ─── 森林小径') && explored.includes('★沼泽'),
+  '探索过森林与沼泽后地图应展开，当前在沼泽',
+);
 ```
 
 ## 规则一览
@@ -145,7 +149,7 @@ assert.ok(explored.startsWith('·—·\n  │\n  @'), '探索过森林与沼泽�
 | 坐标推断 | BFS 从入口铺开，四方向偏移；`up/down` 等非四方向出口可达但**无坐标**（二维平面装不下，地图不画）。v0.9 的区域层解掉了这个边界，见下一章 |
 | 显式 coords | escape hatch（非欧空间），必须与推断一致，否则报错 |
 | 迷雾 | 未探明区域留白——那是信息，不是空白 |
-| 字符 | `@` 当前 / `S` 入口 / `·` 已探明 / `—` `│` 连线 |
+| 字符 | `★` 当前位 / `─` `───` `│` 连线 / 悬空的短线与竖线 = **断线**（出口指向未探明或图外） |
 
 **为什么坐标在定义期推断而不是运行时**：冲突在启动阶段就炸、运行时零推断开销、
 快照里坐标只是普通数据。`Coordinates` 是 `Exits` 的**派生产物**，不是第二份真相——

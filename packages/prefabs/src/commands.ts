@@ -280,6 +280,7 @@ export const MapCommand = defineCommand({
       .filter((id) => areaId === undefined || world.getRelations(id, Area)[0] === areaId)
       .map((id) => ({
         id,
+        name: world.getComponent(id, Name)?.text,
         coords: world.getComponent(id, Coordinates)!,
         exits: world.getComponent(id, Exits)!,
       }));
@@ -293,20 +294,8 @@ export const MapCommand = defineCommand({
     });
 
     const title = areaId ? world.getComponent(areaId, Name)?.text : undefined;
-    const header = title ? `【${title}】\n` : '';
-    // 符号图对不上名字（v0.11）：图下方列已探明地点的中文名清单，
-    // 当前位置标注（此）——地图答"怎么连"，清单答"都是哪"
-    const known = rooms.filter(
-      (r) => !visited || visited.rooms.includes(r.id) || r.id === pos?.roomId,
-    );
-    const places = known
-      .map((r) => {
-        const n = world.getComponent(r.id, Name)?.text;
-        return n ? (r.id === pos?.roomId ? `${n}（此）` : n) : null;
-      })
-      .filter((s): s is string => s !== null);
-    const placeLine = places.length > 0 ? `\n地点：${places.join(' · ')}` : '';
-    return `${header}${map}\n图例：@ 当前位置 · 已探明（未探明区域留白）${placeLine}`;
+    // 地名直书（v0.12）：名字与 ★ 就在图上，不再需要图例和地名清单
+    return title ? `【${title}】\n\n${map}` : map;
   },
 });
 
@@ -327,6 +316,7 @@ export const WorldMapCommand = defineCommand({
       .filter((id) => roomsOfArea(world, id).length > 0)
       .map((id) => ({
         id,
+        name: world.getComponent(id, Name)?.text,
         coords: world.getComponent(id, Coordinates)!,
         exits: world.getComponent(id, Exits)!,
       }));
@@ -346,16 +336,7 @@ export const WorldMapCommand = defineCommand({
       explored.push(currentArea);
     }
 
-    const map = renderAsciiWorldMap(areas, { current: currentArea, visited: explored });
-    // 区域名清单（v0.11）：符号图不带名字，图下列出已探明区域的中文名
-    const areaNames = areas
-      .filter((a) => !explored || explored.includes(a.id))
-      .map((a) => {
-        const n = world.getComponent(a.id, Name)?.text;
-        return n ? (a.id === currentArea ? `${n}（此）` : n) : null;
-      })
-      .filter((s): s is string => s !== null);
-    const areaLine = areaNames.length > 0 ? `\n区域：${areaNames.join(' · ')}` : '';
-    return `${map}\n图例：@ 当前位置 · 已探明区域（未探明区域留白）${areaLine}`;
+    // 地名直书（v0.12）：区域名与 ★ 就在图上，不再需要图例和区域清单
+    return renderAsciiWorldMap(areas, { current: currentArea, visited: explored });
   },
 });

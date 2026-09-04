@@ -1,8 +1,9 @@
 /**
- * ASCII 地图与探索记录测试（v0.8-B）——TDD 先红后绿
+ * 地名地图与探索记录测试（v0.8-B，v0.12 渲染改版）——TDD 先红后绿
  *
  * 锁死：渲染是纯函数（同输入 ⇒ 同字符串，可直接断言每一行）、
- * 迷雾只暴露已探明区域（连线两端都去过才画，不泄漏邻接信息）、
+ * 地名直书 + 连线表方位、迷雾下未探明房间不露名字但朝向它的
+ * 出口画断线（提示"这边还有路"，不透露通向哪）、
  * 探索记录由 Moved 驱动且撞墙不记账。
  */
 import { describe, it, expect } from 'vitest';
@@ -32,17 +33,16 @@ const ell = () =>
 
 describe('renderAsciiMap · 全图', () => {
   it('直线：房间与东西向连线', () => {
-    expect(renderAsciiMap(line().rooms)).toBe('·—·—·');
+    expect(renderAsciiMap(line().rooms)).toBe('a ─── b ─── c');
   });
 
   it('L 形：南北向连线用 │', () => {
-    expect(renderAsciiMap(ell().rooms)).toBe('·—·\n│\n·');
+    expect(renderAsciiMap(ell().rooms)).toBe('a ─── b\n│\nc');
   });
 
-  it('入口标 S，当前位置标 @（覆盖入口）', () => {
-    expect(renderAsciiMap(line().rooms, { entry: 'a' })).toBe('S—·—·');
-    expect(renderAsciiMap(line().rooms, { entry: 'a', current: 'b' })).toBe('S—@—·'); // 入口保持 S
-    expect(renderAsciiMap(line().rooms, { entry: 'a', current: 'a' })).toBe('@—·—·'); // @ 覆盖 S
+  it('当前位置标 ★（★ 占两列，计入列宽，连线随之让位）', () => {
+    expect(renderAsciiMap(line().rooms, { current: 'b' })).toBe('a ─── ★b ─── c');
+    expect(renderAsciiMap(line().rooms, { current: 'a' })).toBe('★a ─── b ─── c');
   });
 
   it('无坐标的房间（跨层可达）不出现在地图上', () => {
@@ -50,12 +50,12 @@ describe('renderAsciiMap · 全图', () => {
       [r('a', { east: 'b', up: 'attic' }), r('b', { west: 'a' }), r('attic', { down: 'a' })],
       { entry: 'a' },
     );
-    expect(renderAsciiMap(layout.rooms)).toBe('·—·'); // attic 没有坐标 → 不画
+    expect(renderAsciiMap(layout.rooms)).toBe('a ─── b'); // attic 没有坐标 → 不画
   });
 
   it('确定性：同输入两次渲染完全一致', () => {
-    expect(renderAsciiMap(ell().rooms, { entry: 'a', current: 'c' })).toBe(
-      renderAsciiMap(ell().rooms, { entry: 'a', current: 'c' }),
+    expect(renderAsciiMap(ell().rooms, { current: 'c' })).toBe(
+      renderAsciiMap(ell().rooms, { current: 'c' }),
     );
   });
 
@@ -71,30 +71,30 @@ describe('renderAsciiMap · 全图', () => {
     );
     // 只探明 b、c ⇒ a 那行纯空（a—b 的连线也不画，两端必须都探明），
     // 若不裁首部，地图头顶挂两行空白
-    expect(renderAsciiMap(layout.rooms, { visited: ['b', 'c'], current: 'c' })).toBe('·\n│\n@');
+    expect(renderAsciiMap(layout.rooms, { visited: ['b', 'c'], current: 'c' })).toBe(' │\nb\n │\n★c');
     // 全部探明 ⇒ 首行有字形，什么都不裁
-    expect(renderAsciiMap(layout.rooms)).toBe('·\n│\n·\n│\n·');
+    expect(renderAsciiMap(layout.rooms)).toBe('a\n│\nb\n│\nc');
   });
 });
 
 describe('renderAsciiMap · 迷雾', () => {
   it('只渲染去过的房间', () => {
-    expect(renderAsciiMap(line().rooms, { visited: ['a'] })).toBe('·');
-    expect(renderAsciiMap(line().rooms, { visited: ['a', 'b'] })).toBe('·—·');
+    expect(renderAsciiMap(line().rooms, { visited: ['a'] })).toBe('a──');
+    expect(renderAsciiMap(line().rooms, { visited: ['a', 'b'] })).toBe('a ─── b──');
   });
 
   it('连线两端都去过才画——单端Known也不泄漏邻接', () => {
     // 去过 a、c，但没去过中间的 b → a 与 c 之间不该出现连线
-    expect(renderAsciiMap(line().rooms, { visited: ['a', 'c'] })).toBe('·   ·');
+    expect(renderAsciiMap(line().rooms, { visited: ['a', 'c'] })).toBe('a──      ──c');
   });
 
   it('二维迷雾：竖线同样要求两端都探明', () => {
-    expect(renderAsciiMap(ell().rooms, { visited: ['a', 'c'] })).toBe('·\n│\n·');
-    expect(renderAsciiMap(ell().rooms, { visited: ['a', 'b'] })).toBe('·—·');
+    expect(renderAsciiMap(ell().rooms, { visited: ['a', 'c'] })).toBe('a──\n│\nc');
+    expect(renderAsciiMap(ell().rooms, { visited: ['a', 'b'] })).toBe('a ─── b\n│');
   });
 
   it('未探明的房间即使有坐标也留白', () => {
-    expect(renderAsciiMap(ell().rooms, { visited: ['a'] })).toBe('·');
+    expect(renderAsciiMap(ell().rooms, { visited: ['a'] })).toBe('a──\n│');
   });
 });
 
@@ -155,7 +155,7 @@ describe('探索记录（Visited / VisitationSystem）', () => {
 });
 
 describe('MapCommand', () => {
-  it('挂了 Visited → 只画已探明区域，附图示', async () => {
+  it('挂了 Visited → 只画已探明区域（★ 当前位，断线示未探明方向）', async () => {
     const w = new World();
     w.register(MovementSystem, VisitationSystem);
     w.registerCommands(
@@ -171,11 +171,11 @@ describe('MapCommand', () => {
     markVisited(w, player);
 
     const out = await w.execute('map', player);
-    expect(out).toBe('@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：a（此）');
+    expect(out).toBe('★a──\n │');
 
     await w.execute('east', player);
     const out2 = await w.execute('map', player);
-    expect(out2).toBe('·—@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：a · b（此）');
+    expect(out2).toBe('a ─── ★b\n│');
   });
 
   it('没挂 Visited → 渲染全图（内容没声明要迷雾就不迷雾）', async () => {
@@ -192,6 +192,6 @@ describe('MapCommand', () => {
     w.addComponent(player, Position, { roomId: 'a' });
 
     const out = await w.execute('map', player);
-    expect(out).toBe('@—·\n│\n·\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：a（此） · b · c');
+    expect(out).toBe('★a ─── b\n │\nc');
   });
 });

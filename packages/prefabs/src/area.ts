@@ -373,9 +373,11 @@ export function buildAreas(world: World, layout: WorldLayoutResult): void {
   }
 }
 
-/** 可渲染的地图节点（区域与房间共用：都有 id / coords / exits） */
+/** 可渲染的地图节点（区域与房间共用：都有 id / name / coords / exits） */
 export type Mappable = {
   id: string;
+  /** 地名直书（v0.12）；缺省退回 id */
+  name?: string;
   coords?: { x: number; y: number };
   exits: Record<string, string>;
 };

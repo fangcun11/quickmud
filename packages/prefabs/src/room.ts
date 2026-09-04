@@ -5,7 +5,7 @@
  * - `buildRooms`：注入世界（Name/Description/Exits/Coordinates/Area）
  * - `inferPlane`：把一张「节点 + 出口」图铺进二维平面的通用 BFS
  *   （房间图与区域图同构，所以只写一次——见 `area.ts` 的 `layoutWorld`）
- * - `renderAsciiMap`：ASCII 地图（纯函数，逐行可断言）
+ * - `renderAsciiMap`：地名地图（纯函数，逐行可断言；v0.12 起地名直书）
  *
  * 单一真相铁律：`Exits` 是拓扑真相，坐标是**派生产物**。
  * 推断在定义期完成而非运行时——冲突在启动阶段就炸，运行时零开销、零非确定性。
@@ -317,69 +317,182 @@ export function buildRooms(world: World, layout: { rooms: LayoutRoom[] }): void 
   }
 }
 
+export interface MapNode {
+  id: string;
+  /** 地名直书（v0.12 地图改为「地名 + 连线」）；缺省退回 id */
+  name?: string;
+  coords?: { x: number; y: number };
+  exits: Record<string, string>;
+}
+
 export interface MapRenderOptions {
-  /** 入口房间（标 `S`；内容层自定义命令时才用得上——世界不存"谁是入口"） */
-  entry?: string;
-  /** 当前所在房间（标 `@`，覆盖 `S`/`·`） */
+  /** 当前所在房间/区域（名字前标 ★） */
   current?: string;
-  /** 已探明房间；不传 = 渲染全图 */
+  /** 已探明节点；不传 = 渲染全图 */
   visited?: string[];
 }
 
+/** 显示宽度：ASCII 与制表符号算 1，中文/全角/★ 算 2（等宽字体下的视觉列数） */
+function displayWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    w += cp >= 0x2e80 || (cp >= 0x2600 && cp <= 0x27bf) ? 2 : 1;
+  }
+  return w;
+}
+
+/** 列间隙：` ─── `（空格 + 三横 + 空格） */
+const H_GAP = 5;
+const H_DASH = '─';
+const V_LINE = '│';
+
 /**
- * ASCII 地图渲染（纯函数：同输入 ⇒ 同字符串，可直接断言每一行）
+ * 地名地图渲染（纯函数：同输入 ⇒ 同字符串，可直接断言每一行）
  *
- * 网格：房间占 `(2x, 2y)`，连线占其间的奇数格。
- * 迷雾规则：只画已探明房间，且**连线两端都探明才画**——
- * 从已探明房间指向未知房间的连线会泄漏邻接信息，不画。
+ * v0.12 起从符号网格（`@—·` + 图例）改为**地名直书**：每个地点画自己的
+ * 名字，四方向连线标注方位，当前所在名字前标 `★`。连线只在两端都探明时
+ * 画实线；指向未探明/图外（含跨区域）的出口画一小段**断线**——告诉玩家
+ * "这边还有路"，但看不清通向哪里。
+ *
+ * 布局：同一 x 坐标的节点共享一列（列宽 = 列上最宽名字，中文名按显示宽
+ * 2 列计），同一 y 坐标共享一行；行块之间夹一行放垂直连线。坐标是全图
+ * 定 bounds 的（相对位置固定，地图不随探索跳动）。
  */
-export function renderAsciiMap(
-  rooms: Array<{ id: string; coords?: { x: number; y: number }; exits: Record<string, string> }>,
-  opts: MapRenderOptions = {},
-): string {
-  const placed = rooms.filter((room) => room.coords);
+export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): string {
+  const placed = nodes.filter((node) => node.coords);
   if (placed.length === 0) return '';
 
-  const visible = opts.visited
-    ? new Set(opts.visited)
-    : new Set(placed.map((room) => room.id));
+  const visible = opts.visited ? new Set(opts.visited) : new Set(placed.map((n) => n.id));
+  const label = (n: MapNode): string => (n.id === opts.current ? `★${n.name ?? n.id}` : n.name ?? n.id);
 
-  const xs = placed.map((room) => room.coords!.x);
-  const ys = placed.map((room) => room.coords!.y);
-  const x0 = Math.min(...xs);
-  const y0 = Math.min(...ys);
-  const W = 2 * (Math.max(...xs) - x0) + 1;
-  const H = 2 * (Math.max(...ys) - y0) + 1;
-  const grid: string[][] = Array.from({ length: H }, () => Array(W).fill(' '));
-  const gx = (c: { x: number; y: number }) => 2 * (c.x - x0);
-  const gy = (c: { x: number; y: number }) => 2 * (c.y - y0);
-  const put = (x: number, y: number, char: string) => {
-    const row = grid[y];
-    if (row) row[x] = char;
+  // 可见格查询（迷雾外的房间对连线/断线判定隐形）
+  const at = (x: number, y: number): MapNode | undefined =>
+    placed.find((n) => visible.has(n.id) && n.coords!.x === x && n.coords!.y === y);
+
+  // ---- 列宽与列起点：同一 x 的格子等宽对齐，垂直连线取列中心 ----
+  const xs = [...new Set(placed.map((n) => n.coords!.x))].sort((a, b) => a - b);
+  const ys = [...new Set(placed.map((n) => n.coords!.y))].sort((a, b) => a - b);
+  const colW = new Map<number, number>();
+  for (const x of xs) {
+    let w = 0;
+    for (const y of ys) {
+      const n = at(x, y);
+      if (n) w = Math.max(w, displayWidth(label(n)));
+    }
+    colW.set(x, w);
+  }
+  const colX = new Map<number, number>();
+  let acc = 0;
+  for (const x of xs) {
+    colX.set(x, acc);
+    acc += colW.get(x)! + H_GAP;
+  }
+  const columnCenter = (x: number) => colX.get(x)! + Math.floor(colW.get(x)! / 2);
+
+  // ---- 行画布：视觉列 → 字符（宽字符占 2 格，第二格写空串占位）----
+  const newRow = (): Map<number, string> => new Map();
+  const writeText = (row: Map<number, string>, col: number, text: string) => {
+    let i = col;
+    for (const ch of text) {
+      row.set(i, ch);
+      if (displayWidth(ch) === 2) row.set(i + 1, '');
+      i += displayWidth(ch);
+    }
+  };
+  const putCell = (row: Map<number, string>, col: number, ch: string) => row.set(col, ch);
+  const renderRow = (row: Map<number, string>, minCol: number): string => {
+    let max = -1;
+    for (const k of row.keys()) max = Math.max(max, k);
+    let s = '';
+    for (let c = minCol; c <= max; c++) s += row.get(c) ?? ' ';
+    return s.replace(/\s+$/, '');
   };
 
-  for (const room of placed) {
-    if (!visible.has(room.id)) continue;
-    const char = room.id === opts.current ? '@' : room.id === opts.entry ? 'S' : '·';
-    put(gx(room.coords!), gy(room.coords!), char);
+  // 行块（y 偶数索引）放名字，夹行（奇数索引）放垂直连线
+  const rows: Map<number, string>[] = Array.from({ length: 2 * ys.length - 1 }, newRow);
+  const blockRow = (y: number) => rows[2 * ys.indexOf(y)]!;
+  const midRow = (yi: number) => rows[2 * yi + 1]!; // 行块 yi 与 yi+1 之间
+  const topRow = newRow();
+  const bottomRow = newRow();
+
+  // ---- 名字 ----
+  for (const n of placed) {
+    if (!visible.has(n.id)) continue;
+    writeText(blockRow(n.coords!.y), colX.get(n.coords!.x)!, label(n));
   }
 
-  for (const room of placed) {
-    if (!visible.has(room.id)) continue;
-    for (const [dir, target] of Object.entries(room.exits)) {
+  // ---- 连线判定：存在任一方向的出口边使两格坐标相邻 ----
+  const hasStep = (from: MapNode, to: MapNode): boolean =>
+    Object.keys(from.exits).some((dir) => {
       const d = DIRS[dir];
-      if (!d || !visible.has(target)) continue;
-      const neighbor = placed.find((other) => other.id === target);
-      if (!neighbor) continue;
-      put(gx(room.coords!) + d.x, gy(room.coords!) + d.y, d.x !== 0 ? '—' : '│');
+      return (
+        !!d &&
+        !!from.coords &&
+        !!to.coords &&
+        from.coords.x + d.x === to.coords.x &&
+        from.coords.y + d.y === to.coords.y
+      );
+    });
+  const linked = (a: MapNode, b: MapNode): boolean => hasStep(a, b) || hasStep(b, a);
+
+  // ---- 水平连线：同行相邻列 ----
+  for (let i = 0; i < xs.length - 1; i++) {
+    for (const y of ys) {
+      const a = at(xs[i]!, y);
+      const b = at(xs[i + 1]!, y);
+      if (!a || !b || !linked(a, b)) continue;
+      const start = colX.get(xs[i]!)! + colW.get(xs[i]!)!;
+      const row = blockRow(y);
+      for (let k = 1; k <= 3; k++) putCell(row, start + k, H_DASH);
     }
   }
 
-  // 坐标系按**全图**定 bounds（房间的相对位置必须固定，否则地图会随探索跳动）。
-  // 只裁掉**首尾**的纯空行——中间的空白行要保留，那是未探明的位置。
-  // 空行不带任何字形，裁掉不影响已探明内容的相对位置；只裁尾部、放任首部
-  // 是不对称的漏裁（v0.10 内容包玩到纵向叠层才暴露：三层剖面图上方挂两行空）。
-  const lines = grid.map((row) => row.join('').replace(/\s+$/, ''));
+  // ---- 垂直连线：同列相邻行块 ----
+  for (const x of xs) {
+    for (let yi = 0; yi < ys.length - 1; yi++) {
+      const a = at(x, ys[yi]!);
+      const b = at(x, ys[yi + 1]!);
+      if (!a || !b || !linked(a, b)) continue;
+      putCell(midRow(yi), columnCenter(x), V_LINE);
+    }
+  }
+
+  // ---- 断线：出口指向迷雾外/图外（含跨区域）——画一小段，暗示"这边有路" ----
+  for (const n of placed) {
+    if (!visible.has(n.id)) continue;
+    const { x, y } = n.coords!;
+    const yi = ys.indexOf(y);
+    for (const [dir] of Object.entries(n.exits)) {
+      const d = DIRS[dir];
+      if (!d) continue; // up/down 跨层无平面坐标，不画
+      if (at(x + d.x, y + d.y)) continue; // 邻格可见：归实线逻辑
+      if (dir === 'north') {
+        putCell(yi === 0 ? topRow : midRow(yi - 1), columnCenter(x), V_LINE);
+      } else if (dir === 'south') {
+        putCell(yi === ys.length - 1 ? bottomRow : midRow(yi), columnCenter(x), V_LINE);
+      } else if (dir === 'west') {
+        const row = blockRow(y);
+        putCell(row, colX.get(x)! - 2, H_DASH);
+        putCell(row, colX.get(x)! - 1, H_DASH);
+      } else if (dir === 'east') {
+        const row = blockRow(y);
+        const start = colX.get(x)! + colW.get(x)!;
+        putCell(row, start, H_DASH);
+        putCell(row, start + 1, H_DASH);
+      }
+    }
+  }
+
+  // ---- 组装（顶/底断线行按需挂载；中间夹行保留结构位）----
+  const out: Map<number, string>[] = [];
+  if (topRow.size > 0) out.push(topRow);
+  out.push(...rows);
+  if (bottomRow.size > 0) out.push(bottomRow);
+  // 西断线写在 colX-2/-1：首列（colX=0）时会落到负数位——按全图最小列统一
+  // 各行左边界，保证带前导断线的行与普通行视觉对齐
+  const minCol = Math.min(0, ...out.flatMap((r) => [...r.keys()]));
+  const lines = out.map((r) => renderRow(r, minCol));
   while (lines.length > 0 && lines[0]!.trim() === '') lines.shift();
   while (lines.length > 0 && lines[lines.length - 1]!.trim() === '') lines.pop();
   return lines.join('\n');

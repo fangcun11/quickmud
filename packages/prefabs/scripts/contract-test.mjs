@@ -190,12 +190,12 @@ const layout = layoutRooms([
 ], { entry: 'plaza' });
 buildRooms(w, layout);
 if (w.getComponent('plaza', Coordinates)?.x !== 0) throw new Error('ESM buildRooms 坐标契约失败');
-// map 命令：无 Visited → 全图；玩家当前不在图内则没有 @
+// map 命令：无 Visited → 全图；玩家当前不在图内则没有 ★
 const mapOut = await w.execute('map', p);
-if (!mapOut.includes('·—·') || !mapOut.includes('图例')) throw new Error('ESM map 契约失败: ' + mapOut);
-// 迷雾：只画去过的房间
+if (!mapOut.includes('广场 ─── 商店')) throw new Error('ESM map 契约失败: ' + mapOut);
+// 迷雾：只画去过的房间（未探明的商店方向画断线）
 const fog = renderAsciiMap(layout.rooms, { visited: ['plaza'] });
-if (fog !== '·') throw new Error('ESM renderAsciiMap 迷雾契约失败: ' + fog);
+if (fog !== '广场──') throw new Error('ESM renderAsciiMap 迷雾契约失败: ' + fog);
 // v0.9 区域 + 自包含房间行为：区域出口反推、守卫拦截、房间命令（state 记账 + spawn 可拾取）
 const HayStateC = trait('hay_state_c', () => ({ searched: false }));
 const w2 = new World();
@@ -246,9 +246,9 @@ if (w2.findRelated(Located, p2).length !== 1) {
   throw new Error('ESM 房间命令 spawn 契约失败');
 }
 await w2.execute('search', p2); // 第二次搜空（state 持久），不应报错
-// worldmap：区域图渲染
+// worldmap：区域图渲染（地名直书 + ★ 当前区域）
 const wm = await w2.execute('worldmap', p2);
-if (!wm.includes('图例')) throw new Error('ESM worldmap 契约失败: ' + wm);
+if (!wm.includes('★村2')) throw new Error('ESM worldmap 契约失败: ' + wm);
 console.log('ESM 契约 ✓');
 `,
   );

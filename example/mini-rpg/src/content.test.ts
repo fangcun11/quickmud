@@ -53,7 +53,7 @@ beforeAll(() => {
 describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
   it('第一幕：村长挂赏，森林杀狼收狼皮', async () => {
     // 出生点只见过村庄 → 区域地图只有自己（迷雾：未探明区域不显示）
-    expect(await run('map')).toBe('【村庄】\n@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：村庄（此）');
+    expect(await run('map')).toBe('【村庄】\n\n★村庄──');
 
     // 村庄里能看到两条任务
     const board = await run('quests');
@@ -168,9 +168,9 @@ describe('mini-rpg 自动通关（蛛巢悬赏）', () => {
   it('第七幕：区域地图只画当前区域，世界地图画区域拓扑', async () => {
     // 踏遍四境后：房间地图（迷雾全亮）只画**村庄区域**；
     // 世界地图画三个区域的连接 village -east-> wilds -east-> lair
-    expect(await run('map')).toBe('【村庄】\n@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：村庄（此）');
+    expect(await run('map')).toBe('【村庄】\n\n★村庄──');
     expect(await run('worldmap')).toBe(
-      '@—·—·\n图例：@ 当前位置 · 已探明区域（未探明区域留白）\n区域：村庄（此） · 野地 · 蛛巢',
+      '★村庄 ─── 野地 ─── 蛛巢',
     );
 
     // 房间命令的位置校验：search 是蛛巢的动词，在村庄里就是"听不懂"

@@ -79,16 +79,16 @@ assert.throws(
 
 // ---- 3. 全图渲染（纯函数，可逐行断言）----
 assert.equal(
-  renderAsciiMap(layout.rooms, { entry: 'village', current: 'cave' }),
-  ['S—·', '  │', '  ·—@'].join('\n'),
-  '全图应正确绘出四方向连线与当前位置（入口标 S）',
+  renderAsciiMap(layout.rooms, { current: 'cave' }),
+  ['村庄 ─── 森林小径', '             │', '         沼泽     ─── ★蛛巢洞穴'].join('\n'),
+  '全图应地名直书、连线表方位、★ 标当前位置',
 );
 
 // ---- 4. 迷雾：只画去过的房间，且连线两端都探明才画 ----
 assert.equal(
   renderAsciiMap(layout.rooms, { visited: ['village', 'forest', 'swamp'] }),
-  ['·—·', '  │', '  ·'].join('\n'),
-  '未探明的洞穴不应出现',
+  ['村庄 ─── 森林小径', '             │', '         沼泽    ──'].join('\n'),
+  '未探明的洞穴不露名字，沼泽朝它的出口画断线',
 );
 
 // ---- 5. 注入世界 + map 命令：探索驱动地图展开 ----
@@ -109,12 +109,12 @@ markVisited(w, player); // seed 入口（初始位置没有 Moved 事件可订�
 // 出生点：地图只有自己
 assert.equal(
   await w.execute('map', player),
-  '@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：村庄（此）',
-  '初始地图只有出生房间',
+  '★村庄──',
+  '初始地图只有出生房间（朝东的断线提示东边有路）',
 );
 
 await w.execute('east', player); // 森林
 await w.execute('south', player); // 沼泽
 const explored = (await w.execute('map', player))!;
-assert.ok(explored.startsWith('·—·\n  │\n  @'), '探索过森林与沼泽后地图应展开，当前在沼泽');
+assert.ok(explored.includes('★沼泽'), '探索过森林与沼泽后地图应展开，★ 标当前房间沼泽');
 console.log('05-room-map ✓ 房间定义 + 坐标推断 + ASCII 地图 + 迷雾 全通过');

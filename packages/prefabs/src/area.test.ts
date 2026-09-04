@@ -144,7 +144,7 @@ describe('layoutWorld · 区域坐标系与出口推断', () => {
   });
 
   it('世界地图渲染：区域图与房间图同构，直接复用同一套渲染', () => {
-    expect(renderAsciiWorldMap(twoAreaLayout().areas)).toBe('·—·');
+    expect(renderAsciiWorldMap(twoAreaLayout().areas)).toBe('村庄 ─── 荒野');
   });
 });
 
@@ -310,12 +310,12 @@ describe('MapCommand · 按当前区域过滤', () => {
   it('map 只画当前区域的房间，带【区域名】抬头', async () => {
     const { w, player } = world(true);
     expect(await w.execute('map', player)).toBe(
-      '【村庄】\n@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：v1（此）',
+      '【村庄】\n\n★v1──',
     );
 
     await w.execute('east', player); // v2，仍在村庄
     expect(await w.execute('map', player)).toBe(
-      '【村庄】\n·—@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：v1 · v2（此）',
+      '【村庄】\n\nv1 ─── ★v2──',
     );
   });
 
@@ -324,14 +324,14 @@ describe('MapCommand · 按当前区域过滤', () => {
     await w.execute('east', player); // v2
     await w.execute('east', player); // w1，跨区域边
     expect(await w.execute('map', player)).toBe(
-      '【荒野】\n@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：w1（此）',
+      '【荒野】\n\n──★w1──',
     );
   });
 
   it('没挂 Visited：渲染当前区域全图（不迷雾）', async () => {
     const { w, player } = world(false);
     expect(await w.execute('map', player)).toBe(
-      '【村庄】\n@—·\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：v1（此） · v2',
+      '【村庄】\n\n★v1 ─── v2──',
     );
   });
 });
@@ -361,14 +361,14 @@ describe('WorldMapCommand · 区域级战争迷雾', () => {
   it('没挂 Visited → 渲染全部区域', async () => {
     const { w, player } = world(false);
     expect(await w.execute('worldmap', player)).toBe(
-      '@—·\n图例：@ 当前位置 · 已探明区域（未探明区域留白）\n区域：村庄（此） · 荒野',
+      '★村庄 ─── 荒野',
     );
   });
 
   it('挂了 Visited：区域内去过任意一间房就算探明该区域', async () => {
     const { w, player } = world(true);
     expect(await w.execute('wmap', player)).toBe(
-      '@\n图例：@ 当前位置 · 已探明区域（未探明区域留白）\n区域：村庄（此）',
+      '★村庄──',
     );
   });
 
@@ -377,7 +377,7 @@ describe('WorldMapCommand · 区域级战争迷雾', () => {
     await w.execute('east', player); // v2
     await w.execute('east', player); // w1：荒野探明
     expect(await w.execute('世界地图', player)).toBe(
-      '·—@\n图例：@ 当前位置 · 已探明区域（未探明区域留白）\n区域：村庄 · 荒野（此）',
+      '村庄 ─── ★荒野',
     );
   });
 });
