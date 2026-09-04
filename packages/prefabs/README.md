@@ -378,6 +378,28 @@ handle(event, ctx) {
 单事件系统（`on: [Attack]`）的 `event.data` 同样直接就是载荷类型。
 `on: [X.token]` 旧写法继续可用（data 退化为 unknown）。
 
+## 房间块、同名消歧与伤势警示（v0.13）
+
+对照北大侠客行的文本呈现惯例补齐的三件事：
+
+**房间块**：进房（首次/详细模式）与 look 共用同一份输出——
+`【名】(title 通道)` → 描述 → 出口 → 地上物 → 同房活体。实体列示带
+**别名与重名计数**，名字段带 `tag:entity`（网页端可点击 = look）：
+
+```
+这里还有：野狼(狼、wolf)×2、店小二。
+你可以看到：狼皮(皮)。
+```
+
+**同名消歧**：`resolveInContainer` / `resolveOccupantIn` 支持「名字N」序号——
+`attack 野狼2` 指定创建序第 2 只（1 起，省略即 1；越界取最末）。仅当原文
+没有直接命中才拆序号，名字自带数字的实体（98k）不受影响。
+
+**伤势警示**：`injuryWarning(before, after, max, { isPlayerTarget, name })`
+按血量档位（>2/3 无恙 → >1/3 轻伤黄 → >0 重伤红）在**掉档那一刻**给一行
+提示；同档连击不刷屏、回血不提示、死亡不叠加（死亡句自有分量）。战斗系统
+（prefabs `CombatSystem` 与侠客行 `WuxiaCombatSystem`）已接线。
+
 ## 命令建议器（v0.13）
 
 Web 输入补全的**数据面**：输入时"该补什么"由这里回答，渲染器（web-client）

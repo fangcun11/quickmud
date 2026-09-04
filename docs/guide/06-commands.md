@@ -18,10 +18,13 @@ const TakeCommand = defineCommand({
     item: { type: 'entity' },            // 第 1 个词
     from:  { type: 'optional_entity' },  // 第 2 个词，可缺省
   },
-  handle({ args, raw, player, world }) {
+  handle({ args, raw, output, player, world }) {
     // args 类型自动推导：item: string | null，from: string | null
     // 运行时给的是原始词（未解析成实体ID），需要实体时用 world.findEntity(args.item)
-    if (!args.item) return '拿什么？';     // 返回 string → 直接作为反馈
+    if (!args.item) {
+      output.error('拿什么？');   // 意图不成立 → error 通道（渲染为红色）
+      return null;
+    }
     world.emit(ItemTaken, { player, item: args.item });
     // 不写 return（void）→ 反馈由事件链上的系统产出
   },
@@ -82,13 +85,36 @@ assert.deepEqual(w.world.output.ofKind('status')[0]!.meta, {
 });
 ```
 
-## 返回串与 output 通道（v0.11）
+## 返回串与输出通道定约（v0.13，F3）
 
-命令有两种给玩家话的方式，v0.11 起可以**同时用**：
+**通道语义表**（完整版见引擎 `OutputView` 的类型注释，渲染端按它着色）：
 
-- **返回串**——`return '拿什么？'`，直接作为命令反馈（一锤子买卖）；
-- **输出通道**——`handle` 的 context 里有 `output`（与系统同款 `OutputView`），
-  语义化输出直接进输出流（铁律"命令不改状态"不变，`output` 只写输出流）。
+| 通道 | 语义 |
+| --- | --- |
+| `narrative` | 世界叙事（过程与结果）；可带语义色：黄=警示/得宝，红=死亡/危急 |
+| `title` | 场景标题（房间块开头的【房间名】） |
+| `system` | 元信息（进度短报、帮助），渲染端压灰 |
+| `dialogue` | 台词 |
+| `error` | **玩家意图无法成立**（缺参、目标不存在、前提不满足） |
+| `status` | 结构化状态数据（机器消费：JSON + meta，**不是玩家文案**） |
+
+**返回串与通道的分工**：返回串 = 命令级**确认型**反馈（切换确认、查询一览）；
+使用类失败（`拿什么？`、`这里没有「X」`）不再走返回值——一律 `output.error`，
+渲染端统一红色，玩家对"什么叫失败"有一致的视觉预期：
+
+```ts
+const TakeCommand = defineCommand({
+  verbs: ['take', '拿'],
+  args: { item: { type: 'entity' } },
+  handle({ args, output }) {
+    if (!args.item) {
+      output.error('拿什么？');   // 意图不成立 → error 通道
+      return null;
+    }
+    return `你想拿起「${args.item}」。`; // 确认型反馈 → 返回串（渲染为叙事）
+  },
+});
+```
 
 ```ts
 const ScoreCommand = defineCommand({
@@ -96,7 +122,7 @@ const ScoreCommand = defineCommand({
   handle({ output }) {
     output.narrative('【状态】生命 80/100'); // 字符串自动包装为 narrative 段
     output.error('存档功能未开启。');
-    return '—— score 完毕 ——'; // 返回串 = 命令自己的文字反馈
+    return '—— score 完毕 ——'; // 返回串 = 命令自己的确认型反馈
   },
 });
 
@@ -110,9 +136,9 @@ assert.deepEqual(
 );
 ```
 
-什么时候用哪个？纯文本一句话用返回串；要分段、带样式、带结构化数据（`status`）
-的输出走 `output` 通道。在此之前，为一条语义化输出"专门写一个系统"是常见绕路，
-v0.11 之后不必了。
+什么时候用哪个？确认型一句话用返回串；意图不成立走 `error`；要分段、带样式、
+带结构化数据（`status`）的输出走 `output` 通道。在此之前，为一条语义化输出
+"专门写一个系统"是常见绕路，v0.11 之后不必了。
 
 ## 动词冲突：定义期 fail-fast
 

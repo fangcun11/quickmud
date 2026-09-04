@@ -100,21 +100,19 @@ export class World {
 
   /** 输出视图（SystemContext 与 CommandContext 共用同一形态） */
   private makeOutputView() {
+    const wrap = (kind: 'narrative' | 'system' | 'dialogue') =>
+      (textOrSegments: string | Segment[]) => {
+        if (typeof textOrSegments === 'string') {
+          this.output[kind]([{ text: textOrSegments }]);
+        } else {
+          this.output[kind](textOrSegments);
+        }
+      };
     return {
-      narrative: (textOrSegments: string | Segment[]) => {
-        if (typeof textOrSegments === 'string') {
-          this.output.narrative([{ text: textOrSegments }]);
-        } else {
-          this.output.narrative(textOrSegments);
-        }
-      },
-      dialogue: (textOrSegments: string | Segment[]) => {
-        if (typeof textOrSegments === 'string') {
-          this.output.dialogue([{ text: textOrSegments }]);
-        } else {
-          this.output.dialogue(textOrSegments);
-        }
-      },
+      narrative: wrap('narrative'),
+      title: (text: string) => this.output.title(text),
+      system: wrap('system'),
+      dialogue: wrap('dialogue'),
       error: (text: string) => this.output.error(text),
       status: (data: unknown) => this.output.status(data),
     };

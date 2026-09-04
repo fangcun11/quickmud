@@ -42,10 +42,12 @@ export const GoCommand = defineCommand({
   args: {
     direction: { type: 'direction' },
   },
-  handle({ args, player, world }) {
+  handle({ args, output, player, world }) {
     const { direction } = args;
     if (!direction) {
-      return '你要去哪里？';
+      // 意图不成立（缺参）→ error 通道（F3 定约），不再走返回值
+      output.error('你要去哪里？');
+      return null;
     }
 
     // 方向归一化（单字母/中文 → 标准方向名）
@@ -56,7 +58,10 @@ export const GoCommand = defineCommand({
     const normalizedDir = dirMap[direction.toLowerCase()] ?? direction.toLowerCase();
 
     const pos = world.getComponent(player, Position);
-    if (!pos) return '你不在任何地方。';
+    if (!pos) {
+      output.error('你不在任何地方。');
+      return null;
+    }
 
     // 只 emit 意图：出不去、被拦下，都由 MovementSystem 判断
     world.emit(MoveRequested, { entity: player, to: normalizedDir });
@@ -116,16 +121,25 @@ export const VerboseCommand = defineCommand({
 export const TakeCommand = defineCommand({
   verbs: ['take', 'get', '拿', '拾取'],
   args: { item: { type: 'entity' } },
-  handle({ args, player, world }) {
-    if (!args.item) return '拿什么？';
+  handle({ args, output, player, world }) {
+    if (!args.item) {
+      output.error('拿什么？');
+      return null;
+    }
 
     const pos = world.getComponent(player, Position);
-    if (!pos) return '你不在任何地方。';
+    if (!pos) {
+      output.error('你不在任何地方。');
+      return null;
+    }
 
     // 作用域解析：只认当前房间地上的物品（全局 findEntity 会因跨容器
     // 同名物品遮蔽而把眼前的东西解析到别的房间）
     const itemId = resolveInContainer(world, pos.roomId, args.item);
-    if (!itemId) return `这里没有「${args.item}」。`;
+    if (!itemId) {
+      output.error(`这里没有「${args.item}」。`);
+      return null;
+    }
 
     world.emit(ItemTaken, { player, item: itemId });
     return null;
@@ -136,15 +150,24 @@ export const TakeCommand = defineCommand({
 export const DropCommand = defineCommand({
   verbs: ['drop', 'put', '放下', '丢弃'],
   args: { item: { type: 'entity' } },
-  handle({ args, player, world }) {
-    if (!args.item) return '放下什么？';
+  handle({ args, output, player, world }) {
+    if (!args.item) {
+      output.error('放下什么？');
+      return null;
+    }
 
     const pos = world.getComponent(player, Position);
-    if (!pos) return '你不在任何地方。';
+    if (!pos) {
+      output.error('你不在任何地方。');
+      return null;
+    }
 
     // 作用域解析：只认自己背包里的物品
     const itemId = resolveInContainer(world, player, args.item);
-    if (!itemId) return `你没有「${args.item}」。`;
+    if (!itemId) {
+      output.error(`你没有「${args.item}」。`);
+      return null;
+    }
 
     world.emit(ItemDropped, { player, item: itemId });
     return null;
@@ -217,12 +240,18 @@ export const QuestCommand = defineCommand({
 /** 交任务命令：turnin/交任务 <向同房间的发任务者交付已完成的任务，领奖> */
 export const TurnInCommand = defineCommand({
   verbs: ['turnin', '交任务', '交付'],
-  handle({ player, world }) {
+  handle({ output, player, world }) {
     const pos = world.getComponent(player, Position);
-    if (!pos) return '你不在任何地方。';
+    if (!pos) {
+      output.error('你不在任何地方。');
+      return null;
+    }
 
     const log = world.getComponent(player, QuestLog);
-    if (!log) return '你还没有任何任务。';
+    if (!log) {
+      output.error('你还没有任何任务。');
+      return null;
+    }
 
     for (const giver of world.findByComponent(QuestGiver)) {
       if (containerOf(world, giver) !== pos.roomId) continue;
@@ -235,7 +264,8 @@ export const TurnInCommand = defineCommand({
       }
     }
 
-    return '这里没有可交付的任务。';
+    output.error('这里没有可交付的任务。');
+    return null;
   },
 });
 
@@ -243,15 +273,24 @@ export const TurnInCommand = defineCommand({
 export const AttackCommand = defineCommand({
   verbs: ['attack', 'kill', '攻击', '打'],
   args: { target: { type: 'entity' } },
-  handle({ args, player, world }) {
-    if (!args.target) return '攻击谁？';
+  handle({ args, output, player, world }) {
+    if (!args.target) {
+      output.error('攻击谁？');
+      return null;
+    }
 
     const pos = world.getComponent(player, Position);
-    if (!pos) return '你不在任何地方。';
+    if (!pos) {
+      output.error('你不在任何地方。');
+      return null;
+    }
 
     // 房间作用域解析（与 take/drop 同理由：全局 findEntity 会跨房间错选）
     const target = resolveOccupantIn(world, pos.roomId, args.target);
-    if (!target) return `这里没有「${args.target}」。`;
+    if (!target) {
+      output.error(`这里没有「${args.target}」。`);
+      return null;
+    }
 
     world.emit(Attack, { attacker: player, target });
     return null;

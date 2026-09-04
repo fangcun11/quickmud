@@ -121,9 +121,11 @@ describe('prefabs 移动', () => {
 
     const pos = w.getComponent(player, Position)!;
     expect(pos.roomId).toBe('tavern');
+    // 首次进入 = xkx 式房间块：【名】(title 通道) + 描述 + 出口
+    expect(textOf(w.output.getAll(), 'title')).toEqual(['【酒馆】']);
     const lines = textOf(w.output.getAll(), 'narrative');
-    expect(lines[0]).toContain('你来到了酒馆');
-    expect(lines[1]).toBe('你走进热闹的酒馆。');
+    expect(lines[0]).toBe('你走进热闹的酒馆。');
+    expect(lines[1]).toBe('出口：南。');
   });
 
   it('出口方向不存在时拒绝移动且不落位', async () => {
@@ -142,12 +144,12 @@ describe('prefabs 查看与物品', () => {
   it('look 输出房间描述、出口与地上可拾取物', async () => {
     const { w, player } = buildWorld();
     await w.execute('look', player);
+    expect(textOf(w.output.getAll(), 'title')).toEqual(['【城镇广场】']);
     const lines = textOf(w.output.getAll(), 'narrative');
-    expect(lines[0]).toBe('【城镇广场】');
-    expect(lines[1]).toBe('你站在城镇广场上。北面是酒馆。');
-    expect(lines[2]).toBe('出口：北。'); // v0.11：出口清单来自 Exits 数据
-    // 石像不可拾取 → 不在列表
-    expect(lines[3]).toBe('你可以看到：生锈的剑、金币。');
+    expect(lines[0]).toBe('你站在城镇广场上。北面是酒馆。');
+    expect(lines[1]).toBe('出口：北。'); // v0.11：出口清单来自 Exits 数据
+    // 石像不可拾取 → 不在列表；别名跟在主名后（P3 词汇教学）
+    expect(lines[2]).toBe('你可以看到：生锈的剑(剑、sword)、金币(coin)。');
   });
 
   it('take 把当前房间的可携物放入背包，inventory 可见', async () => {
@@ -162,7 +164,9 @@ describe('prefabs 查看与物品', () => {
   it('take 不在当前房间的物品 → 错误反馈且不转移', async () => {
     const { w, player, mug } = buildWorld();
     // 麦酒在 tavern，玩家在 town_square → 命令在房间作用域内解析不到
-    expect(await w.execute('take 麦酒', player)).toBe('这里没有「麦酒」。');
+    // F3 定约：意图不成立走 error 通道，返回值只留确认型反馈
+    expect(await w.execute('take 麦酒', player)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toContain('这里没有「麦酒」。');
     expect(w.getRelations(mug, Located)[0]).toBe('tavern');
   });
 
@@ -176,7 +180,9 @@ describe('prefabs 查看与物品', () => {
   it('drop 把背包物品放到当前房间；未持有则报错', async () => {
     const { w, player, sword } = buildWorld();
 
-    expect(await w.execute('drop 剑', player)).toBe('你没有「剑」。'); // 还没拿
+    expect(await w.execute('drop 剑', player)).toBeNull(); // 还没拿
+    expect(textOf(w.output.getAll(), 'error')).toContain('你没有「剑」。');
+    w.output.clear();
 
     await w.execute('take 剑', player);
     await w.execute('north', player); // 去酒馆再丢
@@ -278,7 +284,9 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
     w.addComponent(ground, Portable);
     w.addComponent(ground, Located, { targets: ['town'] });
 
-    expect(await w.execute('drop 金币', player)).toBe('你没有「金币」。');
+    expect(await w.execute('drop 金币', player)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toContain('你没有「金币」。');
+    w.output.clear();
     expect(w.getRelations(ground, Located)[0]).toBe('town');
   });
 
@@ -303,8 +311,12 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
   it('玩家无 Position 时 take/drop 有明确反馈（不再静默）', async () => {
     const { w } = buildWorld();
     const bare = w.entities.createWithId('bare');
-    expect(await w.execute('take 剑', bare)).toBe('你不在任何地方。');
-    expect(await w.execute('drop 剑', bare)).toBe('你不在任何地方。');
+    expect(await w.execute('take 剑', bare)).toBeNull();
+    expect(await w.execute('drop 剑', bare)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toEqual([
+      '你不在任何地方。',
+      '你不在任何地方。',
+    ]);
   });
 });
 
@@ -359,7 +371,8 @@ describe('V2 战斗与死亡（v0.5）', () => {
     w.addComponent(caveMob, Position, { roomId: 'cave' });
     w.addComponent(caveMob, Health, { current: 10, max: 10 });
 
-    expect(await w.execute('attack 洞狼', player)).toBe('这里没有「洞狼」。');
+    expect(await w.execute('attack 洞狼', player)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toContain('这里没有「洞狼」。');
     expect(w.getComponent(caveMob, Health)!.current).toBe(10);
   });
 
@@ -457,9 +470,10 @@ describe('详略模式与出口提示（v0.11）', () => {
   it('重复进房自动简略：描述只在首次出现，look 随时看全，详细命令切回', async () => {
     const { w, player } = buildTwoRooms();
 
-    // 首次进入：标题 + 全量描述
+    // 首次进入：xkx 式房间块（【名】走 title 通道）+ 描述 + 出口
     await w.execute('south', player);
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '乙房的描述。']);
+    expect(textOf(w.output.getAll(), 'title')).toEqual(['【乙房】']);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['乙房的描述。', '出口：北。']);
     w.output.clear();
 
     // 折返再进：只报地名（Visited 里已有，自动简略）
@@ -481,7 +495,7 @@ describe('详略模式与出口提示（v0.11）', () => {
     await w.execute('north', player);
     w.output.clear();
     await w.execute('south', player);
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '乙房的描述。']);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['乙房的描述。', '出口：北。']);
     // 再切回自动简略
     expect(await w.execute('verbose', player)).toContain('自动简略');
   });
@@ -504,6 +518,7 @@ describe('详略模式与出口提示（v0.11）', () => {
 
     await w.execute('south', player);
     // 没挂 Visited：seenBefore 恒 false ⇒ 每次全量（内容没声明探索就不简略）
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '乙房的描述。']);
+    expect(textOf(w.output.getAll(), 'title')).toEqual(['【乙房】']);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['乙房的描述。']); // room_b 无出口，无出口行
   });
 });

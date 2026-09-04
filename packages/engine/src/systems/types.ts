@@ -36,13 +36,30 @@ export interface SystemDefinition<T = unknown> {
 }
 
 /**
- * 输出视图 - narrative/dialogue/error/status 的统一形态
+ * 输出通道定约（0.13，engine-feedback F3 落地）——7 通道各管一类信息：
+ *
+ * | 通道      | 语义                                       | 渲染默认 |
+ * | --------- | ------------------------------------------ | -------- |
+ * | narrative | 世界叙事（过程与结果）；可带语义色：黄=警示/得宝，红=死亡/危急 | 默认色 |
+ * | title     | 场景标题（房间块开头的【房间名】）          | 醒目色+粗 |
+ * | system    | 元信息（进度短报、帮助），非世界叙事        | 压灰     |
+ * | dialogue  | 台词                                        | 品红     |
+ * | error     | **玩家意图无法成立**（缺参/目标不存在/前提不满足） | 红   |
+ * | status    | 结构化状态数据（机器消费：JSON + meta，**不是玩家文案**） | — |
+ * | prompt    | 保留未用                                    | —        |
+ *
+ * 命令的**返回值** = 命令级确认型反馈（切换确认、查询一览），渲染为叙事；
+ * 使用类失败（缺参、目标找不到）不再走返回值，一律 `error` 通道。
  *
  * SystemContext 与 CommandContext 共用（0.11 起命令侧也有输出通道）：
- * 字符串自动包装为单段 narrative/dialogue，Segment[] 原样透传。
+ * 字符串自动包装为单段，Segment[] 原样透传。
  */
 export interface OutputView {
   narrative: (textOrSegments: string | Segment[]) => void;
+  /** 场景标题（如房间块的【名】）；纯文本（渲染端自带强调样式） */
+  title: (text: string) => void;
+  /** 元信息（进度短报、帮助），非世界叙事 */
+  system: (textOrSegments: string | Segment[]) => void;
   dialogue: (textOrSegments: string | Segment[]) => void;
   error: (text: string) => void;
   status: (data: unknown) => void;

@@ -154,7 +154,8 @@ describe('V5 任务进度（v0.6-A2）', () => {
 
     expect(w.getComponent(player, QuestLog)!.active['meat-errand']).toBe(1);
     // 但交付必须回到酒保身边
-    expect(await w.execute('turnin', player)).toBe('这里没有可交付的任务。');
+    expect(await w.execute('turnin', player)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toContain('这里没有可交付的任务。');
   });
 
   it('物品没真正到手 → 不推进（拿不动的东西不计数）', async () => {
@@ -199,12 +200,14 @@ describe('V5 任务进度（v0.6-A2）', () => {
     );
 
     // 再交一次 → 被拒，不重复发奖
-    expect(await w.execute('turnin', player)).toBe('这里没有可交付的任务。');
+    expect(await w.execute('turnin', player)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toContain('这里没有可交付的任务。');
   });
 
   it('任务未完成时 turnin 被拒', async () => {
     const { w, player } = questWorld([DOG_HUNT]);
-    expect(await w.execute('turnin', player)).toBe('这里没有可交付的任务。');
+    expect(await w.execute('turnin', player)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toContain('这里没有可交付的任务。');
   });
 
   it('玩家没有 QuestLog 时不参与任务（静默，不报错）', async () => {

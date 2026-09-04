@@ -17,3 +17,4 @@ export * from './systems.js';
 export * from './commands.js';
 export * from './queries.js';
 export * from './suggest.js';
+export * from './vitals.js';

@@ -17,7 +17,7 @@
 | --- | --- | --- | --- | --- | --- |
 | F1 | example 间样板逐字复制：`main.ts` 终端 REPL（「队列 + 串行排水」模式，tide-cellar 自注"与 mini-rpg 同款"）、`walk.ts` 通关录像三件套（drain/act/scene）、`commands/help.ts` 每包一份、玩家出生拼装（Position/Name/Visited + markVisited）在 tide-cellar / mini-rpg / demo-adventure / 侠客行间重复 | M0 | prefabs | 抽 `createRepl()` / `createWalkScript()` / `spawnPlayer()` 脚手架进 prefabs（或独立 example 基建），迁移三个存量 example | 待拍板 |
 | F2 | `execute` 兜底文案不带建议：未识别输入一律「我不明白你的意思。」，不提示相近动词（实测输「上」想爬楼时，玩家不知道该敲什么） | M0 体验批 | engine | 兜底时对注册表动词做近似匹配（前缀/编辑距离），文案附「你是想…？」；代价是十余处 `toBe` 精确断言要适配 | 攒批评估 |
-| F3 | 错误通道语义未约定：命令失败反馈有的走返回 string、有的走 output error 通道，两条路径混用无规则，宿主渲染无法统一着色/过滤 | M0 体验批 | engine | 错误通道语义重设计（返回值 vs `OutputCollector` 分工），牵动命令层契约，单独立项 | 攒批评估 |
+| F3 | 错误通道语义未约定：命令失败反馈有的走返回 string、有的走 output error 通道，两条路径混用无规则，宿主渲染无法统一着色/过滤 | M0 体验批 | engine | 错误通道语义重设计（返回值 vs `OutputCollector` 分工），牵动命令层契约，单独立项 | ✅ 定约落地（0.13）：7 通道语义写进 `OutputView` 类型契约，prefabs 使用类失败迁 error 通道；guide 06 同步。全量命令层清点（含第三方内容包的返回值习惯）留待收口 |
 | F4 | 无回退命令：玩家想原路返回只能重敲方向；「回/退」需要来路记录（`Visited` 只记房间集合无顺序） | M0 体验批 | prefabs | 新增来路 trait（栈式，进快照）+ `back/回/退` 命令 emit 意图，MovementSystem 消费 | 待拍板 |
 | F5 | web-client 零测试：渲染器 ~450 行纯 DOM 逻辑无任何自动化测试，本批 4 个缺陷（↑ 历史边界、重开输入残留、地图换行折叠、VerboseSystem 漏注册的误报路径）全是浏览器实测才暴露 | M0 体验批 | web-client | 引入 jsdom/happy-dom 测 `handleInput`/`recallHistory`/`tryRestore`/重开状态机；DOM 渲染断言覆盖 pre-wrap 与实体点击 | ✅ 已落地（web-client 0.3.0，vitest+happy-dom 14 例） |
 | F6 | 引擎无公开的命令枚举 API：`World.commands` 私有，宿主想知道"注册了哪些动词/参数形状"只能游戏侧从命令常量二次枚举（命令建议器现状）。注册表与建议源理论上可漂移 | M1 体验批 | engine | `world.listCommands(): { verbs, abbrev, args }[]` 元数据只读接口；建议器改吃它即可删除"命令表单一数据源"约定。注意与 F2（兜底近似匹配同样需要动词全集）是同一个缺口的两个症状 | 攒批评估 |
@@ -71,6 +71,16 @@ quit）、`spawnPlayer(world, opts)`（出生四件套）、可选 `walkScript` 
 **建议**：单独立项定约——建议方向：返回值 = 命令级即时反馈（一句话），
 事件链输出 = 系统产生的世界叙事，error 通道 = 真错误（玩家输入无法
 解析）；guide 补决策表。牵动命令层契约与全部示例，攒批评估。
+
+**落地**（2026-09-05，0.13）：
+- 7 通道语义定约写进 `OutputView` 类型注释（narrative/title/system/dialogue/
+  error/status/prompt 各管一类，status 是机器数据通道不是玩家文案）；
+  `OutputView` 放行 `title`/`system`（此前房间标题只能 narrative+bold 硬凑）
+- 返回值收窄为**确认型反馈**；prefabs go/take/drop/attack/turnin 的使用类
+  失败迁 `error` 通道（十余处断言跟进，比预估的少——`toContain` 类确实不受影响）
+- guide 06 补决策表；web 渲染补齐 7 通道配色
+- 与 F2 的关联不变：兜底近似匹配（F2）仍需动词全集，等 F6 的
+  `listCommands()` 一起做
 
 ### F4 · 无回退命令
 

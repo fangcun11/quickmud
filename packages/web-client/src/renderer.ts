@@ -299,8 +299,13 @@ export class WebRenderer {
     await this.runCommand(input);
   }
 
-  /** 回显输入并入历史（连续重复只记一次） */
+  /** 回显输入并入历史（连续重复只记一次）；块间留一行呼吸（xkx 空行节奏） */
   private echo(input: string): void {
+    if (this.outputEl.childNodes.length > 0) {
+      const spacer = document.createElement('div');
+      spacer.style.height = '0.55em';
+      this.outputEl.appendChild(spacer);
+    }
     this.appendOutput({
       kind: 'system',
       segments: [{ text: `> ${input}`, style: { color: 'gray' } }],
@@ -496,7 +501,7 @@ export class WebRenderer {
     // 保留文本内换行（ASCII 地图/help 多行文案），长段落仍自动折行
     line.style.whiteSpace = 'pre-wrap';
 
-    // 根据 kind 设置样式
+    // 根据 kind 设置样式（语义与引擎 ANSI 渲染器同一套约定）
     switch (msg.kind) {
       case 'error':
         line.style.color = '#e74c3c';
@@ -507,6 +512,15 @@ export class WebRenderer {
       case 'title':
         line.style.fontWeight = 'bold';
         line.style.color = '#f39c12';
+        break;
+      case 'dialogue':
+        line.style.color = '#9b59b6';
+        break;
+      case 'status':
+        line.style.color = '#f1c40f';
+        break;
+      case 'prompt':
+        line.style.color = '#1abc9c';
         break;
       default:
         line.style.color = '#e0e0e0';

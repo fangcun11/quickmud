@@ -57,6 +57,48 @@ function matchRank(q: WorldQuery, id: EntityId, name: string): number {
   return -1;
 }
 
+/** 名称匹配层级最高的一组（同级取创建序）；无命中返回空数组 */
+function bestRankGroup(q: WorldQuery, ids: EntityId[], name: string): EntityId[] {
+  let best = -1;
+  const out: EntityId[] = [];
+  for (const id of ids) {
+    const rank = matchRank(q, id, name);
+    if (rank > best) {
+      best = rank;
+      out.length = 0;
+      out.push(id);
+    } else if (rank === best && rank >= 0) {
+      out.push(id);
+    }
+  }
+  return best >= 0 ? out : [];
+}
+
+/**
+ * 在候选里按名称解析实体；返回匹配层级最高者（同级取创建序靠前者）。
+ *
+ * 同名消歧（xkx「店小二2」式）：名字后缀数字 = 取同名候选中创建序第 N 个
+ * （1 起，省略即 1）。仅当**原文整体没有直接命中**才拆序号——名字本身
+ * 带数字的实体（如 98k）不受影响。序号越界取最末一个。
+ *
+ * 未命中返回 undefined。
+ */
+export function resolveBest(
+  q: WorldQuery,
+  ids: EntityId[],
+  name: string,
+): EntityId | undefined {
+  const direct = bestRankGroup(q, ids, name);
+  if (direct.length > 0) return direct[0];
+
+  const m = name.match(/^(.+?)(\d{1,3})$/);
+  if (!m) return undefined;
+  const group = bestRankGroup(q, ids, m[1]!);
+  if (group.length === 0) return undefined;
+  const ordinal = Math.min(Math.max(Number(m[2]), 1), group.length);
+  return group[ordinal - 1]!;
+}
+
 /**
  * 在容器内按名称解析实体；返回匹配层级最高的实体（同级取创建序靠前者）。
  * 未命中返回 undefined。
@@ -66,7 +108,7 @@ export function resolveInContainer(
   container: EntityId,
   name: string,
 ): EntityId | undefined {
-  return bestRanked(q, itemsInContainer(q, container), name);
+  return resolveBest(q, itemsInContainer(q, container), name);
 }
 
 /** 房间内"有身体"的实体（Position.roomId == room；含玩家/NPC/敌怪） */
@@ -82,19 +124,5 @@ export function resolveOccupantIn(
   room: EntityId,
   name: string,
 ): EntityId | undefined {
-  return bestRanked(q, occupantsIn(q, room), name);
-}
-
-/** 在一组候选里选名称匹配层级最高者（同级取创建序靠前） */
-function bestRanked(q: WorldQuery, ids: EntityId[], name: string): EntityId | undefined {
-  let best: EntityId | undefined;
-  let bestRank = -1;
-  for (const id of ids) {
-    const rank = matchRank(q, id, name);
-    if (rank > bestRank) {
-      best = id;
-      bestRank = rank;
-    }
-  }
-  return best;
+  return resolveBest(q, occupantsIn(q, room), name);
 }

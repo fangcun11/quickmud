@@ -232,7 +232,8 @@ describe('侠客行 M1 · 内功根基', () => {
     const blocked = await run('attack 野狼');
     expect(blocked).toContain('格挡');
     expect(blocked).toContain('只造成 3 点伤害');
-    expect(blocked).toContain('挡下了「野狼」的攻击');
+    // P4 句式定约：句首永远是攻击者——狼还手的句子以「野狼」开头
+    expect(blocked).toContain('「野狼」全力出手，被你格挡');
     expect(hp()).toBe(97); // 100 − 3
 
     // 差 −2 → 被闪避：零伤；但狼察觉攻击仍会反咬（差 +2 → 咬实 4 伤）
@@ -309,5 +310,16 @@ describe('侠客行 M1 · 内功根基', () => {
     const out = await run('attack 野狼'); // 狼还手 → Attacked(target=玩家) → 打断
     expect(world.getComponent(player, Cultivating)!.on).toBe(false);
     expect(out).toContain('收功护体');
+  });
+
+  it('help 覆盖：注册表里每个命令都能在 help 里找到自己（防漂移，P8）', async () => {
+    fresh();
+    const text = await run('help');
+    for (const cmd of bootstrap().commands) {
+      const hit =
+        cmd.verbs.some((v) => text.includes(v)) ||
+        (cmd.abbrev ?? []).some((a) => text.includes(a));
+      expect(hit, `help 缺少命令：${cmd.verbs.join('/')}`).toBe(true);
+    }
   });
 });

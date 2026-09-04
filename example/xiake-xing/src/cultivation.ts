@@ -21,9 +21,15 @@ export const MEDITATE_GAIN = 20;
 /** 打坐/meditate：发打坐意图（on 翻转由系统落地） */
 export const MeditateCommand = defineCommand({
   verbs: ['meditate', '打坐', '运功'],
-  handle({ player, world }) {
-    if (!world.getComponent(player, Energy)) return '你还没有内力可修。';
-    if (world.getComponent(player, Cultivating)?.on) return '你已在打坐中。';
+  handle({ output, player, world }) {
+    if (!world.getComponent(player, Energy)) {
+      output.error('你还没有内力可修。');
+      return null;
+    }
+    if (world.getComponent(player, Cultivating)?.on) {
+      output.error('你已在打坐中。');
+      return null;
+    }
     world.emit(MeditateRequested, { entity: player });
     return null;
   },
@@ -32,8 +38,11 @@ export const MeditateCommand = defineCommand({
 /** 停/stop：发收功意图 */
 export const StopCommand = defineCommand({
   verbs: ['stop', '停', '收功'],
-  handle({ player, world }) {
-    if (!world.getComponent(player, Cultivating)?.on) return '你并没有在打坐。';
+  handle({ output, player, world }) {
+    if (!world.getComponent(player, Cultivating)?.on) {
+      output.error('你并没有在打坐。');
+      return null;
+    }
     world.emit(StopRequested, { entity: player });
     return null;
   },
@@ -85,6 +94,9 @@ export const CultivationToggleSystem = defineSystem({
  * 吐纳结算（every 1000，与 world.tickInterval 对齐）：
  * 每个打坐中的实体内力 +MEDITATE_GAIN，封顶 max。
  *
+ * 反馈聚合（P5）：每息只报一行**压灰短讯**（进度型信息不是世界叙事，
+ * 走 system 通道），充满那一刻给一句里程碑 + 自动收功——不再无限吐纳。
+ *
  * 引擎的 every 时相本身是 drift-free 固定网格（k × every），
  * `Cultivating.lastTickedAt` 记录上次结算时间，为快照/回滚后的一致性兜底。
  */
@@ -102,7 +114,15 @@ export const MeditationSystem = defineSystem({
       if (!energy) continue; // 组件不全 → 静默跳过
       if (energy.current >= energy.max) continue; // 已满：保持打坐状态，不再回复
       energy.current = Math.min(energy.max, energy.current + MEDITATE_GAIN);
-      ctx.output.narrative(`你吐纳一轮，内力增至 ${energy.current}/${energy.max}。`);
+      if (energy.current >= energy.max) {
+        // 充满：里程碑一句 + 自动收功（继续吐纳没有收益，纯占状态）
+        ctx.output.narrative([
+          { text: `内力已然充盈（${energy.current}/${energy.max}），你缓缓收功。`, style: { color: 'yellow' } },
+        ]);
+        c.on = false;
+      } else {
+        ctx.output.system(`内力 ${energy.current}/${energy.max}。`);
+      }
     }
   },
 });

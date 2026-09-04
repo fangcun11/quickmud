@@ -15,7 +15,8 @@
  * 自动还手一击（走同一内核）——攻守两向共用一套公式，平衡可推演。
  */
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
-import { Attack, Died, Health, Position, Moved, displayName } from '@mud/prefabs';
+import type { Segment } from '@mud/ecs-engine';
+import { Attack, Died, Health, Position, Moved, displayName, injuryWarning } from '@mud/prefabs';
 import { Attacked, Fled } from './events';
 import { Stats, Retaliate, Trail, PlayerTag } from './traits';
 
@@ -24,12 +25,36 @@ import { Stats, Retaliate, Trail, PlayerTag } from './traits';
 /** 逃/flee：发逃跑意图，成败由 FleeSystem 按身法差结算 */
 export const FleeCommand = defineCommand({
   verbs: ['flee', '逃', '逃跑'],
-  handle({ player, world }) {
-    if (!world.getComponent(player, Position)) return '你不在任何地方。';
+  handle({ output, player, world }) {
+    if (!world.getComponent(player, Position)) {
+      output.error('你不在任何地方。');
+      return null;
+    }
     world.emit(Fled, { entity: player });
     return null;
   },
 });
+
+// ---------------------------------------------------------------- 文案 --
+
+/**
+ * 战斗句式定约（P4）：**句首永远是攻击者**（你 / 「X」），三态同构——
+ * 命中（造成 n 伤）→ 格挡（被挡，n 伤）→ 闪避（落空，零伤）。
+ * 多方混战时扫一眼句首就知道谁在出手；玩家视角一律「你」。
+ * 玩家不在场（NPC 互殴）时双方全名第三人称。
+ */
+function combatLine(
+  atk: string,
+  def: string,
+  result: 'hit' | 'blocked' | 'dodged',
+  damage: number,
+): Segment[] | string {
+  const ATK = atk === '你' ? '你' : `「${atk}」`;
+  const DEF = def === '你' ? '你' : `「${def}」`;
+  if (result === 'hit') return `${ATK}一击命中${DEF}，造成 ${damage} 点伤害。`;
+  if (result === 'blocked') return `${ATK}全力出手，被${DEF}格挡，只造成 ${damage} 点伤害。`;
+  return `${ATK}这一击落了空——${DEF}轻巧地闪过。`;
+}
 
 // ---------------------------------------------------------------- 系统 --
 
@@ -65,13 +90,14 @@ export const WuxiaCombatSystem = defineSystem({
     const result = diff >= 2 ? 'hit' : diff >= -1 ? 'blocked' : 'dodged';
 
     const targetName = displayName(ctx, target);
+    const atkName = displayName(ctx, attacker);
     const atkIsPlayer = !!ctx.getComponent(attacker, PlayerTag);
+    const defIsPlayer = !!ctx.getComponent(target, PlayerTag);
+    const atkLabel = atkIsPlayer ? '你' : atkName;
+    const defLabel = defIsPlayer ? '你' : targetName;
+
     if (result === 'dodged') {
-      ctx.output.narrative(
-        atkIsPlayer
-          ? `${targetName}轻巧地闪过了你的攻击。`
-          : `你轻巧地闪过了「${displayName(ctx, attacker)}」的攻击。`,
-      );
+      ctx.output.narrative(combatLine(atkLabel, defLabel, 'dodged', 0));
       ctx.emit(Attacked, { attacker, target, damage: 0, result });
       return;
     }
@@ -81,21 +107,22 @@ export const WuxiaCombatSystem = defineSystem({
 
     const before = hp.current;
     hp.current = Math.max(0, hp.current - damage);
-    // 文案跟视角走：玩家攻 → "你击中它"；玩家守 → "它咬中你"；其余全名第三人称
-    ctx.output.narrative(
-      atkIsPlayer
-        ? result === 'hit'
-          ? `你一击命中「${targetName}」，造成 ${damage} 点伤害。`
-          : `「${targetName}」格挡了你的攻击，只造成 ${damage} 点伤害。`
-        : result === 'hit'
-          ? `「${displayName(ctx, attacker)}」击中「${targetName}」，造成 ${damage} 点伤害。`
-          : `「${targetName}」挡下了「${displayName(ctx, attacker)}」的攻击，只造成 ${damage} 点伤害。`,
-    );
+    ctx.output.narrative(combatLine(atkLabel, defLabel, result, damage));
+
+    // 伤势警示（P2）：被打者掉档才出现（黄=轻伤、红=危急）
+    const warn = injuryWarning(before, hp.current, hp.max, {
+      isPlayerTarget: defIsPlayer,
+      name: targetName,
+    });
+    if (warn) ctx.output.narrative([{ text: warn.text, style: { color: warn.color } }]);
 
     ctx.emit(Attacked, { attacker, target, damage, result });
 
     if (before > 0 && hp.current <= 0) {
-      ctx.output.narrative(`「${targetName}」惨嚎一声，轰然倒地。`);
+      // 死亡是视觉事件（xkx 惯例）：独立强调
+      ctx.output.narrative([
+        { text: `「${targetName}」惨嚎一声，轰然倒地。`, style: { color: 'red', bold: true } },
+      ]);
       ctx.emit(Died, { entity: target, killer: attacker, roomId: tgtPos.roomId });
     }
   },
@@ -155,7 +182,10 @@ export const FleeSystem = defineSystem({
     if (diff >= 2 && trail && trail.roomId && trail.roomId !== from) {
       pos.roomId = trail.roomId;
       const roomName = ctx.getComponent(trail.roomId, Name)?.text ?? trail.roomId;
-      ctx.output.narrative(`你拔腿就跑，一口气退回「${roomName}」。`);
+      // 成功脱身是转折事件：黄色提示，与普通过招区分
+      ctx.output.narrative([
+        { text: `你拔腿就跑，一口气退回「${roomName}」。`, style: { color: 'yellow' } },
+      ]);
       // 手动改位置不走 MovementSystem，Moved 要自己发（打断打坐、记录来路都靠它）
       ctx.emit(Moved, { entity: id, from, to: trail.roomId, direction: 'flee' });
       return;

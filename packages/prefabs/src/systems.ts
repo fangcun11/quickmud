@@ -18,6 +18,7 @@ import type {
   EntityId,
   SystemContext,
   BlueprintComponentInput,
+  Segment,
 } from '@mud/ecs-engine';
 import {
   Moved,
@@ -63,6 +64,7 @@ import {
   occupantsIn,
   containerOf,
 } from './queries.js';
+import { injuryWarning } from './vitals.js';
 import { queryRoomGate } from './behavior.js';
 import { directionLabel } from './room.js';
 
@@ -94,6 +96,81 @@ function exitDirectionList(
   const exits = ctx.getComponent(roomId, Exits);
   const dirs = exits ? Object.keys(exits) : [];
   return dirs.length > 0 ? dirs.map(directionLabel).join('、') : undefined;
+}
+
+/**
+ * 实体列示段（xkx「店小二2」词汇教学）：同名聚组，主名可点（tag:entity），
+ * 别名并集与重名计数跟在名字后——`野狼(狼、wolf)×2`。
+ */
+function entityListSegments(ctx: SystemContext, ids: EntityId[]): Segment[] {
+  const groups = new Map<string, { aliases: string[]; count: number }>();
+  for (const id of ids) {
+    const nc = ctx.getComponent(id, Name);
+    const name = nc?.text && nc.text !== '' ? nc.text : id;
+    const group = groups.get(name) ?? { aliases: [], count: 0 };
+    if (group.count === 0) {
+      for (const alias of nc?.aliases ?? []) {
+        if (alias !== name && !group.aliases.includes(alias)) group.aliases.push(alias);
+      }
+    }
+    group.count += 1;
+    groups.set(name, group);
+  }
+  const out: Segment[] = [];
+  let index = 0;
+  for (const [name, group] of groups) {
+    out.push({ text: name, style: { tag: 'entity' } });
+    const alias = group.aliases.length > 0 ? `(${group.aliases.join('、')})` : '';
+    const count = group.count > 1 ? `×${group.count}` : '';
+    const separator = index < groups.size - 1 ? '、' : '';
+    out.push({ text: `${alias}${count}${separator}` });
+    index += 1;
+  }
+  return out;
+}
+
+/**
+ * 房间块（xkx 式）：【名】 → 描述 → 出口 → 地上物 → 同房活体。
+ *
+ * 进房（首次/详细模式）与 look 共用同一份输出——进房即全知，look 是重看；
+ * 实体名都带 tag:entity（网页端可点击 = look）。标题走 title 通道
+ * （渲染端有专属配色），不再混在 narrative 里。
+ */
+function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): void {
+  const name = ctx.getComponent(roomId, Name);
+  const desc = ctx.getComponent(roomId, Description);
+
+  if (name) {
+    ctx.output.title(`【${name.text}】`);
+  }
+  ctx.output.narrative(desc && desc.text !== '' ? desc.text : '这里没有任何描述。');
+
+  const exitList = exitDirectionList(ctx, roomId);
+  if (exitList) {
+    ctx.output.narrative(`出口：${exitList}。`);
+  }
+
+  // 地上可拾取物（Located.at == 房间 && Portable）
+  const groundItems = itemsInContainer(ctx, roomId).filter(
+    (id) => ctx.getComponent(id, Portable) !== undefined,
+  );
+  if (groundItems.length > 0) {
+    ctx.output.narrative([
+      { text: '你可以看到：' },
+      ...entityListSegments(ctx, groundItems),
+      { text: '。' },
+    ]);
+  }
+
+  // 同房活物（有身体的实体；不含查看者自己）
+  const others = occupantsIn(ctx, roomId).filter((id) => id !== viewer);
+  if (others.length > 0) {
+    ctx.output.narrative([
+      { text: '这里还有：' },
+      ...entityListSegments(ctx, others),
+      { text: '。' },
+    ]);
+  }
 }
 
 export const MovementSystem = defineSystem({
@@ -139,19 +216,22 @@ export const MovementSystem = defineSystem({
     // 4. 落位（唯一改状态处）
     pos.roomId = targetRoomId;
 
-    // 5. 输出目标房间的标题与描述
-    //    描述默认"自动简略"（v0.11）：首次进入全量，重复进入只报地名——
-    //    来没来过查 `Visited`（VisitationSystem 在 Moved 之后记账，所以
-    //    本系统 emit Moved 前查到的"没有"就是真的第一次）；挂 `Verbose`
-    //    的玩家切回每次全量。细节随时可以用 look 重看。
-    const roomName = ctx.getComponent(targetRoomId, Name);
+    // 5. 输出目标房间：首次进入（或详细模式）给 xkx 式完整房间块——
+    //    进房即全知，不再"你来到了X"+描述双报名；重复进入只报地名一行
+    //    （自动简略，v0.11）。来没来过查 `Visited`（VisitationSystem 在
+    //    Moved 之后记账，本系统 emit Moved 前查到的"没有"就是真的第一次）。
+    //    细节随时可以用 look 重看。
     const desc = ctx.getComponent(targetRoomId, Description);
-    ctx.output.narrative([
-      { text: `你来到了${roomName?.text ?? targetRoomId}。`, style: { bold: true } },
-    ]);
     const seenBefore = ctx.getComponent(entity, Visited)?.rooms.includes(targetRoomId) ?? false;
-    if (desc && (!seenBefore || ctx.getComponent(entity, Verbose)?.on === true)) {
-      ctx.output.narrative(desc.text);
+    const hasDesc = !!desc && desc.text !== '';
+    const fullDesc = hasDesc && (!seenBefore || ctx.getComponent(entity, Verbose)?.on === true);
+    if (fullDesc) {
+      emitRoomBlock(ctx, targetRoomId, entity);
+    } else {
+      const roomName = ctx.getComponent(targetRoomId, Name);
+      ctx.output.narrative([
+        { text: `你来到了${roomName?.text ?? targetRoomId}。`, style: { bold: true } },
+      ]);
     }
 
     // 6. 广播"人真的到了"——探索记账、房间 enter/leave/firstEnter 都挂在这上面
@@ -227,40 +307,8 @@ export const DescriptionSystem = defineSystem({
       return;
     }
 
-    const name = ctx.getComponent(pos.roomId, Name);
-    const desc = ctx.getComponent(pos.roomId, Description);
-
-    if (name) {
-      ctx.output.narrative([{ text: `【${name.text}】`, style: { bold: true } }]);
-    }
-    if (desc) {
-      ctx.output.narrative(desc.text);
-    } else {
-      ctx.output.narrative('这里没有任何描述。');
-    }
-
-    // 出口清单（v0.11）：拓扑真相是 Exits 数据，不靠描述文案手写——
-    // 内容忘了在描述里提方向，玩家也不至于撞墙试错
-    const exitList = exitDirectionList(ctx, pos.roomId);
-    if (exitList) {
-      ctx.output.narrative(`出口：${exitList}。`);
-    }
-
-    // 列地上可拾取物（Located.at == 房间 && Portable）
-    const groundItems = itemsInContainer(ctx, pos.roomId).filter(
-      (id) => ctx.getComponent(id, Portable) !== undefined,
-    );
-    if (groundItems.length > 0) {
-      ctx.output.narrative(
-        `你可以看到：${groundItems.map((id) => displayName(ctx, id)).join('、')}。`,
-      );
-    }
-
-    // 列同房活物（有身体的实体；不含查看者自己）
-    const others = occupantsIn(ctx, pos.roomId).filter((id) => id !== entity);
-    if (others.length > 0) {
-      ctx.output.narrative(`这里还有：${others.map((id) => displayName(ctx, id)).join('、')}。`);
-    }
+    // look = 重看一遍进房时的房间块（同一份输出，格式永不漂移）
+    emitRoomBlock(ctx, pos.roomId, entity);
   },
 });
 
@@ -361,10 +409,20 @@ export const CombatSystem = defineSystem({
     const damage = weapon && weapon.damage > 0 ? weapon.damage : 10;
     const before = hp.current;
     hp.current = Math.max(0, hp.current - damage);
-    ctx.output.narrative(`你攻击了「${displayName(ctx, target)}」，造成 ${damage} 点伤害。`);
+    const targetName = displayName(ctx, target);
+    ctx.output.narrative(`你攻击了「${targetName}」，造成 ${damage} 点伤害。`);
+    // 伤势警示（P2）：只在掉档那一刻出现，黄=轻伤、红=危急
+    const warn = injuryWarning(before, hp.current, hp.max, {
+      isPlayerTarget: false,
+      name: targetName,
+    });
+    if (warn) ctx.output.narrative([{ text: warn.text, style: { color: warn.color } }]);
 
     if (before > 0 && hp.current <= 0) {
-      ctx.output.narrative(`「${displayName(ctx, target)}」倒下了。`);
+      // 死亡是视觉事件（xkx 惯例）：独立强调，不与普通过招同权重
+      ctx.output.narrative([
+        { text: `「${targetName}」倒下了。`, style: { color: 'red', bold: true } },
+      ]);
       ctx.emit(Died, { entity: target, killer: attacker, roomId: tgtPos.roomId });
     }
   },
@@ -416,7 +474,10 @@ export const LootSystem = defineSystem({
     }
 
     const names = items.map((id) => displayName(ctx, id)).join('、');
-    ctx.output.narrative(`「${displayName(ctx, entity)}」倒下，掉了${names}。`);
+    // 得宝是视觉事件（xkx 惯例）：黄色醒目，但不算错误
+    ctx.output.narrative([
+      { text: `「${displayName(ctx, entity)}」倒下，掉了${names}。`, style: { color: 'yellow' } },
+    ]);
     ctx.emit(LootDropped, { entity, roomId, items });
   },
 });
@@ -536,7 +597,10 @@ function advance(
 
   if (progress >= def.objective.count) {
     log.completed.push(def.id);
-    ctx.output.narrative(`任务「${def.title}」完成。`);
+    // 里程碑是视觉事件（xkx 惯例）：黄色加粗，与普通过程区分
+    ctx.output.narrative([
+      { text: `任务「${def.title}」完成。`, style: { color: 'yellow', bold: true } },
+    ]);
     ctx.emit(QuestCompleted, { player, giver, questId: def.id });
   }
 }
