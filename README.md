@@ -120,6 +120,9 @@ quickmud 的解法是把游戏拆成一条**单向流水线**，并让整条流�
 
 ## 快速开始
 
+不想装环境？浏览器直接玩（每次 push 自动构建部署）：
+**[侠客行 · 网页版](https://fangcun11.github.io/quickmud/xiake-xing/)** · **[能力演示 · 网页版](https://fangcun11.github.io/quickmud/demo-adventure/)** —— 进度自动存浏览器本地，刷新可接着玩。
+
 ```bash
 npm install @mud/ecs-engine @mud/prefabs
 ```

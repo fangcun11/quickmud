@@ -1,0 +1,64 @@
+# GitHub Pages：每次 push 到 main 自动构建网页版并部署
+# 前置（一次性，仓库管理员）：Settings → Pages → Build and deployment → Source 选 "GitHub Actions"
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      # 网页版从包源码直接打包（build-html.js 的别名指向 packages/*/src），
+      # 而引擎源码里的 version.generated.ts 是构建产物（gitignore）——必须先构建包生成它
+      - name: 构建包（生成 version.generated 等）
+        run: pnpm build
+
+      - name: 构建网页版（单文件 HTML）
+        run: |
+          pnpm --filter demo-adventure build
+          pnpm --filter xiake-xing build
+
+      - name: 组装站点
+        run: node scripts/build-site.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
