@@ -138,7 +138,8 @@ const Health = trait('health', () => ({ current: 100, max: 100 }));
 const Healed = defineEvent('healed')<{ target: string; amount: number }>();
 
 // 3. 系统——唯一能改状态的地方
-const HealSystem = defineSystem<{ target: string; amount: number }>({
+// on 传事件定义（而非 token 字符串）：载荷类型自动贯通，event.data 带类型，无断言
+const HealSystem = defineSystem({
   name: 'heal',
   on: [Healed],
   handle(event, ctx) {
@@ -203,8 +204,8 @@ buildRooms(world, layout);
 
 | 包 | 版本 | 说明 |
 | --- | --- | --- |
-| [`@mud/ecs-engine`](./packages/engine/README.md) | 0.6.0 | 引擎核心：ECS、事件泵、命令、快照/回滚、录像重放、确定性时钟、对话树。**零第三方依赖**，ESM + CJS 双产物 |
-| [`@mud/prefabs`](./packages/prefabs/README.md) | 0.8.0 | 领域预制件：移动/房间/地图、查看、物品/背包、战斗/掉落/死亡、任务、Buff、NPC 巡逻 |
+| [`@mud/ecs-engine`](./packages/engine/README.md) | 0.7.0 | 引擎核心：ECS、事件泵、命令、快照/回滚、录像重放、确定性时钟、对话树。**零第三方依赖**，ESM + CJS 双产物 |
+| [`@mud/prefabs`](./packages/prefabs/README.md) | 0.9.0 | 领域预制件：移动/房间/地图、查看、物品/背包、战斗/掉落/死亡、任务、Buff、NPC 巡逻 |
 | `example/mini-rpg` | — | 完整小游戏：村庄 → 森林 → 沼泽 → 洞穴，含战斗、掉落、双任务、地图迷雾 |
 | `example/tide-cellar` | — | 内容验证包：潮汐地窖，三层三区域 + 守卫 + 房间心跳 + 区域实体状态 |
 | `example/demo-adventure` | — | 引擎能力演示：对话树、物品、开发者命令、终端 REPL |
@@ -233,10 +234,10 @@ buildRooms(world, layout);
 
 | 文档 | 内容 |
 | --- | --- |
-| [新手指南](./docs/guide.md) | 从零搭出可存档游戏的完整教程（文中代码全部经过实测） |
+| [渐进式指南](./docs/guide/) | **入门 → 基础 → 领域 → 深入**四篇 16 章，从零搭出可存档游戏（文中代码全部机器验证） |
 | [引擎 README](./packages/engine/README.md) | 引擎 API 与测试支持 |
 | [预制件 README](./packages/prefabs/README.md) | 领域件用法与已知边界 |
-| [文档示例](./docs/examples) | 6 个可运行示例，`strict` 类型检查 + 运行双验证 |
+| [文档示例](./docs/examples) | 10 个可运行示例，`strict` 类型检查 + 运行双验证 |
 | [CHANGELOG](./CHANGELOG.md) | 逐版本变更明细 |
 | [路线图](./docs) | `roadmap-0.6` ~ `roadmap-0.10` 的设计定稿与实现记录 |
 | [引擎 API 审查](./docs/engine-api-review.md) | v0.10 后的引擎层体检：分级发现、修法与实施状态 |
@@ -258,9 +259,9 @@ buildRooms(world, layout);
 ```bash
 pnpm install                    # 安装依赖
 pnpm build                      # 构建两个包（tsc + esbuild 双格式）
-pnpm test                       # 全部单测（engine 112 / prefabs 134 / mini-rpg 7 / tide-cellar 10）
+pnpm test                       # 全部单测（engine 112 / prefabs 134 / mini-rpg 7；tide-cellar 10 用 --filter tide-cellar test）
 pnpm test:contract              # ESM + CJS + TS strict 契约测试
-node docs/examples/verify-doc-examples.mjs   # 文档示例双验证
+pnpm test:docs                  # 文档示例双验证（strict tsc 类型检查 + 运行断言）
 
 pnpm --filter mini-rpg dev      # 试玩完整小游戏
 pnpm --filter tide-cellar dev   # 试玩潮汐地窖（内容验证包）

@@ -12,6 +12,9 @@ import {
   DeathSystem,
   QuestSystem,
   DescriptionSystem,
+  BuffSystem,
+  BuffCleanupSystem,
+  buffBlueprint,
   // 组件
   Health,
   Position,
@@ -43,6 +46,8 @@ w.world.register(
   DeathSystem,
   QuestSystem,
   DescriptionSystem,
+  BuffSystem, // 定时效果结算（v0.7）
+  BuffCleanupSystem, // 死亡清 buff
 );
 w.world.registerCommands(
   AttackCommand,
@@ -116,4 +121,24 @@ clock.advance(300); // 3 个 tick（tickInterval: 100）
 assert.strictEqual(w.currentTime, 300, '世界时间被真正推进');
 assert.strictEqual(clock.now(), 300, 'clock 与世界时间同步');
 
-console.log('04-loot-quest ✓ 掉落/任务闭环 + 可控时钟全通过');
+// ---- 5. Buff：定时效果也是实体（v0.7），结算由世界时间网格驱动 ----
+// BuffSystem 每 1000ms 一跳；首跳激活（写计时起点），此后每格结算一次效果
+const hp = () => w.entities.getComponent(player, Health)!.current;
+w.world.spawn(
+  buffBlueprint({
+    victim: player,
+    effect: { type: 'heal', amount: 5, every: 1000 },
+    lasts: 1500, // 毫秒，自激活起；<= 0 表示永久
+  }),
+);
+
+clock.advance(1000); // 首个结算网格：激活，本格不结算
+assert.strictEqual(hp(), 70, '激活网格只写计时起点，不结算');
+
+clock.advance(1000); // 第二网格：结算 +5（截断在 0..max）
+assert.strictEqual(hp(), 75, 'heal buff 按网格回血');
+
+clock.advance(1000); // time 3000 ≥ startedAt(1000) + lasts(1500)：到期那格不再结算并销毁
+assert.strictEqual(hp(), 75, '到期不再结算');
+
+console.log('04-loot-quest ✓ 掉落/任务/buff/可控时钟 全通过');

@@ -86,7 +86,7 @@ await sandbox.execute('attack boss', player); // 主世界纹丝不动
 ```
 
 输出渲染：`renderAnsi` / `renderSemanticHtml` / `renderPlainText`（纯函数，语义化消息 → 终端/Web/日志）。
-完整新手指南见仓库根 `docs/guide.md`；变更明细见 `CHANGELOG.md`。
+完整新手指南见 `docs/guide/`（渐进式四篇 16 章，示例全部机器验证）；变更明细见 `CHANGELOG.md`。
 
 ## 0.3-B 对话与 NPC
 
