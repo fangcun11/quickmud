@@ -5,7 +5,15 @@
  */
 import { defineCommand, Name } from '@mud/ecs-engine';
 import type { AnyCommand } from '@mud/ecs-engine';
-import { MoveRequested, Look, ItemTaken, ItemDropped, Attack, QuestTurnedIn } from './events.js';
+import {
+  MoveRequested,
+  Look,
+  ItemTaken,
+  ItemDropped,
+  Attack,
+  QuestTurnedIn,
+  VerboseToggled,
+} from './events.js';
 import {
   Position,
   Health,
@@ -13,6 +21,7 @@ import {
   QuestLog,
   Coordinates,
   Visited,
+  Verbose,
   Exits,
   Area,
 } from './traits.js';
@@ -77,6 +86,29 @@ export const LookCommand = defineCommand({
   handle({ args, player, world }) {
     world.emit(Look, { entity: player, target: args.target ?? undefined });
     return null;
+  },
+});
+
+/**
+ * 详细模式命令：verbose/详细（切换移动时的描述详略）
+ *
+ * 默认"自动简略"：首次进房全量描述，重复进房只报地名。命令只 emit
+ * 切换意图（铁律：命令不改状态），`VerboseSystem` 翻转 `Verbose.on`——
+ * emit 同步派发，所以回显读两次状态就能说准切到了哪档。
+ * 玩家没预挂 `Verbose` 的世界没有这个开关。
+ */
+export const VerboseCommand = defineCommand({
+  verbs: ['verbose', '详细'],
+  handle({ player, world }) {
+    // 开关是否存在只看组件本身：before/after 对比会把「系统没注册、事件
+    // 无人消费」误报成「没有详略开关」，两种失败不该共用一句文案
+    const verbose = world.getComponent(player, Verbose);
+    if (!verbose) return '这个世界的玩家没有详略开关。';
+    world.emit(VerboseToggled, { entity: player });
+    // emit 同步派发，verbose.on 此刻已是翻转后的值
+    return verbose.on
+      ? '已切换为详细模式：每次进入房间都显示完整描述。'
+      : '已切回自动简略：重复经过的房间只报地名，想重看细节用 look。';
   },
 });
 
@@ -262,7 +294,19 @@ export const MapCommand = defineCommand({
 
     const title = areaId ? world.getComponent(areaId, Name)?.text : undefined;
     const header = title ? `【${title}】\n` : '';
-    return `${header}${map}\n图例：@ 当前位置 · 已探明（未探明区域留白）`;
+    // 符号图对不上名字（v0.11）：图下方列已探明地点的中文名清单，
+    // 当前位置标注（此）——地图答"怎么连"，清单答"都是哪"
+    const known = rooms.filter(
+      (r) => !visited || visited.rooms.includes(r.id) || r.id === pos?.roomId,
+    );
+    const places = known
+      .map((r) => {
+        const n = world.getComponent(r.id, Name)?.text;
+        return n ? (r.id === pos?.roomId ? `${n}（此）` : n) : null;
+      })
+      .filter((s): s is string => s !== null);
+    const placeLine = places.length > 0 ? `\n地点：${places.join(' · ')}` : '';
+    return `${header}${map}\n图例：@ 当前位置 · 已探明（未探明区域留白）${placeLine}`;
   },
 });
 
@@ -303,6 +347,15 @@ export const WorldMapCommand = defineCommand({
     }
 
     const map = renderAsciiWorldMap(areas, { current: currentArea, visited: explored });
-    return `${map}\n图例：@ 当前位置 · 已探明区域（未探明区域留白）`;
+    // 区域名清单（v0.11）：符号图不带名字，图下列出已探明区域的中文名
+    const areaNames = areas
+      .filter((a) => !explored || explored.includes(a.id))
+      .map((a) => {
+        const n = world.getComponent(a.id, Name)?.text;
+        return n ? (a.id === currentArea ? `${n}（此）` : n) : null;
+      })
+      .filter((s): s is string => s !== null);
+    const areaLine = areaNames.length > 0 ? `\n区域：${areaNames.join(' · ')}` : '';
+    return `${map}\n图例：@ 当前位置 · 已探明区域（未探明区域留白）${areaLine}`;
   },
 });

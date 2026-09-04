@@ -35,6 +35,7 @@ import {
   BuffApplied,
   BuffTicked,
   BuffExpired,
+  VerboseToggled,
 } from './events.js';
 import {
   Position,
@@ -52,6 +53,7 @@ import {
   Afflicts,
   Duration,
   Visited,
+  Verbose,
 } from './traits.js';
 import type { LootEntry, QuestDef, QuestLogData, BuffEffect } from './traits.js';
 import {
@@ -84,6 +86,16 @@ import { directionLabel } from './room.js';
  * 也正因为如此，`Moved` 必须是**结果**而不是意图：守卫放行前 emit 的任何
  * "到达"都会让 `Visited` 误记、房间 `enter` 幽灵触发。
  */
+/** 出口方向的玩家文案（"北、南、西"）；没有出口返回 undefined */
+function exitDirectionList(
+  ctx: { getComponent: (id: EntityId, t: typeof Exits) => Record<string, string> | undefined },
+  roomId: EntityId,
+): string | undefined {
+  const exits = ctx.getComponent(roomId, Exits);
+  const dirs = exits ? Object.keys(exits) : [];
+  return dirs.length > 0 ? dirs.map(directionLabel).join('、') : undefined;
+}
+
 export const MovementSystem = defineSystem({
   name: 'prefab.movement',
   on: [MoveRequested],
@@ -96,12 +108,17 @@ export const MovementSystem = defineSystem({
 
     const from = pos.roomId;
 
-    // 1. 出口存在性（拓扑真相来自 Exits）
+    // 1. 出口存在性（拓扑真相来自 Exits）；撞墙时顺手告诉玩家还能往哪走
     const exits = ctx.getComponent(from, Exits);
     const targetRoomId = exits?.[to];
     if (!targetRoomId) {
       // 方向 id 是机器真相，文案要说人话
-      ctx.output.narrative(`你不能往${directionLabel(to)}走。`);
+      const here = exitDirectionList(ctx, from);
+      ctx.output.narrative(
+        here
+          ? `你不能往${directionLabel(to)}走。这里的出口：${here}。`
+          : `你不能往${directionLabel(to)}走。`,
+      );
       return;
     }
 
@@ -123,12 +140,17 @@ export const MovementSystem = defineSystem({
     pos.roomId = targetRoomId;
 
     // 5. 输出目标房间的标题与描述
+    //    描述默认"自动简略"（v0.11）：首次进入全量，重复进入只报地名——
+    //    来没来过查 `Visited`（VisitationSystem 在 Moved 之后记账，所以
+    //    本系统 emit Moved 前查到的"没有"就是真的第一次）；挂 `Verbose`
+    //    的玩家切回每次全量。细节随时可以用 look 重看。
     const roomName = ctx.getComponent(targetRoomId, Name);
     const desc = ctx.getComponent(targetRoomId, Description);
     ctx.output.narrative([
       { text: `你来到了${roomName?.text ?? targetRoomId}。`, style: { bold: true } },
     ]);
-    if (desc) {
+    const seenBefore = ctx.getComponent(entity, Visited)?.rooms.includes(targetRoomId) ?? false;
+    if (desc && (!seenBefore || ctx.getComponent(entity, Verbose)?.on === true)) {
       ctx.output.narrative(desc.text);
     }
 
@@ -155,6 +177,25 @@ export const VisitationSystem = defineSystem({
     if (!visited) return;
 
     if (!visited.rooms.includes(to)) visited.rooms.push(to);
+  },
+});
+
+/**
+ * 详略模式系统（v0.11）：`VerboseToggled` 的唯一订阅者
+ *
+ * 翻转玩家 `Verbose.on` 字段（可变读特权，与房间 state 同款）。
+ * 玩家没预挂 `Verbose` 的世界没有这个开关（静默忽略）——组件的挂载
+ * 由内容层声明（与 `Visited` 同款），系统不替内容补组件。
+ * 回显文案由命令给出（emit 同步派发，命令读得到翻转结果）。
+ */
+export const VerboseSystem = defineSystem({
+  name: 'prefab.verbose',
+  on: [VerboseToggled],
+  priority: 0,
+  handle(event, ctx) {
+    const { entity } = event.data;
+    const verbose = ctx.getComponent(entity, Verbose);
+    if (verbose) verbose.on = !verbose.on;
   },
 });
 
@@ -196,6 +237,13 @@ export const DescriptionSystem = defineSystem({
       ctx.output.narrative(desc.text);
     } else {
       ctx.output.narrative('这里没有任何描述。');
+    }
+
+    // 出口清单（v0.11）：拓扑真相是 Exits 数据，不靠描述文案手写——
+    // 内容忘了在描述里提方向，玩家也不至于撞墙试错
+    const exitList = exitDirectionList(ctx, pos.roomId);
+    if (exitList) {
+      ctx.output.narrative(`出口：${exitList}。`);
     }
 
     // 列地上可拾取物（Located.at == 房间 && Portable）

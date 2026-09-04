@@ -1,9 +1,9 @@
 {
   "name": "xiake-xing",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "侠客行——武侠题材文字 RPG（M0 骨架：三区域世界脚手架，吃 @mud/ecs-engine 0.12 + @mud/prefabs 0.10）",
+  "description": "侠客行——武侠题材文字 RPG（M0 骨架：三区域世界脚手架，吃 @mud/ecs-engine 0.12 + @mud/prefabs 0.11）",
   "scripts": {
     "dev": "tsx src/main.ts",
     "walk": "tsx src/walk.ts",

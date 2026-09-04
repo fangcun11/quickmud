@@ -16,6 +16,10 @@
 | # | 发现 | 所在期 | 层 | 建议处置 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | F1 | example 间样板逐字复制：`main.ts` 终端 REPL（「队列 + 串行排水」模式，tide-cellar 自注"与 mini-rpg 同款"）、`walk.ts` 通关录像三件套（drain/act/scene）、`commands/help.ts` 每包一份、玩家出生拼装（Position/Name/Visited + markVisited）在 tide-cellar / mini-rpg / demo-adventure / 侠客行间重复 | M0 | prefabs | 抽 `createRepl()` / `createWalkScript()` / `spawnPlayer()` 脚手架进 prefabs（或独立 example 基建），迁移三个存量 example | 待拍板 |
+| F2 | `execute` 兜底文案不带建议：未识别输入一律「我不明白你的意思。」，不提示相近动词（实测输「上」想爬楼时，玩家不知道该敲什么） | M0 体验批 | engine | 兜底时对注册表动词做近似匹配（前缀/编辑距离），文案附「你是想…？」；代价是十余处 `toBe` 精确断言要适配 | 攒批评估 |
+| F3 | 错误通道语义未约定：命令失败反馈有的走返回 string、有的走 output error 通道，两条路径混用无规则，宿主渲染无法统一着色/过滤 | M0 体验批 | engine | 错误通道语义重设计（返回值 vs `OutputCollector` 分工），牵动命令层契约，单独立项 | 攒批评估 |
+| F4 | 无回退命令：玩家想原路返回只能重敲方向；「回/退」需要来路记录（`Visited` 只记房间集合无顺序） | M0 体验批 | prefabs | 新增来路 trait（栈式，进快照）+ `back/回/退` 命令 emit 意图，MovementSystem 消费 | 待拍板 |
+| F5 | web-client 零测试：渲染器 ~450 行纯 DOM 逻辑无任何自动化测试，本批 4 个缺陷（↑ 历史边界、重开输入残留、地图换行折叠、VerboseSystem 漏注册的误报路径）全是浏览器实测才暴露 | M0 体验批 | web-client | 引入 jsdom/happy-dom 测 `handleInput`/`recallHistory`/`tryRestore`/重开状态机；DOM 渲染断言覆盖 pre-wrap 与实体点击 | 待拍板 |
 
 ## 条目展开
 
@@ -35,3 +39,58 @@ tide-cellar / mini-rpg / demo-adventure 三包间只有横幅文案不同，且�
 **建议**：prefabs 加 `createRepl({ world, playerId, banner })`（REPL + 输出排水 +
 quit）、`spawnPlayer(world, opts)`（出生四件套）、可选 `walkScript` 辅助。
 迁移时机：不影响 M0~M2 主线，可放在 M2 收口后或与下一批 example 需求一起做。
+
+### F2 · execute 兜底文案不带建议
+
+**现象**：M0 体验批浏览器实测，在只有水平出口的房间里敲「上」，
+回应是「我不明白你的意思。」——没告诉玩家引擎认识哪些动词、离输入
+最近的动词是什么。移动口语别名（往东/向东/东边…）缓解了方向这一类，
+但「看看/瞅瞅/观察」「拿/取/捡」这些非方向的近义输入依然撞墙。
+
+**为什么是引擎问题**：兜底文案由 `World.execute` 的命令注册表查找
+失败路径给出，只有注册表知道全部动词——prefabs 无从给出全局建议。
+
+**阻碍**：文案从固定串变为动态建议后，全仓十余处对兜底文案的 `toBe`
+精确断言需要适配（`toContain` 类不受影响）。
+
+**建议**：查找失败时对注册表动词做廉价近似匹配（前缀命中优先，
+必要时编辑距离 ≤2），兜底文案附「你是想「看看」吗？」；无命中保持
+原文案。与 F3 一起做可以少动一轮断言。
+
+### F3 · 错误通道语义未约定
+
+**现象**：同样是"命令没成功"，`VerboseCommand` 用**返回值**给反馈、
+撞墙走 `MovementSystem` 的 **output.narrative**、参数解析失败走
+**output.error**——三条通道混用，宿主无法统一决定"失败反馈要不要
+红色、要不要进历史"。
+
+**为什么是引擎问题**：`execute` 的返回值语义（`string | null`）与
+`OutputCollector` 的分工从未定过规则，各命令各凭手感。
+
+**建议**：单独立项定约——建议方向：返回值 = 命令级即时反馈（一句话），
+事件链输出 = 系统产生的世界叙事，error 通道 = 真错误（玩家输入无法
+解析）；guide 补决策表。牵动命令层契约与全部示例，攒批评估。
+
+### F4 · 无回退命令
+
+**现象**：M0 体验批实测，从狼穴原路返回青石镇要连敲六次方向；玩家
+本能的「回」「退」无命令。
+
+**建议**：prefabs 新增来路记录 trait（栈式，进快照——`Visited` 是
+集合语义不记顺序，不能复用）+ `back/回/退` 命令只发意图，由
+MovementSystem 消费（等同 `MoveRequested` 的另一来源）；有守卫的房间
+后退照走守卫。拍板时机随 M1 移动相关改动一起。
+
+### F5 · web-client 零测试
+
+**现象**：M0 体验批给 web-client 加了存档/历史/重开状态机后行数
+翻倍（~450 行），而该包没有任何自动化测试——四个缺陷全部靠浏览器
+实测暴露：↑ 历史首按永远无效（`historyIndex=-1` 起步的边界）、重开
+确认后输入框残留「重开」致第二段永远拼成「重开重开」、ASCII 地图
+换行被 HTML 空白折叠吞掉、（配合 prefabs 侧）VerboseSystem 漏注册被
+误报成「没有详略开关」。单测绿 ≠ 能玩，DOM 层是盲区。
+
+**建议**：引入 jsdom/happy-dom，优先测纯逻辑面：`handleInput` 的
+重开两段状态机、`recallHistory` 全路径、`tryRestore` 成功/脏数据
+两分支、pre-wrap 渲染、实体点击 → `runCommand('look X')`。
+时机：M1 前补齐，避免战斗 UI（M1 起状态栏会动）继续裸奔。

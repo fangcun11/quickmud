@@ -210,6 +210,17 @@ export const Coordinates = trait('coordinates', () => ({ x: 0, y: 0 }));
 export const Visited = trait('visited', () => ({ rooms: [] as string[] }));
 
 /**
+ * 详细模式（v0.11）：`on = true` 时移动**每次**都显示房间完整描述
+ *
+ * 默认行为是"自动简略"：首次进入全量描述，重复进入只显示
+ * 「你来到了X。」一行（细节用 look 看）。**内容层预挂**（与 `Visited`
+ * 同款声明模式——不预挂的世界没有详略开关，移动永远是自动简略），
+ * `详细/verbose` 命令经 `VerboseSystem` 翻转 `on` 字段（可变读特权，
+ * 与房间 state 同款）。进快照，模式随存档走。
+ */
+export const Verbose = trait('verbose', () => ({ on: false }));
+
+/**
  * 区域归属**关系**（v0.9-B 引入组件、v0.10 关系化）：房间 → 所属区域实体
  *
  * 单一真相铁律（与 Coordinates 同款）：房间声明 `area`，区域**不**维护

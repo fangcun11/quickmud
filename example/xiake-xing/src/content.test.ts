@@ -114,7 +114,7 @@ describe('侠客行 M0 · 三区域骨架', () => {
   it('世界地图：三个区域纵向一条线，玩家在最深处（区域间有连线）', async () => {
     // 跨区域出口是 south/north ⇒ 区域图按四方向反推拓扑，画得出连线（与跨层 up/down 不同）
     expect(await run('worldmap')).toBe(
-      '·\n│\n·\n│\n@\n图例：@ 当前位置 · 已探明区域（未探明区域留白）',
+      '·\n│\n·\n│\n@\n图例：@ 当前位置 · 已探明区域（未探明区域留白）\n区域：青石镇 · 终南山道 · 野狼林（此）',
     );
   });
 
@@ -132,7 +132,7 @@ describe('侠客行 M0 · 三区域骨架', () => {
     const b = bootstrap();
     b.world.output.clear();
     expect(await b.world.execute('worldmap', b.playerId)).toBe(
-      '@\n图例：@ 当前位置 · 已探明区域（未探明区域留白）',
+      '@\n图例：@ 当前位置 · 已探明区域（未探明区域留白）\n区域：青石镇（此）',
     );
   });
 });

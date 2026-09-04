@@ -150,3 +150,13 @@ export const BuffExpired = defineEvent('buff_expired')<{
   buff: EntityId;
   victim: EntityId;
 }>();
+
+/**
+ * 详略模式切换**意图**（v0.11）：{ entity }
+ *
+ * 由 `详细/verbose` 命令 emit，`VerboseSystem` 是唯一订阅者——
+ * 命令不改状态（铁律），挂/摘 `Verbose` 标记由系统完成。
+ */
+export const VerboseToggled = defineEvent('verbose_toggled')<{
+  entity: EntityId;
+}>();

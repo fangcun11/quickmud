@@ -109,7 +109,7 @@ markVisited(w, player); // seed 入口（初始位置没有 Moved 事件可订�
 // 出生点：地图只有自己
 assert.equal(
   await w.execute('map', player),
-  '@\n图例：@ 当前位置 · 已探明（未探明区域留白）',
+  '@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：村庄（此）',
   '初始地图只有出生房间',
 );
 

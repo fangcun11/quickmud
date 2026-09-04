@@ -11,6 +11,8 @@ import {
   CombatSystem,
   DeathSystem,
   NpcWanderSystem,
+  VerboseSystem,
+  VisitationSystem,
 } from './systems.js';
 import {
   GoCommand,
@@ -21,6 +23,7 @@ import {
   TakeCommand,
   DropCommand,
   AttackCommand,
+  VerboseCommand,
 } from './commands.js';
 import {
   Health,
@@ -31,6 +34,8 @@ import {
   Weapon,
   Located,
   Wander,
+  Visited,
+  Verbose,
 } from './traits.js';
 
 /** 按 kind 提取消息纯文本 */
@@ -125,20 +130,24 @@ describe('prefabs 移动', () => {
     const { w, player } = buildWorld();
     await w.execute('go east', player);
     expect(w.getComponent(player, Position)!.roomId).toBe('town_square');
-    // 文案说人话：方向 id（east）不该原样拼进中文句子
-    expect(textOf(w.output.getAll(), 'narrative')[0]).toBe('你不能往东走。');
+    // 文案说人话：方向 id（east）不该原样拼进中文句子；
+    // v0.11 起撞墙还附上当前可用出口，玩家不用回 look 查
+    expect(textOf(w.output.getAll(), 'narrative')[0]).toBe(
+      '你不能往东走。这里的出口：北。',
+    );
   });
 });
 
 describe('prefabs 查看与物品', () => {
-  it('look 输出房间描述并列出地上可拾取物', async () => {
+  it('look 输出房间描述、出口与地上可拾取物', async () => {
     const { w, player } = buildWorld();
     await w.execute('look', player);
     const lines = textOf(w.output.getAll(), 'narrative');
     expect(lines[0]).toBe('【城镇广场】');
     expect(lines[1]).toBe('你站在城镇广场上。北面是酒馆。');
+    expect(lines[2]).toBe('出口：北。'); // v0.11：出口清单来自 Exits 数据
     // 石像不可拾取 → 不在列表
-    expect(lines[2]).toBe('你可以看到：生锈的剑、金币。');
+    expect(lines[3]).toBe('你可以看到：生锈的剑、金币。');
   });
 
   it('take 把当前房间的可携物放入背包，inventory 可见', async () => {
@@ -414,5 +423,87 @@ describe('V3 NPC 巡逻（v0.5）', () => {
 
     for (let i = 0; i < 18; i++) w.tick(); // 3 个周期
     expect(w.getComponent(npc, Position)!.roomId).toBe('dead-end');
+  });
+});
+
+describe('详略模式与出口提示（v0.11）', () => {
+  /** 两间互通房 + 挂好 Visited/Verbose 的玩家 */
+  function buildTwoRooms() {
+    const w = new World({ tickInterval: 500 });
+    w.register(MovementSystem, DescriptionSystem, VisitationSystem, VerboseSystem);
+    w.registerCommands(
+      GoCommand,
+      createDirectionCommand('north', ['north']),
+      createDirectionCommand('south', ['south']),
+      LookCommand,
+      VerboseCommand,
+    );
+    const player = w.entities.createWithId('player-1');
+    w.addComponent(player, Position, { roomId: 'room_a' });
+    w.addComponent(player, Visited, { rooms: [] });
+    w.addComponent(player, Verbose, { on: false });
+    for (const room of [
+      { id: 'room_a', name: '甲房', desc: '甲房的描述。', exits: { south: 'room_b' } },
+      { id: 'room_b', name: '乙房', desc: '乙房的描述。', exits: { north: 'room_a' } },
+    ]) {
+      w.entities.createWithId(room.id);
+      w.addComponent(room.id, Name, { text: room.name });
+      w.addComponent(room.id, Description, { text: room.desc });
+      w.addComponent(room.id, Exits, room.exits);
+    }
+    return { w, player };
+  }
+
+  it('重复进房自动简略：描述只在首次出现，look 随时看全，详细命令切回', async () => {
+    const { w, player } = buildTwoRooms();
+
+    // 首次进入：标题 + 全量描述
+    await w.execute('south', player);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '乙房的描述。']);
+    w.output.clear();
+
+    // 折返再进：只报地名（Visited 里已有，自动简略）
+    await w.execute('north', player);
+    w.output.clear();
+    await w.execute('south', player);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。']);
+    w.output.clear();
+
+    // look 随时能重看全部细节（+出口清单）
+    await w.execute('look', player);
+    const looked = textOf(w.output.getAll(), 'narrative');
+    expect(looked).toContain('乙房的描述。');
+    expect(looked).toContain('出口：北。');
+    w.output.clear();
+
+    // 详细命令切回：重复进房恢复全量
+    expect(await w.execute('详细', player)).toContain('详细模式');
+    await w.execute('north', player);
+    w.output.clear();
+    await w.execute('south', player);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '乙房的描述。']);
+    // 再切回自动简略
+    expect(await w.execute('verbose', player)).toContain('自动简略');
+  });
+
+  it('没预挂 Verbose 的世界：移动不简略（无 Visited 视为首次），切换命令明说没开关', async () => {
+    const w = new World({ tickInterval: 500 });
+    w.register(MovementSystem, DescriptionSystem, VerboseSystem);
+    w.registerCommands(GoCommand, createDirectionCommand('south', ['south']), VerboseCommand);
+    const player = w.entities.createWithId('player-1');
+    w.addComponent(player, Position, { roomId: 'room_a' });
+    w.entities.createWithId('room_a');
+    w.addComponent('room_a', Name, { text: '甲房' });
+    w.addComponent('room_a', Description, { text: '甲房的描述。' });
+    w.addComponent('room_a', Exits, { south: 'room_b' });
+    w.entities.createWithId('room_b');
+    w.addComponent('room_b', Name, { text: '乙房' });
+    w.addComponent('room_b', Description, { text: '乙房的描述。' });
+
+    expect(await w.execute('详细', player)).toContain('没有详略开关');
+
+    await w.execute('south', player);
+    // 没挂 Visited：seenBefore 恒 false ⇒ 每次全量（内容没声明探索就不简略）
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '乙房的描述。']);
   });
 });

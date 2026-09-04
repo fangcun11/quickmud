@@ -26,15 +26,18 @@ import {
   MovementSystem,
   DescriptionSystem,
   VisitationSystem,
+  VerboseSystem,
   // 命令
   GoCommand,
   LookCommand,
   MapCommand,
   WorldMapCommand,
+  VerboseCommand,
   createDirectionCommand,
   // 组件
   Position,
   Visited,
+  Verbose,
   // 房间与区域
   defineRoom,
   defineArea,
@@ -44,7 +47,7 @@ import {
   buildRoomBehaviors,
   markVisited,
 } from '@mud/prefabs';
-import { HelpCommand } from '../commands/help';
+import { HelpCommand, QuitHintCommand } from '../commands/help';
 
 export interface BootstrapResult {
   world: World;
@@ -58,7 +61,7 @@ export function bootstrap(): BootstrapResult {
   });
 
   // M0 只注册 prefabs 基础件；M1 起再上修炼/战斗/系统
-  world.register(MovementSystem, DescriptionSystem, VisitationSystem);
+  world.register(MovementSystem, DescriptionSystem, VisitationSystem, VerboseSystem);
   // RoomEventSystem / RoomTickSystem 由 buildRoomBehaviors 幂等注册
 
   // 开发者套件一步注册：命令 + 效果系统（/tp /heal 等调试件）
@@ -69,11 +72,14 @@ export function bootstrap(): BootstrapResult {
     LookCommand,
     MapCommand,
     WorldMapCommand,
+    VerboseCommand,
     HelpCommand,
-    createDirectionCommand('north', ['north', 'n', '北']),
-    createDirectionCommand('south', ['south', 's', '南']),
-    createDirectionCommand('east', ['east', 'e', '东']),
-    createDirectionCommand('west', ['west', 'w', '西']),
+    QuitHintCommand,
+    // 口语方向别名：中文玩家不会先想到敲 north——往东/向东/东边都能走
+    createDirectionCommand('north', ['north', 'n', '北', '往北', '向北', '朝北', '北边', '往北走']),
+    createDirectionCommand('south', ['south', 's', '南', '往南', '向南', '朝南', '南边', '往南走']),
+    createDirectionCommand('east', ['east', 'e', '东', '往东', '向东', '朝东', '东边', '往东走']),
+    createDirectionCommand('west', ['west', 'w', '西', '往西', '向西', '朝西', '西边', '往西走']),
   );
 
   // ---- 区域：三张平面，从北往南一条线 ----
@@ -193,7 +199,7 @@ export function bootstrap(): BootstrapResult {
       id: 'den',
       name: '狼穴',
       description:
-        '林子深处的一处洼地，土腥味混着兽骚味扑面而来。地上的爪印又深又密，压倒的荒草铺成一个窝——这是狼群的老巢。M1 的野狼就住这儿。',
+        '林子深处的一处洼地，土腥味混着兽骚味扑面而来。地上的爪印又深又密，压倒的荒草铺成一个窝，草茎还是新的——狼群常回来。',
       area: 'woods',
       exits: { north: 'thicket' },
     }),
@@ -209,6 +215,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Position, { roomId: layout.entry });
   world.addComponent(playerId, Name, { text: '少年侠客' });
   world.addComponent(playerId, Visited);
+  world.addComponent(playerId, Verbose, { on: false }); // 预挂详略开关（详细/verbose 命令用）
   markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
 
   return { world, playerId };

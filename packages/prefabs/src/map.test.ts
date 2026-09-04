@@ -171,11 +171,11 @@ describe('MapCommand', () => {
     markVisited(w, player);
 
     const out = await w.execute('map', player);
-    expect(out).toBe('@\n图例：@ 当前位置 · 已探明（未探明区域留白）');
+    expect(out).toBe('@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：a（此）');
 
     await w.execute('east', player);
     const out2 = await w.execute('map', player);
-    expect(out2).toBe('·—@\n图例：@ 当前位置 · 已探明（未探明区域留白）');
+    expect(out2).toBe('·—@\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：a · b（此）');
   });
 
   it('没挂 Visited → 渲染全图（内容没声明要迷雾就不迷雾）', async () => {
@@ -192,6 +192,6 @@ describe('MapCommand', () => {
     w.addComponent(player, Position, { roomId: 'a' });
 
     const out = await w.execute('map', player);
-    expect(out).toBe('@—·\n│\n·\n图例：@ 当前位置 · 已探明（未探明区域留白）');
+    expect(out).toBe('@—·\n│\n·\n图例：@ 当前位置 · 已探明（未探明区域留白）\n地点：a（此） · b · c');
   });
 });
