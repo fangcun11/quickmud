@@ -8,6 +8,8 @@ export interface SystemErrorRecord {
   token: EventToken;
   message: string;
   policy: SystemErrorPolicy;
+  /** 原始 error 对象（0.11 起：不再是只剩 message 的字符串，可查堆栈/类型） */
+  cause?: unknown;
 }
 
 /**
@@ -41,7 +43,10 @@ export interface EventPumpConfig {
  */
 export class EventPump {
   private subscriptions = new Map<EventToken, EventSubscription[]>();
+  /** 事件队列。queueHead 指向下一个待处理项——出队只移指针（O(1)），
+   * 消费完的槽位在排水结束/恢复队列时统一回收，避免 shift() 的 O(n) 搬移 */
   private queue: QueuedEvent[] = [];
+  private queueHead = 0;
   private processing = false;
   private eventCount = 0;
   private readonly maxEvents: number;
@@ -125,18 +130,21 @@ export class EventPump {
 
     this.eventCount++;
 
-    // 暂存当前队列状态
+    // 暂存当前队列状态（含头指针）
     const savedQueue = this.queue;
+    const savedHead = this.queueHead;
     this.queue = [{ token, payload: data, timestamp }];
+    this.queueHead = 0;
 
     // 递归处理
-    while (this.queue.length > 0) {
-      const event = this.queue.shift()!;
+    while (this.queueHead < this.queue.length) {
+      const event = this.queue[this.queueHead++]!;
       this.processEvent(event);
     }
 
     // 恢复队列
     this.queue = savedQueue;
+    this.queueHead = savedHead;
   }
 
   /**
@@ -157,10 +165,13 @@ export class EventPump {
     this.processing = true;
 
     try {
-      while (this.queue.length > 0) {
-        const event = this.queue.shift()!;
+      while (this.queueHead < this.queue.length) {
+        const event = this.queue[this.queueHead++]!;
         this.processEvent(event);
       }
+      // 排水结束，回收已消费槽位（此时头指针必然追平队尾）
+      this.queue = [];
+      this.queueHead = 0;
     } finally {
       this.processing = false;
     }
@@ -173,24 +184,27 @@ export class EventPump {
     const handlers = this.subscriptions.get(event.token);
     if (!handlers) return;
 
+    // payload 与事件泵上下文对同一事件的所有订阅者相同——
+    // 提升到订阅循环外，热路径不再每订阅重建
+    const payload: EventPayload = {
+      token: event.token,
+      data: event.payload,
+      timestamp: event.timestamp,
+    };
+    // 事件泵本身不持有实体表，故 context 只提供 emit——
+    // 系统经 World.register 订阅时收到的是 World 注入的完整
+    // SystemContext（getComponent/output/after 等），与此无关。
+    const pumpContext = {
+      emit: (token: EventToken, data: unknown) => {
+        this.emit(token, data);
+      },
+    };
+
     for (const subscription of handlers) {
       if (subscription.disabled) continue;
       try {
-        const payload: EventPayload = {
-          token: event.token,
-          data: event.payload,
-          timestamp: event.timestamp,
-        };
-
-        // 事件泵本身不持有实体表，故 context 只提供 emit——
-        // 系统经 World.register 订阅时收到的是 World 注入的完整
-        // SystemContext（getComponent/output/after 等），与此无关。
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (subscription.handler as any)(payload, {
-          emit: (token: EventToken, data: unknown) => {
-            this.emit(token, data);
-          },
-        });
+        (subscription.handler as any)(payload, pumpContext);
       } catch (error) {
         this.handleError(subscription, error);
       }
@@ -209,13 +223,16 @@ export class EventPump {
     const policy = subscription.onError ?? 'propagate';
 
     if (policy === 'propagate') {
-      throw new Error(`Event handler error: ${message}`);
+      // { cause } 保留原始 error：调用方拿得到根因堆栈与类型，
+      // 不再只是 throw 点的一条 message 字符串（ES2022 error cause）
+      throw new Error(`Event handler error: ${message}`, { cause: error });
     }
 
     this.systemErrors.push({
       token: subscription.token,
       message,
       policy,
+      cause: error,
     });
 
     if (policy === 'degrade') {
@@ -313,6 +330,7 @@ export class EventPump {
    */
   clearQueue(): void {
     this.queue = [];
+    this.queueHead = 0;
     this.eventCount = 0;
   }
 
@@ -320,7 +338,7 @@ export class EventPump {
    * 获取当前队列长度
    */
   get queueLength(): number {
-    return this.queue.length;
+    return this.queue.length - this.queueHead;
   }
 
   /**

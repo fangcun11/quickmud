@@ -72,6 +72,37 @@ describe('系统错误策略（onError）', () => {
     expect(w.getSystemErrors()).toHaveLength(1); // 不新增
   });
 
+  it('propagate 上抛时保留原始 error（cause）', () => {
+    const w = new World();
+    w.register(makeSystem('bad'));
+    const p = w.entities.createWithId('p');
+    w.entities.addComponent(p, Counter, { value: 0 });
+
+    try {
+      w.eventPump.emit(Boom.token, { target: p });
+      expect.unreachable();
+    } catch (error) {
+      const cause = (error as Error).cause as Error | undefined;
+      expect(cause).toBeInstanceOf(Error);
+      expect(cause?.message).toBe('bad exploded');
+      expect(cause?.stack).toBeTruthy(); // 根因堆栈可定位，不再只剩 message 字符串
+    }
+  });
+
+  it('skip 策略的错误日志记录原始 error（cause）', () => {
+    const w = new World();
+    w.register(makeSystem('bad', 'skip'));
+    const p = w.entities.createWithId('p');
+    w.entities.addComponent(p, Counter, { value: 0 });
+
+    w.eventPump.emit(Boom.token, { target: p });
+    const errors = w.getSystemErrors();
+    expect(errors).toHaveLength(1);
+    const cause = errors[0]!.cause as Error | undefined;
+    expect(cause).toBeInstanceOf(Error);
+    expect(cause?.message).toBe('bad exploded');
+  });
+
   it('clearSystemErrors 清空日志', () => {
     const w = new World();
     w.register(makeSystem('bad', 'skip'));

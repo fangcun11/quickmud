@@ -153,6 +153,36 @@ ctx.destroy(target);
 
 > 注：destroy 不级联清理其他实体的引用（如 Located 指向被删容器会悬挂）。
 
+## 0.11 事件类型贯通与命令输出通道
+
+```ts
+// 事件定义：第一层把名字推断为字面量，token 携带字面量类型
+const Killed = defineEvent('killed')<{ victim: string }>();
+
+// 多事件系统：on 传定义数组，handle 收 discriminated union
+const HuntSystem = defineSystem({
+  on: [Killed, Looted],
+  handle(event, ctx) {
+    if (event.token === Killed.token) {
+      event.data.victim; // string——收窄自动完成，无需 as
+    }
+  },
+});
+
+// 命令侧输出通道（0.11 新增）：语义化输出不必再"为一个事件写一个系统"
+defineCommand({
+  verbs: ['score'],
+  handle({ output, player }) {
+    output.narrative([{ text: '【状态】', style: { bold: true } }]);
+    output.error('没有存档。');
+    return null;
+  },
+});
+```
+
+正确性加固：错误包装带 `{ cause }`（根因堆栈可查）；`trait()` 同 id 不同名
+（djb2 碰撞）fail-fast；`verifyReplay` 拒绝跨版本录像（`versionMismatch`）。
+
 ## 双模块格式
 
 | 入口 | import (ESM) | require (CJS) |

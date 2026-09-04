@@ -1,4 +1,5 @@
 import type { ComponentDefinition, ComponentId } from './types';
+import { deepClone } from '../internal/clone';
 
 /**
  * 基于名称的确定性 ID 生成（djb2 哈希 + base36 编码）
@@ -16,12 +17,25 @@ export function deterministicId(name: string): ComponentId {
   return (`c${(hash >>> 0).toString(36)}`.slice(0, 10)) as ComponentId;
 }
 
-/** 深拷贝：默认值是共享模板/工厂产物，create() 必须返回独立实例 */
-function deepClone<T>(value: T): T {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(value);
+/**
+ * 组件名 → ID 注册表（碰撞防护）
+ *
+ * deterministicId 是 32 位 djb2 哈希，理论可碰撞——实测 10 万个组件名
+ * 能找到 3 对撞车（如 comp_1r_x / comp_30_x → 同一 ID）。碰撞的后果是
+ * 两个不同 trait 静默共享同一存储槽、数据互相覆盖，且无任何报错。
+ * 这里在 trait()/relation() 注册时查重：同 id 不同名 → fail-fast 抛错。
+ */
+const idRegistry = new Map<ComponentId, string>();
+
+function registerId(id: ComponentId, name: string): void {
+  const existing = idRegistry.get(id);
+  if (existing !== undefined && existing !== name) {
+    throw new Error(
+      `deterministicId 冲突（collision）：组件 "${name}" 与 "${existing}" 哈希撞车（${id}）。` +
+        `请给其中一个换个名字。`,
+    );
   }
-  return JSON.parse(JSON.stringify(value)) as T;
+  idRegistry.set(id, name);
 }
 
 /**
@@ -42,6 +56,7 @@ export function trait<T extends Record<string, unknown>>(
   defaults?: T | (() => T),
 ): ComponentDefinition<T> {
   const id = deterministicId(name);
+  registerId(id, name);
   const base: T | undefined =
     typeof defaults === 'function' ? (defaults as () => T)() : defaults;
 
@@ -62,6 +77,7 @@ export function relation(name: string): ComponentDefinition<{
   type: string;
 }> {
   const id = deterministicId(name);
+  registerId(id, name);
 
   return {
     id,

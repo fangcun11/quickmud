@@ -239,6 +239,7 @@ buildRooms(world, layout);
 | [文档示例](./docs/examples) | 6 个可运行示例，`strict` 类型检查 + 运行双验证 |
 | [CHANGELOG](./CHANGELOG.md) | 逐版本变更明细 |
 | [路线图](./docs) | `roadmap-0.6` ~ `roadmap-0.10` 的设计定稿与实现记录 |
+| [引擎 API 审查](./docs/engine-api-review.md) | v0.10 后的引擎层体检：分级发现、修法与实施状态 |
 
 ## 设计取舍
 
@@ -257,7 +258,7 @@ buildRooms(world, layout);
 ```bash
 pnpm install                    # 安装依赖
 pnpm build                      # 构建两个包（tsc + esbuild 双格式）
-pnpm test                       # 全部单测（engine 101 / prefabs 134 / mini-rpg 7 / tide-cellar 10）
+pnpm test                       # 全部单测（engine 112 / prefabs 134 / mini-rpg 7 / tide-cellar 10）
 pnpm test:contract              # ESM + CJS + TS strict 契约测试
 node docs/examples/verify-doc-examples.mjs   # 文档示例双验证
 

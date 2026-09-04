@@ -12,8 +12,6 @@ export interface SnapshotData {
   worldTime?: number;
   /** 实体 ID 计数器（决定"下一个 create() 返回什么"）。0.1 存档无此字段，恢复时从 0 起（碰撞保护兜底） */
   idCounter?: number;
-  /** 组件注册表 */
-  registry: Record<ComponentId, string>;
   /** 所有实体 */
   entities: SnapshotEntity[];
   /** 调度器状态 */

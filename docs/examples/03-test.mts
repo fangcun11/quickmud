@@ -7,7 +7,7 @@ import { createTestWorld } from '@mud/ecs-engine/testing';
 const Health = trait('health', () => ({ current: 100, max: 100 }));
 const Healed = defineEvent('healed')<{ target: string; amount: number }>();
 
-const HealSystem = defineSystem<{ target: string; amount: number }>({
+const HealSystem = defineSystem({
   name: 'heal',
   on: [Healed],
   priority: 10,

@@ -24,14 +24,6 @@ import {
   Located,
   buffBlueprint,
 } from '@mud/prefabs';
-type AttackPayload = { attacker: EntityId; target: EntityId };
-type ChoicePayload = {
-  player: EntityId;
-  npc: EntityId;
-  optionText: string;
-  remember?: string[];
-};
-type TurnInPayload = { player: EntityId; giver: EntityId; questId: string };
 
 /** 巨蛛的实体 id（本内容包的内部约定：id 在 bootstrap 里用 createWithId 固定） */
 const SPIDER = 'spider' as EntityId;
@@ -51,7 +43,7 @@ const SPIDER = 'spider' as EntityId;
  * 反咬前检查自己是否还活着：玩家最后一击会先把自己打成 0 血，
  * 排水到本系统时蛛已死，不该从坟墓里咬人。
  */
-export const SpiderRevengeSystem = defineSystem<AttackPayload>({
+export const SpiderRevengeSystem = defineSystem({
   name: 'mini-rpg.spider-revenge',
   on: [Attack],
   priority: 0,
@@ -73,7 +65,7 @@ export const SpiderRevengeSystem = defineSystem<AttackPayload>({
  * `source: SPIDER`——若玩家毒死在蛛巢里，Died.killer 会归到巨蛛头上
  * （击杀任务计数、战利品归属全走标准管线）。
  */
-export const SpiderVenomSystem = defineSystem<AttackPayload>({
+export const SpiderVenomSystem = defineSystem({
   name: 'mini-rpg.spider-venom',
   on: [Attack],
   priority: 0,
@@ -100,7 +92,7 @@ export const SpiderVenomSystem = defineSystem<AttackPayload>({
  * 与 demo 酒保模式同款：对话必须面对面（DialogueSystem 保证），
  * 效果系统再校验药婆就在村里——不隔空发茶。
  */
-export const HerbalistEffectsSystem = defineSystem<ChoicePayload>({
+export const HerbalistEffectsSystem = defineSystem({
   name: 'mini-rpg.herbalist-effects',
   on: [DialogueChoiceMade],
   priority: 0,
@@ -126,7 +118,7 @@ export const HerbalistEffectsSystem = defineSystem<ChoicePayload>({
 });
 
 /** 终局：主线任务交付 → 一段结局文案（事件钩子的内容用法） */
-export const EndingSystem = defineSystem<TurnInPayload>({
+export const EndingSystem = defineSystem({
   name: 'mini-rpg.ending',
   on: [QuestTurnedIn],
   priority: 0,

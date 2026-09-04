@@ -17,11 +17,12 @@ export type { Entity, EntityId, ComponentDefinition, ComponentId, EventToken } f
 // 事件
 export { defineEvent } from './events/define-event';
 export { EventPump } from './events/event-pump';
+export type { SystemErrorRecord } from './events/event-pump';
 export type { EventDefinition, EventHandler, EventPayload, EventContext, TypedEmit } from './events/types';
 
 // 系统
 export { defineSystem } from './systems/define-system';
-export type { SystemDefinition, SystemContext } from './systems/types';
+export type { SystemDefinition, SystemContext, OutputView } from './systems/types';
 
 // 命令
 export { defineCommand } from './commands/define-command';

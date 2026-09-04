@@ -30,6 +30,28 @@ describe('A1 定时系统', () => {
     expect(payload.data.time).toBe(300);
   });
 
+  it('every 系统错误上抛时保留原始 error（cause）', () => {
+    const w = new World({ tickInterval: 100 });
+    w.register(
+      defineSystem({
+        name: 'bad-every',
+        every: 50,
+        handle() {
+          throw new Error('boom-every');
+        },
+      }),
+    );
+
+    try {
+      w.tick();
+      expect.unreachable();
+    } catch (error) {
+      const cause = (error as Error).cause as Error | undefined;
+      expect(cause).toBeInstanceOf(Error);
+      expect(cause?.message).toBe('boom-every');
+    }
+  });
+
   it('ctx.after：延时事件到期才触发，同刻按调度顺序', () => {
     const order: string[] = [];
     const w = new World({ tickInterval: 100 });

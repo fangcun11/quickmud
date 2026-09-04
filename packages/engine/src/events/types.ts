@@ -1,4 +1,15 @@
 import type { EventToken } from '../core/types';
+import { TICK_TOKEN } from './tick';
+
+/**
+ * every 系统收到的合成 tick 事件（World.tick 直接调用 handle，不经事件泵）
+ */
+export interface TickEventPayload {
+  token: typeof TICK_TOKEN;
+  /** data.time = 当时的世界时间（毫秒） */
+  data: { time: number };
+  timestamp: number;
+}
 
 /**
  * 类型化事件发射器
@@ -15,12 +26,16 @@ export interface TypedEmit {
 /**
  * 事件定义 - 描述事件的结构和行为
  *
+ * 泛型 T 是载荷类型（emit / defineSystem 的类型推导来源）；
+ * 泛型 TName 保留调用处的**名称字面量**——token 随之携带字面量类型，
+ * defineSystem 多事件订阅时依 `event.token === Def.token` 收窄 event.data。
+ *
  * schema 字段只是**载荷类型的类型锚点**：帮助 TS 关联 EventDefinition<T> 的
  * 载荷类型（emit/defineSystem 的类型推导）。引擎**不做运行时校验**——
  * 不要指望 emit 时调用 validate。version 保留作为未来事件迁移的扩展点。
  */
-export interface EventDefinition<T = void> {
-  token: EventToken;
+export interface EventDefinition<T = void, TName extends string = string> {
+  token: TName;
   name: string;
   version: number;
   /** 类型锚点（引擎不执行运行时校验；缺省即可） */

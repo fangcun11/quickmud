@@ -382,17 +382,12 @@ function invokeHandler(
  */
 export const RoomEventSystem = defineSystem({
   name: 'prefab.room.event',
-  on: [Moved.token, Look.token, RoomCommandInvoked.token],
+  on: [Moved, Look, RoomCommandInvoked],
   priority: 5,
   onError: 'skip',
   handle(event, ctx) {
     if (event.token === Moved.token) {
-      const { entity, from, to, direction } = event.data as {
-        entity: EntityId;
-        from: EntityId;
-        to: EntityId;
-        direction?: string;
-      };
+      const { entity, from, to, direction } = event.data;
 
       const leaving = lookupRoomBehavior(ctx, from);
       if (leaving?.on.leave) {
@@ -434,11 +429,7 @@ export const RoomEventSystem = defineSystem({
     }
 
     if (event.token === RoomCommandInvoked.token) {
-      const { player, roomId, verb } = event.data as {
-        player: EntityId;
-        roomId: EntityId;
-        verb: string;
-      };
+      const { player, roomId, verb } = event.data;
       const behavior = lookupRoomBehavior(ctx, roomId);
       if (!behavior) return;
       const key = verb.toLowerCase();
@@ -463,7 +454,7 @@ export const RoomEventSystem = defineSystem({
       return;
     }
 
-    const { entity, target } = event.data as { entity: EntityId; target?: string };
+    const { entity, target } = event.data;
     if (target !== undefined) return; // look <目标>：看的是东西不是房间
     const pos = ctx.getComponent(entity, Position);
     if (!pos) return;
@@ -489,7 +480,7 @@ export const RoomTickSystem = defineSystem({
   every: ROOM_TICK_MS,
   onError: 'skip',
   handle(payload, ctx) {
-    const time = (payload.data as { time: number }).time;
+    const time = payload.data.time;
 
     for (const roomId of ctx.findByComponent(RoomBehaviorRef)) {
       const behavior = lookupRoomBehavior(ctx, roomId);

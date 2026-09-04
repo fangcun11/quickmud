@@ -70,13 +70,16 @@ import {
 const Health = trait('health', () => ({ current: 100, max: 100 }));
 
 // ── 事件：发生过的事，过去时态命名 ────────────────────
-// 注意柯里化语法：defineEvent('名字')<载荷类型>()，结尾有 ()
+// 注意柯里化语法：defineEvent('名字')<载荷类型>()，结尾有 ()。
+// 两段各管一个类型角色：第一层把名字推断为字面量（token 携带字面量类型，
+// 多事件系统靠它收窄）；第二层显式载荷。TS 无部分泛型推断，一步到位写法
+// defineEvent<载荷>('名字') 会让 token 退化成 string，别这么写。
 const Healed = defineEvent('healed')<{ target: string; amount: number }>();
 
 // ── 系统：订阅事件，修改状态，产出输出 ─────────────────
-// 要点：① 显式声明载荷泛型 defineSystem<载荷>；② 订阅用事件定义 Healed
-// 而非 token 字符串——这样 handle 里 event.data 带类型，无需断言。
-const HealSystem = defineSystem<{ target: string; amount: number }>({
+// 要点：on 传事件定义 Healed（而非 token 字符串）——载荷类型自动贯通，
+// handle 里 event.data 带类型，无需断言。多事件订阅写 on: [A, B]。
+const HealSystem = defineSystem({
   name: 'heal',
   on: [Healed],
   priority: 10,                // 数字越小越先执行

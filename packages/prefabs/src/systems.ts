@@ -83,10 +83,7 @@ import { directionLabel } from './room.js';
  * 也正因为如此，`Moved` 必须是**结果**而不是意图：守卫放行前 emit 的任何
  * "到达"都会让 `Visited` 误记、房间 `enter` 幽灵触发。
  */
-export const MovementSystem = defineSystem<{
-  entity: EntityId;
-  to: string;
-}>({
+export const MovementSystem = defineSystem({
   name: 'prefab.movement',
   on: [MoveRequested],
   priority: 0,
@@ -147,11 +144,7 @@ export const MovementSystem = defineSystem<{
  *
  * 没挂 `Visited` 的实体不参与记账（系统不能替内容补组件）。
  */
-export const VisitationSystem = defineSystem<{
-  entity: EntityId;
-  from: EntityId;
-  to: EntityId;
-}>({
+export const VisitationSystem = defineSystem({
   name: 'prefab.visitation',
   on: [Moved],
   priority: 0,
@@ -165,10 +158,7 @@ export const VisitationSystem = defineSystem<{
 });
 
 /** 处理查看（输出所在房间的描述与地上可拾取物；look <目标> 查看容器内物品详情） */
-export const DescriptionSystem = defineSystem<{
-  entity: EntityId;
-  target?: string;
-}>({
+export const DescriptionSystem = defineSystem({
   name: 'prefab.description',
   on: [Look],
   priority: 0,
@@ -234,12 +224,12 @@ export const DescriptionSystem = defineSystem<{
  */
 export const ItemSystem = defineSystem({
   name: 'prefab.items',
-  on: [ItemTaken.token, ItemDropped.token],
+  on: [ItemTaken, ItemDropped],
   handle(event, ctx) {
     if (event.token === ItemTaken.token) {
-      handleTake(ctx, event.data as { player: EntityId; item: EntityId });
+      handleTake(ctx, event.data);
     } else {
-      handleDrop(ctx, event.data as { player: EntityId; item: EntityId });
+      handleDrop(ctx, event.data);
     }
   },
 });
@@ -300,10 +290,10 @@ function handleDrop(ctx: SystemContext, { player, item }: TakeDrop): void {
  */
 export const CombatSystem = defineSystem({
   name: 'prefab.combat',
-  on: [Attack.token],
+  on: [Attack],
   priority: 0,
   handle(event, ctx) {
-    const { attacker, target } = event.data as { attacker: EntityId; target: EntityId };
+    const { attacker, target } = event.data;
 
     const hp = ctx.getComponent(target, Health);
     if (!hp) {
@@ -338,10 +328,10 @@ export const CombatSystem = defineSystem({
  */
 export const DeathSystem = defineSystem({
   name: 'prefab.death',
-  on: [Died.token],
+  on: [Died],
   priority: 100,
   handle(event, ctx) {
-    const { entity } = event.data as { entity: EntityId };
+    const { entity } = event.data;
     ctx.destroy(entity);
   },
 });
@@ -359,14 +349,10 @@ export const DeathSystem = defineSystem({
  */
 export const LootSystem = defineSystem({
   name: 'prefab.loot',
-  on: [Died.token],
+  on: [Died],
   priority: 0,
   handle(event, ctx) {
-    const { entity, roomId } = event.data as {
-      entity: EntityId;
-      killer?: EntityId;
-      roomId?: string;
-    };
+    const { entity, roomId } = event.data;
 
     // 无房间（不是死在某个容器里）→ 无处可掉
     if (!roomId) return;
@@ -415,11 +401,11 @@ function lootBlueprint(entry: LootEntry, roomId: EntityId) {
  */
 export const QuestSystem = defineSystem({
   name: 'prefab.quest',
-  on: [ItemTaken.token, Died.token, QuestTurnedIn.token],
+  on: [ItemTaken, Died, QuestTurnedIn],
   priority: 10,
   handle(event, ctx) {
     if (event.token === ItemTaken.token) {
-      const { player, item } = event.data as { player: EntityId; item: EntityId };
+      const { player, item } = event.data;
       const itemName = displayName(ctx, item);
       // 转移已由 ItemSystem 完成（priority 更低）；没到手就不记账
       if (ctx.getComponent(item, Located)?.at !== player) return;
@@ -430,11 +416,7 @@ export const QuestSystem = defineSystem({
     }
 
     if (event.token === Died.token) {
-      const { entity, killer } = event.data as {
-        entity: EntityId;
-        killer?: EntityId;
-        roomId?: string;
-      };
+      const { entity, killer } = event.data;
       if (!killer) return;
       const deadName = displayName(ctx, entity);
       forEachMatchingQuest(ctx, killer, 'kill', deadName, (def, giver, log) =>
@@ -443,11 +425,7 @@ export const QuestSystem = defineSystem({
       return;
     }
 
-    const { player, giver, questId } = event.data as {
-      player: EntityId;
-      giver: EntityId;
-      questId: string;
-    };
+    const { player, giver, questId } = event.data;
     handleTurnIn(ctx, player, giver, questId);
   },
 });
@@ -561,7 +539,7 @@ export const BuffSystem = defineSystem({
   name: 'prefab.buff',
   every: 1000,
   handle(payload, ctx) {
-    const time = (payload.data as { time: number }).time;
+    const time = payload.data.time;
 
     for (const buffId of ctx.findByComponent(Afflicted)) {
       const buff = ctx.getComponent(buffId, Afflicted);
@@ -628,10 +606,10 @@ export const BuffSystem = defineSystem({
  */
 export const BuffCleanupSystem = defineSystem({
   name: 'prefab.buff-cleanup',
-  on: [Died.token],
+  on: [Died],
   priority: 50,
   handle(event, ctx) {
-    const { entity } = event.data as { entity: EntityId };
+    const { entity } = event.data;
     for (const buffId of ctx.findByComponent(Afflicted)) {
       if (ctx.getComponent(buffId, Afflicted)?.victim === entity) {
         ctx.destroy(buffId);
@@ -679,7 +657,7 @@ export const NpcWanderSystem = defineSystem({
   every: 3000,
   priority: 0,
   handle(payload, ctx) {
-    const time = (payload.data as { time: number }).time;
+    const time = payload.data.time;
     const interval = 3000;
     const round = Math.floor(time / interval);
 

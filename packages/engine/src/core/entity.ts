@@ -1,15 +1,5 @@
 import type { Entity, EntityId, ComponentId, ComponentDefinition } from './types';
-
-/**
- * 深拷贝（用于快照恢复，切断与快照对象的引用共享）
- * structuredClone 不可用时的 JSON 兜底。
- */
-function deepClone<T>(value: T): T {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(value);
-  }
-  return JSON.parse(JSON.stringify(value)) as T;
-}
+import { deepClone } from '../internal/clone';
 
 /**
  * 实体管理器 - 管理游戏世界中的所有实体

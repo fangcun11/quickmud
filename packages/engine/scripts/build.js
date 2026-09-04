@@ -50,15 +50,23 @@ async function main() {
   // 修正 .d.ts 相对导入：补 .js 扩展名
   // tsc 对扩展名导入不重写，产物在 node16/nodenext 解析下会编译失败
   // （外部消费者契约测试发现的真实缺陷，见 scripts/contract-test.mjs）。
+  // 0.11：同时处理裸 '..'/'.' 引用——tsc 对推断类型（无显式类型标注、
+  // 类型经包入口 re-export）会生成 import("..")，而 ESM 解析不做
+  // 目录→index 扩展，必须显式 ../index.js。
   const dtsFiles = (await fs.promises.readdir('dist', { recursive: true }))
     .filter((f) => f.endsWith('.d.ts'))
     .map((f) => path.join('dist', f));
   for (const file of dtsFiles) {
     const code = await fs.promises.readFile(file, 'utf-8');
     const fixed = code.replace(
-      /(from\s+|import\s*\(\s*|import\s+)(['"])(\.\.?\/[^'"]+)\2/g,
+      /(from\s+|import\s*\(\s*|import\s+)(['"])(\.\.?(?:\/[^'"]*)?)\2/g,
       (_, prefix, quote, spec) => {
-        const withExt = spec.endsWith('.js') || spec.endsWith('.d.ts') ? spec : `${spec}.js`;
+        let withExt;
+        if (spec === '..' || spec === '.') {
+          withExt = `${spec}/index.js`;
+        } else {
+          withExt = spec.endsWith('.js') || spec.endsWith('.d.ts') ? spec : `${spec}.js`;
+        }
         return `${prefix}${quote}${withExt}${quote}`;
       },
     );

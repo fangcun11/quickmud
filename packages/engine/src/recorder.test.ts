@@ -84,6 +84,19 @@ describe('D1 录像重放', () => {
     expect(result.diff).toBeDefined();
   });
 
+  it('跨版本录像拒绝重放（versionMismatch），不做无意义的分叉比对', async () => {
+    const w = buildWorld();
+    const rec = record(w);
+    await rec.execute('rest 30', 'player-1');
+    const recording = rec.stop();
+
+    const forged: typeof recording = { ...recording, engineVersion: '0.0.1' };
+    const result = await verifyReplay(forged, buildWorld);
+    expect(result.ok).toBe(false);
+    expect(result.versionMismatch).toBe(true);
+    expect(result.diff).toBeUndefined(); // 不是内容分叉，是版本不兼容
+  });
+
   it('replay 返回的世界可继续操作（调试起点）', async () => {
     const rec = record(buildWorld());
     await rec.execute('rest 10', 'player-1');

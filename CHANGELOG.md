@@ -2,6 +2,74 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.11.0] - 2026-09-04
+
+主题：**引擎 API 审查修复（第一批）**。对 `packages/engine` 全量审查
+（3322 行源码，见 `docs/engine-api-review.md`）后落地的高收益批：4 个正确性
+问题、2 个易用性问题、3 个热路径分配、3 个清理项。多数向后兼容；两处
+类型层变化（事件定义双泛型、快照 registry 字段删除）随 0.x minor 发布。
+
+### 正确性（@mud/ecs-engine 0.7.0）
+
+- **错误包装保留原始 error**：事件泵与 every 系统的 propagate 上抛改为
+  `new Error(msg, { cause: error })`（ES2022），skip/degrade 的
+  `SystemErrorRecord` 新增 `cause?: unknown`——调 bug 时终于拿得到根因
+  堆栈与类型，不再只剩一条 message 字符串（审查 P0-1）
+- **`deterministicId` 碰撞 fail-fast**：32 位 djb2 哈希理论可碰撞
+  （实测 10 万名字 3 对，如 `comp_1r_x`/`comp_30_x` → 同一存储槽静默互踩）。
+  `trait()`/`relation()` 现在走模块级注册表查重，同 id 不同名直接抛错；
+  同名重复调用幂等（热重载安全）（审查 P0-4）
+- **`verifyReplay` 版本护栏**：录像 `engineVersion` 与当前 `ENGINE_VERSION`
+  不一致时拒绝重放，返回 `versionMismatch: true`——跨版本的状态布局可能
+  已变，此时给出的"分叉路径"没有诊断价值（审查 P0-3）
+
+### 类型贯通（@mud/ecs-engine 0.7.0 + @mud/prefabs 0.9.0）
+
+- **多事件系统的 discriminated union**：`defineEvent` 第一层把名字推断为
+  **字面量**（token 随之携带 `'moved'` 等字面量类型），`defineSystem` 的
+  `on` 传**事件定义数组**时 handle 收到按 token 可收窄的 union——
+  `event.token === Moved.token` 自动收窄 `event.data`。prefabs 顺势删掉
+  12 处 `as` 断言（ItemSystem/QuestSystem/RoomEventSystem 等），
+  mini-rpg/demo-adventure 删 5 处显式载荷泛型（审查 P1-1）
+- **审查报告 P1-8 的修法修正**：报告建议 `defineEvent<TName, T>(name)`
+  一步到位，实施时验证发现 TS 的部分泛型推断不存在——显式传载荷实参会
+  跳过名字推断、token 退化为 string，**收窄失效**。保留两段柯里化形态
+  （第一层推断名字字面量、第二层显式载荷），代价是漏写尾 `()` 编译期
+  即报 "not callable"（fail-fast，guide FAQ 已覆盖）
+- **`CommandContext.output`**：命令侧新增输出通道（与 `SystemContext.output`
+  同一形态，`OutputView` 提取为公共类型）。语义化输出（多段/对话/状态）
+  不再必须"返回一个 string"或"为一个事件写一个系统"；"命令不改状态"
+  的铁律不变（审查 P1-2）
+
+### 高效性（@mud/ecs-engine 0.7.0，零语义变化）
+
+- **事件队列头指针**：`shift()` O(n) 出队改为 `queueHead` 指针，事件风暴
+  场景从 O(n²) 回到 O(n)（审查 P2-1）
+- **SystemContext 缓存复用**：context 是无状态视图，缓存单实例，
+  热路径不再每事件每系统重建（审查 P2-2）
+- **processEvent 闭包提升**：payload 与事件泵上下文提升到订阅循环外，
+  不再每订阅重建（审查 P2-3）
+
+### 清理（@mud/ecs-engine 0.7.0）
+
+- **删除 `SnapshotData.registry` 死字段**：`createSnapshot` 恒写 `{}`、
+  类型承诺无现实（审查 P3-1；旧快照 JSON 多余字段读回时自动忽略）
+- **导出 `SystemErrorRecord`**：`getSystemErrors()` 返回值可在外部命名
+  （审查 P3-3）
+- **`deepClone` 收敛为 `internal/clone.ts`**：world/entity/trait/blueprint
+  四份相同实现合一（审查 P3-7）
+- **d.ts 产物裸 `..` 引用修复**：tsc 对推断类型（无显式标注、类型经包入口
+  re-export）会生成 `import("..")`，而 ESM 消费（`type: module` + Node16）
+  不做目录→index 扩展——契约测试撞出来的真实缺陷，build.js 补丁改写为
+  `../index.js`
+
+### 测试与文档
+
+- 四包合计 **263 例**全绿（engine 112 / prefabs 134 / mini-rpg 7 /
+  tide-cellar 10）：新增碰撞防护 2 例、cause 保留 3 例、版本护栏 1 例、
+  多事件收窄 2 例（含编译期字面量断言）、命令输出通道 3 例
+- 契约测试 ×2、文档示例 ×6、lint 全过
+
 ## [0.10.0] - 2026-09-04
 
 主题：**内容验证版**。不加能力，专门做一个真内容包把 v0.9 那批「只有单测、

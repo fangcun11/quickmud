@@ -349,6 +349,32 @@ v0.10 的内容包（`example/tide-cellar`）把 v0.9 的 API 玩了一遍，撞
   （空行不带字形，裁掉不影响已探明内容的相对位置）；中间的空白行照旧保留
   ——那是未探明的位置，是信息。
 
+## 类型贯通（v0.11）
+
+多事件系统不再需要 `as` 断言：`on` 传**事件定义**（而非 `.token` 字符串），
+handle 收到按 token 可收窄的 union，载荷类型自动贯通——
+
+```ts
+// 0.11 前：event.data 是 unknown，两处 as
+on: [ItemTaken.token, ItemDropped.token],
+handle(event, ctx) {
+  if (event.token === ItemTaken.token) {
+    handleTake(ctx, event.data as { player: EntityId; item: EntityId });
+  }
+}
+
+// 0.11 后：event.token === ItemTaken.token 分支里 event.data 自动收窄
+on: [ItemTaken, ItemDropped],
+handle(event, ctx) {
+  if (event.token === ItemTaken.token) {
+    handleTake(ctx, event.data); // { player, item }，无断言
+  }
+}
+```
+
+单事件系统（`on: [Attack]`）的 `event.data` 同样直接就是载荷类型。
+`on: [X.token]` 旧写法继续可用（data 退化为 unknown）。
+
 ## 开发
 
 ```bash

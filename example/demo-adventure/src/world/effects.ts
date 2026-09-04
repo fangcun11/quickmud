@@ -9,13 +9,6 @@ import { defineSystem, DialogueChoiceMade, blueprint } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 import { Position, Located, Portable, Description } from '@mud/prefabs';
 
-type ChoicePayload = {
-  player: EntityId;
-  npc: EntityId;
-  optionText: string;
-  remember?: string[];
-};
-
 /** 麦酒蓝图：一杯现酿（由效果系统 spawn） */
 const AleBp = blueprint({
   name: '麦酒',
@@ -26,7 +19,7 @@ const AleBp = blueprint({
   ],
 });
 
-export const BarkeepEffectsSystem = defineSystem<ChoicePayload>({
+export const BarkeepEffectsSystem = defineSystem({
   name: 'demo.barkeep-effects',
   on: [DialogueChoiceMade],
   priority: 0,

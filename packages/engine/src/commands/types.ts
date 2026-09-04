@@ -1,5 +1,6 @@
 import type { EntityId, Entity, ComponentDefinition } from '../core/types';
 import type { TypedEmit } from '../events/types';
+import type { OutputView } from '../systems/types';
 
 /**
  * 参数定义
@@ -75,6 +76,12 @@ export interface CommandContext<
   args: ParsedArgs<A>;
   /** 玩家实体ID */
   player: EntityId;
+  /**
+   * 输出通道（0.11 起）：命令可产出语义化输出（多段/对话/状态），
+   * 不再必须"返回一个 string"或"为一个事件写一个系统"。
+   * 铁律仍是**不改状态**——output 只写输出流，不碰组件。
+   */
+  output: OutputView;
   /** 世界接口 */
   world: {
     emit: TypedEmit;

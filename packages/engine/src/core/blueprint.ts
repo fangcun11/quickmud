@@ -27,21 +27,7 @@
 import type { ComponentDefinition, EntityId } from './types';
 import { trait } from './trait';
 import { Name } from './name';
-
-/**
- * 深拷贝（蓝图数据挂到实体前使用）
- *
- * 与快照恢复（restoreComponent）同一语义：蓝图是共享的纯数据定义，
- * 直接挂引用会让同蓝图多次 spawn 出的实体共享同一对象——改 A 的
- * 组件会"隔空"污染 B，也与「蓝图不可变」的承诺相悖。
- * structuredClone 不可用时 JSON 兜底。
- */
-function deepClone<T>(value: T): T {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(value);
-  }
-  return JSON.parse(JSON.stringify(value)) as T;
-}
+import { deepClone } from '../internal/clone';
 
 /** 蓝图组件项：trait 定义 + 实例数据（data 缺省用 trait 工厂默认值） */
 export interface BlueprintComponent<T = unknown> {

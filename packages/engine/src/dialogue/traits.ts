@@ -18,7 +18,6 @@
 import { trait } from '../core/trait';
 import { defineEvent } from '../events/define-event';
 import type { ComponentDefinition, EntityId } from '../core/types';
-import type { EventDefinition } from '../events/types';
 
 /** 对话选项 */
 export interface DialogueOption {
@@ -78,32 +77,20 @@ export const Memory: ComponentDefinition<MemoryData> = trait('memory', () => ({ 
 // ---------- 引擎内置对话事件 ----------
 
 /** 玩家主动搭话：{ player, npc } */
-export const DialogueTalk: EventDefinition<{
-  player: EntityId;
-  npc: EntityId;
-}> = defineEvent('dialogue:talk')<{
+export const DialogueTalk = defineEvent('dialogue:talk')<{
   player: EntityId;
   npc: EntityId;
 }>();
 
 /** 玩家选择了选项序号（1-based，对应展示时的编号）：{ player, npc, option } */
-export const DialogueChoose: EventDefinition<{
-  player: EntityId;
-  npc: EntityId;
-  option: number;
-}> = defineEvent('dialogue:choose')<{
+export const DialogueChoose = defineEvent('dialogue:choose')<{
   player: EntityId;
   npc: EntityId;
   option: number;
 }>();
 
 /** 选项生效（供游戏层效果系统订阅）：{ player, npc, optionText, remember } */
-export const DialogueChoiceMade: EventDefinition<{
-  player: EntityId;
-  npc: EntityId;
-  optionText: string;
-  remember?: string[];
-}> = defineEvent('dialogue:choice-made')<{
+export const DialogueChoiceMade = defineEvent('dialogue:choice-made')<{
   player: EntityId;
   npc: EntityId;
   optionText: string;

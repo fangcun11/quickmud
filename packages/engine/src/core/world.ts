@@ -2,6 +2,8 @@ import { EntityManager } from './entity';
 import { spawnBlueprint } from './blueprint';
 import type { EntityBlueprint, SpawnOptions } from './blueprint';
 import { Name } from './name';
+import { deepClone } from '../internal/clone';
+import { TICK_TOKEN } from '../events/tick';
 import { EventPump } from '../events/event-pump';
 import { OutputCollector } from '../output/output-collector';
 import { ENGINE_VERSION } from '../version';
@@ -9,8 +11,8 @@ import type { EntityId, ComponentDefinition, EventToken } from './types';
 import type { SystemDefinition, SystemContext } from '../systems/types';
 import type { SystemErrorRecord } from '../events/event-pump';
 
-/** every 系统收到的合成 tick 事件 token */
-export const TICK_TOKEN = 'engine:tick' as const;
+/** every 系统收到的合成 tick 事件 token（实现在 events/tick.ts，此处 re-export 保持 API 稳定） */
+export { TICK_TOKEN };
 import type { AnyCommand, CommandContext } from '../commands/types';
 import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
 import type { SnapshotData } from '../persistence/types';
@@ -22,14 +24,6 @@ type AnySystemDefinition = SystemDefinition<unknown> | SystemDefinition<any>;
 
 /** 默认 tick 间隔（毫秒）——测试工具与 World 构造共用同一来源 */
 export const DEFAULT_TICK_INTERVAL = 500;
-
-/** 深拷贝（快照冻结视图用：组件与延时事件载荷都必须与活世界切断引用） */
-function deepClone<T>(value: T): T {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(value);
-  }
-  return JSON.parse(JSON.stringify(value)) as T;
-}
 
 /**
  * 世界配置
@@ -89,9 +83,36 @@ export class World {
     this.systemErrorSink = [];
   }
 
-  /** 构建系统上下文（事件系统与 every 定时系统共用） */
-  private makeSystemContext(): SystemContext {
+  /** 构建系统上下文（事件系统与 every 定时系统共用）。
+   * context 是无状态视图（闭包只引用 World 自身），缓存单实例复用，
+   * 热路径不再每事件每系统重建一次全量对象。 */
+  private systemContext?: SystemContext;
+
+  /** 输出视图（SystemContext 与 CommandContext 共用同一形态） */
+  private makeOutputView() {
     return {
+      narrative: (textOrSegments: string | Segment[]) => {
+        if (typeof textOrSegments === 'string') {
+          this.output.narrative([{ text: textOrSegments }]);
+        } else {
+          this.output.narrative(textOrSegments);
+        }
+      },
+      dialogue: (textOrSegments: string | Segment[]) => {
+        if (typeof textOrSegments === 'string') {
+          this.output.dialogue([{ text: textOrSegments }]);
+        } else {
+          this.output.dialogue(textOrSegments);
+        }
+      },
+      error: (text: string) => this.output.error(text),
+      status: (data: unknown) => this.output.status(data),
+    };
+  }
+
+  private makeSystemContext(): SystemContext {
+    if (this.systemContext) return this.systemContext;
+    this.systemContext = {
       emit: this.makeEmit(),
       getEntity: (id: EntityId) => this.entities.get(id),
       getComponent: <T>(id: EntityId, component: ComponentDefinition<T>) =>
@@ -100,29 +121,13 @@ export class World {
         this.entities.findByComponent(component),
       spawn: (bp, opts) => this.spawn(bp, opts),
       destroy: (id) => this.entities.delete(id),
-      output: {
-        narrative: (textOrSegments: string | Segment[]) => {
-          if (typeof textOrSegments === 'string') {
-            this.output.narrative([{ text: textOrSegments }]);
-          } else {
-            this.output.narrative(textOrSegments);
-          }
-        },
-        dialogue: (textOrSegments: string | Segment[]) => {
-          if (typeof textOrSegments === 'string') {
-            this.output.dialogue([{ text: textOrSegments }]);
-          } else {
-            this.output.dialogue(textOrSegments);
-          }
-        },
-        error: (text: string) => this.output.error(text),
-        status: (data: unknown) => this.output.status(data),
-      },
+      output: this.makeOutputView(),
       after: (delayMs, definitionOrToken, data) => {
         const token = typeof definitionOrToken === 'string' ? definitionOrToken : definitionOrToken.token;
         this.eventPump.schedule(token, data, delayMs, this.timeMs);
       },
     };
+    return this.systemContext;
   }
 
   /** 类型化事件发射器（EventDefinition 或 token 皆可） */
@@ -275,6 +280,9 @@ export class World {
       raw: trimmed,
       args,
       player: playerId,
+      // 0.11：命令侧输出通道。铁律"命令不改状态"对输出放宽——
+      // 语义化输出（多段/对话/状态）不必再"为一个事件写一个系统"
+      output: this.makeOutputView(),
       world: {
         emit: this.makeEmit(),
         getEntity: (id: EntityId) => this.entities.get(id),
@@ -408,7 +416,6 @@ export class World {
     return {
       engineVersion: ENGINE_VERSION,
       tickCount: this.tickCount,
-      registry: {},
       entities,
       worldTime: this.timeMs,
       idCounter: this.entities.getIdCounter(),
@@ -526,9 +533,10 @@ export class World {
   private handleSystemError(system: AnySystemDefinition, error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
     if ((system.onError ?? 'propagate') === 'propagate') {
-      throw new Error(`Event handler error: ${message}`);
+      // { cause } 保留原始 error（与事件泵的错误包装一致）
+      throw new Error(`Event handler error: ${message}`, { cause: error });
     }
-    this.systemErrorSink.push({ token: TICK_TOKEN, message, policy: system.onError! });
+    this.systemErrorSink.push({ token: TICK_TOKEN, message, policy: system.onError!, cause: error });
     // degrade 对 every 系统同样生效：从后续 tick 中摘除
     if (system.onError === 'degrade') {
       this.systems = this.systems.filter((s) => s !== system);

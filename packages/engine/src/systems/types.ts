@@ -34,6 +34,19 @@ export interface SystemDefinition<T = unknown> {
 }
 
 /**
+ * 输出视图 - narrative/dialogue/error/status 的统一形态
+ *
+ * SystemContext 与 CommandContext 共用（0.11 起命令侧也有输出通道）：
+ * 字符串自动包装为单段 narrative/dialogue，Segment[] 原样透传。
+ */
+export interface OutputView {
+  narrative: (textOrSegments: string | Segment[]) => void;
+  dialogue: (textOrSegments: string | Segment[]) => void;
+  error: (text: string) => void;
+  status: (data: unknown) => void;
+}
+
+/**
  * 系统上下文 - 系统执行时的环境
  */
 export interface SystemContext {
@@ -53,12 +66,7 @@ export interface SystemContext {
   /** 销毁实体（死亡清场等）。注意：不级联清理其他实体的引用 */
   destroy: (id: EntityId) => boolean;
   /** 输出消息 */
-  output: {
-    narrative: (textOrSegments: string | Segment[]) => void;
-    dialogue: (textOrSegments: string | Segment[]) => void;
-    error: (text: string) => void;
-    status: (data: unknown) => void;
-  };
+  output: OutputView;
   /** 调度延时事件：delayMs 后以指定 token 触发（World.tick 驱动） */
   after: (delayMs: number, definitionOrToken: EventDefinition<unknown> | EventToken, data: unknown) => void;
 }

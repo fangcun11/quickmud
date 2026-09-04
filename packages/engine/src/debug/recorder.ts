@@ -122,11 +122,14 @@ export function firstDiff(a: unknown, b: unknown, path = ''): string | undefined
 export interface ReplayResult {
   /** true = 重放状态与录制时完全一致 */
   ok: boolean;
-  /** 重放后世界（ok 时即"复现成功"的世界，可继续用它调试） */
+  /** 重放后世界（ok 时即"复现成功"的世界，可继续用它调试；
+   * 版本不匹配时为未应用任何操作的初始世界） */
   world: World;
-  /** 首个分叉路径（仅 ok=false 时存在） */
+  /** 首个分叉路径（仅 ok=true 的内容分叉时存在；版本不匹配时为 undefined） */
   diff?: string;
-  /** 重放侧最终快照 */
+  /** true = 录像与当前引擎版本不一致，重放被拒绝（分叉比对无意义） */
+  versionMismatch?: boolean;
+  /** 重放侧最终快照（版本不匹配时为未重放的初始状态） */
   replaySnapshot: SnapshotData;
   /** 录制侧最终快照 */
   recordedSnapshot: SnapshotData;
@@ -135,11 +138,27 @@ export interface ReplayResult {
 /**
  * 重放并校验：重放后的全量快照与录制时的最终快照逐字段比对。
  * ok=false 时用 result.diff 定位首个分叉点。
+ *
+ * 版本护栏：录像的 engineVersion 与当前 ENGINE_VERSION 不一致时直接拒绝
+ * （versionMismatch: true、不执行重放）——跨版本的状态布局可能已变，
+ * 此时得出的"分叉"没有诊断价值，只会误导排查方向。
  */
 export async function verifyReplay(
   recording: Recording,
   build: () => World,
 ): Promise<ReplayResult> {
+  // 版本护栏：不一致时拒绝重放（分叉比对无意义），只构建世界供返回
+  if (recording.engineVersion !== ENGINE_VERSION) {
+    const untouched = build();
+    return {
+      ok: false,
+      versionMismatch: true,
+      world: untouched,
+      replaySnapshot: untouched.createSnapshot(),
+      recordedSnapshot: recording.finalSnapshot,
+    };
+  }
+
   const world = await replay(recording, build);
   const replaySnapshot = world.createSnapshot();
   const diff = firstDiff(recording.finalSnapshot, replaySnapshot);
