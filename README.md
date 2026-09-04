@@ -53,6 +53,36 @@ quickmud 的解法是把游戏拆成一条**单向流水线**，并让整条流�
 坐标和连线由 `layoutWorld()` 算出来；每个区域是一张独立平面，`map` 画当前区域、
 `worldmap` 画区域之间的连接，迷雾由 `Visited` 组件决定。
 
+第二个示例 `example/tide-cellar` 是一个**内容验证包**：三层三区域的小世界，
+把 v0.9 的房间行为 API（守卫、生命周期、房间心跳、区域实体状态）全部用上一遍：
+
+```
+> down
+你来到了台阶。
+十二级石阶。往下是地窖的黑暗，往上能看见井口割出来的一小块天。东边是闸门房，南边是蓄水池。
+
+> south
+水还漫着门槛，下去就是齐腰深——等退干净了再说。        ← canEnter 守卫：不落位
+
+> up
+退路被水封死了——台阶下面翻涌着黑水，你上不去。        ← canLeave 守卫：只封 up
+
+> turn
+你咬牙拧动铁轮，地下的水闸「哐」地落下一半——潮水再也漫不上来了，可它也退不干净：水位卡在门槛上，进蓄水池还是过不去。管口的汽也停了。
+
+> worldmap
+·
+
+@
+
+·
+图例：@ 当前位置 · 已探明区域（未探明区域留白）        ← 三层剖面：钟楼 / 废墟 / 地窖
+```
+
+潮汐水位挂在**区域实体**上而不是任何房间里，房间只在守卫和 `look` 里读它；
+关闸（`turn`）保住退路却进不去蓄水池，敲钟（`ring`）只开一个几秒的窗口——
+两条解法各管一头，缺一不可。详见 [example/tide-cellar](./example/tide-cellar/README.md)。
+
 ---
 
 ## 30 秒理解设计
@@ -174,8 +204,9 @@ buildRooms(world, layout);
 | 包 | 版本 | 说明 |
 | --- | --- | --- |
 | [`@mud/ecs-engine`](./packages/engine/README.md) | 0.6.0 | 引擎核心：ECS、事件泵、命令、快照/回滚、录像重放、确定性时钟、对话树。**零第三方依赖**，ESM + CJS 双产物 |
-| [`@mud/prefabs`](./packages/prefabs/README.md) | 0.6.0 | 领域预制件：移动/房间/地图、查看、物品/背包、战斗/掉落/死亡、任务、Buff、NPC 巡逻 |
+| [`@mud/prefabs`](./packages/prefabs/README.md) | 0.8.0 | 领域预制件：移动/房间/地图、查看、物品/背包、战斗/掉落/死亡、任务、Buff、NPC 巡逻 |
 | `example/mini-rpg` | — | 完整小游戏：村庄 → 森林 → 沼泽 → 洞穴，含战斗、掉落、双任务、地图迷雾 |
+| `example/tide-cellar` | — | 内容验证包：潮汐地窖，三层三区域 + 守卫 + 房间心跳 + 区域实体状态 |
 | `example/demo-adventure` | — | 引擎能力演示：对话树、物品、开发者命令、终端 REPL |
 
 ## 能力矩阵
@@ -207,7 +238,7 @@ buildRooms(world, layout);
 | [预制件 README](./packages/prefabs/README.md) | 领域件用法与已知边界 |
 | [文档示例](./docs/examples) | 6 个可运行示例，`strict` 类型检查 + 运行双验证 |
 | [CHANGELOG](./CHANGELOG.md) | 逐版本变更明细 |
-| [路线图](./docs) | `roadmap-0.6` ~ `roadmap-0.9` 的设计定稿与实现记录 |
+| [路线图](./docs) | `roadmap-0.6` ~ `roadmap-0.10` 的设计定稿与实现记录 |
 
 ## 设计取舍
 
@@ -219,18 +250,20 @@ buildRooms(world, layout);
   宁可启动时崩溃，也不运行时静默出错。
 - **零第三方依赖**。运行时与编译期都不依赖外部包——一个库最持久的部分是它没有的部分。
 - **暂不支持**：i18n、数据驱动内容加载（YAML 等，内容当前内联在代码中）、
-  多人联网、z 轴多层地图。
+  多人联网、纵向跨层地图的连接线绘制（层与层之间用 up/down 连通，但剖面图上暂以留白表示）。
 
 ## 开发
 
 ```bash
 pnpm install                    # 安装依赖
 pnpm build                      # 构建两个包（tsc + esbuild 双格式）
-pnpm test                       # 三包单测（engine 101 / prefabs 86 / mini-rpg 7）
+pnpm test                       # 全部单测（engine 101 / prefabs 134 / mini-rpg 7 / tide-cellar 10）
 pnpm test:contract              # ESM + CJS + TS strict 契约测试
 node docs/examples/verify-doc-examples.mjs   # 文档示例双验证
 
 pnpm --filter mini-rpg dev      # 试玩完整小游戏
+pnpm --filter tide-cellar dev   # 试玩潮汐地窖（内容验证包）
+pnpm --filter tide-cellar walk  # 潮汐地窖通关录像：八幕一路打到底
 pnpm --filter demo-adventure dev             # 试玩能力演示
 ```
 

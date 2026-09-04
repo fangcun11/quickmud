@@ -33,9 +33,36 @@ const OPPOSITE: Record<string, string> = {
   south: 'north',
   east: 'west',
   west: 'east',
+  up: 'down',
+  down: 'up',
+  in: 'out',
+  out: 'in',
+};
+
+/**
+ * 方向 id → 中文名（**只用于面向玩家的文案**）
+ *
+ * `Exits` 的键、命令动词、`MoveRequested.to` 一律是英文 id（机器真相），
+ * 但把 id 直接拼进中文句子会吐出「你不能往up走。」——拿 id 当文案是懒。
+ * 查不到就原样返回：自定义方向（比如 `enter`）不该因为这里缺表就变成空白。
+ */
+export const DIRECTION_LABELS: Record<string, string> = {
+  north: '北',
+  south: '南',
+  east: '东',
+  west: '西',
+  up: '上',
+  down: '下',
+  in: '里',
+  out: '外',
 };
 
 export { DIRS as DIRECTION_OFFSETS, OPPOSITE as OPPOSITE_DIRECTION };
+
+/** 方向的中文名（未知方向退回 id 本身，宁可露 id 也不说空话） */
+export function directionLabel(dir: string): string {
+  return DIRECTION_LABELS[dir] ?? dir;
+}
 
 export type { RoomDef };
 
@@ -347,12 +374,14 @@ export function renderAsciiMap(
     }
   }
 
-  // 坐标系按**全图**定 bounds（房间的相对位置必须固定，否则地图会随探索跳动），
-  // 只裁掉尾部空行——中间的空白行要保留，那是未探明区域
-  return grid
-    .map((row) => row.join('').replace(/\s+$/, ''))
-    .join('\n')
-    .replace(/\s+$/, '');
+  // 坐标系按**全图**定 bounds（房间的相对位置必须固定，否则地图会随探索跳动）。
+  // 只裁掉**首尾**的纯空行——中间的空白行要保留，那是未探明的位置。
+  // 空行不带任何字形，裁掉不影响已探明内容的相对位置；只裁尾部、放任首部
+  // 是不对称的漏裁（v0.10 内容包玩到纵向叠层才暴露：三层剖面图上方挂两行空）。
+  const lines = grid.map((row) => row.join('').replace(/\s+$/, ''));
+  while (lines.length > 0 && lines[0]!.trim() === '') lines.shift();
+  while (lines.length > 0 && lines[lines.length - 1]!.trim() === '') lines.pop();
+  return lines.join('\n');
 }
 
 /**

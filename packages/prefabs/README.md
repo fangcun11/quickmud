@@ -329,6 +329,26 @@ world.registerCommands(MapCommand, WorldMapCommand); // map=当前区域 / world
 `defineRoom` 的答案是：**行为是代码（回滚后重新可用），状态是数据（`state`
 组件，随快照走）**。跨房间的机制不要塞给单个房间——那是区域或全局系统的职责。
 
+## 文案与渲染修正（v0.10）
+
+v0.10 的内容包（`example/tide-cellar`）把 v0.9 的 API 玩了一遍，撞出两个
+只有真实消费者才暴露得出来的缺陷，都已修复：
+
+- **撞墙文案说人话**：拒绝移动时输出「你不能往**东**走。」，不再把方向 id
+  原样拼进中文句子（此前会吐出「你不能往up走。」）。新增导出：
+
+  ```ts
+  import { directionLabel, DIRECTION_LABELS } from '@mud/prefabs';
+
+  directionLabel('up');    // '上'
+  directionLabel('enter'); // 'enter'（未知方向退回 id 本身，不拦人说话）
+  ```
+
+- **ASCII 地图首尾裁剪对称**：`renderAsciiMap` 此前只裁尾部空行、放任首部，
+  纵向叠层的世界地图头顶会挂着几行纯空白。现在首尾的**纯空行**都裁掉
+  （空行不带字形，裁掉不影响已探明内容的相对位置）；中间的空白行照旧保留
+  ——那是未探明的位置，是信息。
+
 ## 开发
 
 ```bash

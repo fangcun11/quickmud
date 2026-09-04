@@ -61,6 +61,7 @@ import {
   containerOf,
 } from './queries.js';
 import { queryRoomGate } from './behavior.js';
+import { directionLabel } from './room.js';
 
 /**
  * 移动系统（v0.9-A 重写）：`MoveRequested` 的**唯一**订阅者
@@ -101,7 +102,8 @@ export const MovementSystem = defineSystem<{
     const exits = ctx.getComponent(from, Exits);
     const targetRoomId = exits?.[to];
     if (!targetRoomId) {
-      ctx.output.narrative(`你不能往${to}走。`);
+      // 方向 id 是机器真相，文案要说人话
+      ctx.output.narrative(`你不能往${directionLabel(to)}走。`);
       return;
     }
 

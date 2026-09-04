@@ -125,7 +125,8 @@ describe('prefabs 移动', () => {
     const { w, player } = buildWorld();
     await w.execute('go east', player);
     expect(w.entities.getComponent(player, Position)!.roomId).toBe('town_square');
-    expect(textOf(w.output.getAll(), 'narrative')[0]).toBe('你不能往east走。');
+    // 文案说人话：方向 id（east）不该原样拼进中文句子
+    expect(textOf(w.output.getAll(), 'narrative')[0]).toBe('你不能往东走。');
   });
 });
 

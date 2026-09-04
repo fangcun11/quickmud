@@ -62,6 +62,19 @@ describe('renderAsciiMap · 全图', () => {
   it('没有房间时返回空串', () => {
     expect(renderAsciiMap([])).toBe('');
   });
+
+  it('裁掉首尾的纯空行，保留中间的（v0.10 纵向叠层暴露的漏裁）', () => {
+    // 三间房南北向叠：a(0,-1) — b(0,0) — c(0,1)，网格五行
+    const layout = layoutRooms(
+      [r('a', { south: 'b' }), r('b', { north: 'a', south: 'c' }), r('c', { north: 'b' })],
+      { entry: 'b' },
+    );
+    // 只探明 b、c ⇒ a 那行纯空（a—b 的连线也不画，两端必须都探明），
+    // 若不裁首部，地图头顶挂两行空白
+    expect(renderAsciiMap(layout.rooms, { visited: ['b', 'c'], current: 'c' })).toBe('·\n│\n@');
+    // 全部探明 ⇒ 首行有字形，什么都不裁
+    expect(renderAsciiMap(layout.rooms)).toBe('·\n│\n·\n│\n·');
+  });
 });
 
 describe('renderAsciiMap · 迷雾', () => {
