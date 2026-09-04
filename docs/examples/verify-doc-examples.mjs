@@ -12,8 +12,8 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const examplesDir = join(dirname(fileURLToPath(import.meta.url)));
-const tsx = resolve(examplesDir, '../../example/demo-adventure/node_modules/.bin/tsx');
-const tsc = resolve(examplesDir, '../../packages/engine/node_modules/.bin/tsc');
+const tsx = resolve(examplesDir, '../../example/demo-adventure/node_modules/tsx/dist/cli.mjs');
+const tsc = resolve(examplesDir, '../../packages/engine/node_modules/typescript/bin/tsc');
 
 let failed = 0;
 const fail = (msg) => {
@@ -24,7 +24,7 @@ const fail = (msg) => {
 // 0. 类型检查先行（strict 编译不过 = 文档示例失效）
 console.log('▶ tsc 类型检查');
 try {
-  execSync(`${tsc} -p tsconfig.json --noEmit`, { stdio: 'inherit', cwd: examplesDir });
+  execSync(`node ${JSON.stringify(tsc)} -p tsconfig.json --noEmit`, { stdio: 'inherit', cwd: examplesDir });
   console.log('  tsc ✓');
 } catch {
   fail('示例类型检查失败');
@@ -35,7 +35,7 @@ const files = readdirSync(examplesDir).filter((f) => f.endsWith('.mts'));
 for (const file of files) {
   console.log(`\n▶ ${file}`);
   try {
-    execSync(`${tsx} ${join(examplesDir, file)}`, { stdio: 'inherit', cwd: examplesDir });
+    execSync(`node ${JSON.stringify(tsx)} ${JSON.stringify(join(examplesDir, file))}`, { stdio: 'inherit', cwd: examplesDir });
   } catch {
     fail(`${file} 运行失败`);
   }

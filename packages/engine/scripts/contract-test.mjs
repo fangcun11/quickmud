@@ -171,7 +171,7 @@ void nodeBackend;
       2,
     ),
   );
-  run('node_modules/.bin/tsc -p tsconfig.contract.json', { cwd: consumer });
+  run('node node_modules/typescript/bin/tsc -p tsconfig.contract.json', { cwd: consumer });
 
   console.log('\n✅ 外部消费者契约测试全部通过');
 } finally {
