@@ -1,5 +1,6 @@
 import type { EventToken, Entity, EntityId, ComponentDefinition } from '../core/types';
 import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
+import type { ScheduledEventHandle } from '../events/event-pump';
 import type { Segment } from '../output/types';
 import type { EntityBlueprint, SpawnOptions } from '../core/blueprint';
 
@@ -67,6 +68,11 @@ export interface SystemContext {
   destroy: (id: EntityId) => boolean;
   /** 输出消息 */
   output: OutputView;
-  /** 调度延时事件：delayMs 后以指定 token 触发（World.tick 驱动） */
-  after: (delayMs: number, definitionOrToken: EventDefinition<unknown> | EventToken, data: unknown) => void;
+  /**
+   * 调度延时事件：delayMs 后以指定 token 触发（World.tick 驱动）。
+   * 返回句柄可用于取消（0.12 起）。
+   */
+  after: (delayMs: number, definitionOrToken: EventDefinition<unknown> | EventToken, data: unknown) => ScheduledEventHandle;
+  /** 取消一个尚未触发的延时事件（幂等：已触发/已取消返回 false） */
+  cancel: (handle: ScheduledEventHandle) => boolean;
 }

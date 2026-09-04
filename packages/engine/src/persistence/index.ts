@@ -1,4 +1,4 @@
-export { SavePort, FsBackend, LocalStorageBackend } from './save-port';
+export { SavePort, LocalStorageBackend } from './save-port';
 export type {
   SnapshotData,
   SnapshotMigration,

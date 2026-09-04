@@ -4,7 +4,7 @@
  * 走标准 execute 流水线；组件缺失时友好反馈不炸
  */
 import { describe, it, expect } from 'vitest';
-import { World, createDeveloperCommands } from './index';
+import { World, registerDeveloperKit } from './index';
 import { trait } from './core/trait';
 
 const Position = trait('position', () => ({ roomId: 'hall' }));
@@ -13,7 +13,7 @@ const Name = trait('name', () => ({ text: '', aliases: [] as string[] }));
 
 function setup() {
   const w = new World();
-  w.registerCommands(...createDeveloperCommands());
+  registerDeveloperKit(w);
   const player = w.entities.createWithId('dev-player');
   w.entities.addComponent(player, Position, { roomId: 'hall' });
   w.entities.addComponent(player, Health, { current: 30, max: 100 });
@@ -50,7 +50,7 @@ describe('A4 开发者命令', () => {
 
   it('组件缺失时友好反馈，不抛错', async () => {
     const w = new World();
-    w.registerCommands(...createDeveloperCommands());
+    registerDeveloperKit(w);
     const bare = w.entities.createWithId('bare');
     expect(await w.execute('/tp anywhere', bare)).toContain('没有 position 组件');
     expect(await w.execute('/heal', bare)).toContain('没有 health 组件');
@@ -64,5 +64,33 @@ describe('A4 开发者命令', () => {
     w.entities.getComponent(player, Position)!.roomId = 'elsewhere';
     w.rollbackWorld(snap);
     expect(w.entities.getComponent(player, Position)!.roomId).toBe('dungeon');
+  });
+});
+
+describe('P1-6 开发者命令走事件（铁律示范位）', () => {
+  it('/tp /heal 只 emit 事件，写状态的是内置效果系统', async () => {
+    const { w, player } = setup();
+    await w.execute('/tp dungeon', player);
+    expect(w.eventPump.queueLength).toBe(0); // 事件链已排水
+
+    // 事件路径可观测：命令只翻译意图，效果系统消费事件
+    // （DevTeleported/DevHealed 的 token 见 developer.ts；此处经组件效果间接验证——
+    //   状态确实变了，而命令本身没有改组件的通道）
+    expect(w.entities.getComponent(player, Position)!.roomId).toBe('dungeon');
+
+    await w.execute('/heal', player);
+    expect(w.entities.getComponent(player, Health)!.current).toBe(100);
+  });
+
+  it('不注册效果系统时事件悬空，但命令不炸、状态不变（fail-safe）', async () => {
+    const { createDeveloperCommands } = await import('./index');
+    const w = new World();
+    w.registerCommands(...createDeveloperCommands()); // 只注册命令
+    const player = w.entities.createWithId('dev-player');
+    w.entities.addComponent(player, Position, { roomId: 'hall' });
+    w.entities.addComponent(player, Health, { current: 30, max: 100 });
+
+    expect(await w.execute('/tp dungeon', player)).toContain('hall → dungeon');
+    expect(w.entities.getComponent(player, Position)!.roomId).toBe('hall'); // 未落位
   });
 });

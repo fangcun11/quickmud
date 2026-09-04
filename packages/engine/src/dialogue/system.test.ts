@@ -142,6 +142,8 @@ describe('B2 对话系统与命令', () => {
     expect(w.entities.getComponent(npc, Memory)!.flags).toEqual(['asked_who', 'trusted']);
 
     // 重新搭话：打听传闻现在可见（requires: trusted）
+    // 0.12 起 execute 不再自动清空输出——段落边界显式清缓冲
+    w.output.clear();
     await w.execute('talk 酒保', player);
     const lines = textOf(w.output.getAll(), 'dialogue');
     expect(lines[0]).toBe('欢迎光临酒馆。');

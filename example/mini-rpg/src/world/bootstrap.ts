@@ -19,7 +19,7 @@ import {
   Name,
   trait,
   blueprint,
-  createDeveloperCommands,
+  registerDeveloperKit,
   createDialogueCommands,
   DialogueSystem,
   Dialogue,
@@ -114,9 +114,11 @@ export function bootstrap(): BootstrapResult {
     EndingSystem,
   );
 
-  // 注册命令：开发者 + 对话 + prefabs 通用 + 四方向 + help
+  // 开发者套件一步注册：命令 + 效果系统（0.12 起写状态走事件链）
+  registerDeveloperKit(world);
+
+  // 注册命令：对话 + prefabs 通用 + 四方向 + help
   world.registerCommands(
-    ...createDeveloperCommands(),
     ...createDialogueCommands(),
     GoCommand,
     LookCommand,

@@ -2,7 +2,7 @@
  * @mud/prefabs 集成测试：移动 / 查看 / 物品（Located 容器模型）/ 状态
  */
 import { describe, it, expect } from 'vitest';
-import { World, Name, createDeveloperCommands, record, verifyReplay } from '@mud/ecs-engine';
+import { World, Name, registerDeveloperKit, record, verifyReplay } from '@mud/ecs-engine';
 import type { OutputMessage } from '@mud/ecs-engine';
 import {
   MovementSystem,
@@ -44,8 +44,8 @@ function textOf(messages: OutputMessage[], kind: string): string[] {
 function buildWorld() {
   const w = new World({ tickInterval: 500 });
   w.register(MovementSystem, DescriptionSystem, ItemSystem);
+  registerDeveloperKit(w); // 开发者命令 + 效果系统（0.12 起写状态走事件链）
   w.registerCommands(
-    ...createDeveloperCommands(),
     GoCommand,
     createDirectionCommand('north', ['north', 'n', '北']),
     createDirectionCommand('south', ['south', 's', '南']),

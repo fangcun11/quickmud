@@ -5,7 +5,8 @@
 // 快照内的 engineVersion 字段会被覆写为它。
 import assert from 'node:assert';
 import { rm } from 'node:fs/promises';
-import { World, trait, SavePort, FsBackend } from '@mud/ecs-engine';
+import { World, trait, SavePort } from '@mud/ecs-engine';
+import { FsBackend } from '@mud/ecs-engine/node'; // 0.12 起 Node 专属后端拆至子路径
 
 console.log('imports ok');
 const Health = trait('health', () => ({ current: 100, max: 100 }));

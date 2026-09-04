@@ -15,13 +15,18 @@ world.output.error('这里过不去。');               // 错误（纯文本快
 world.output.status({ hp: 80 });                 // 状态数据（前端自行渲染）
 
 world.output.ofKind('narrative');   // 按种类取
-world.output.getAll();              // 全量消息
+world.output.getAll();              // 全量消息（不清空）
 world.output.count;                 // 条数
+world.drainOutput();                // 取走全部并复位缓冲（0.12 起）
 ```
 
 **为什么要收集而不是直接打印？——渲染与逻辑解耦。** 同一个世界，终端可以打印纯文本，
-Web 前端可以拿 `segments` 里的语义标签渲染颜色和动效。每次 `execute` 前输出自动清空，
-一轮输入对应一批输出。
+Web 前端可以拿 `segments` 里的语义标签渲染颜色和动效。
+
+**输出跨命令累积（0.12 起的行为）。** `execute` 不再自动清空输出——多次执行的
+消息都在缓冲里。单轮场景（每轮渲染后复位）用 `drainOutput()`：一次取走全部并清空，
+下一轮从干净状态开始；只读检查用 `getAll() / ofKind() / last()`。
+批量处理、回合结算等"攒一批再渲染"的场景直接受益。
 
 ## 消息的形状
 

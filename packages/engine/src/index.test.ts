@@ -8,7 +8,8 @@ import { defineEvent } from './events/define-event';
 import { defineSystem } from './systems/define-system';
 import { defineCommand } from './commands/define-command';
 import { beforeAll, afterAll } from 'vitest';
-import { FsBackend, SavePort } from './persistence/save-port';
+import { FsBackend } from './persistence/fs-backend';
+import { SavePort } from './persistence/save-port';
 import type { SnapshotData } from './persistence/types';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
@@ -316,11 +317,22 @@ describe('MUD Engine', () => {
   });
 
   it('R2: createTestWorld entities 夹具支持固定 id（不再被静默丢弃）', () => {
+    // 元组形态（0.12 起推荐）：用 trait 定义挂载，data 省略时用组件默认值
     const w = createTestWorld({
-      entities: [{ id: 'hero', components: { [Health.id]: { current: 10, max: 10 } } }],
+      entities: [
+        { id: 'hero', components: [[Health, { current: 10, max: 10 }]] },
+        { id: 'fresh', components: [[Health]] },
+      ],
     });
     expect(w.entities.has('hero')).toBe(true);
     expect(w.entities.getComponent('hero', Health)).toEqual({ current: 10, max: 10 });
+    expect(w.entities.getComponent('fresh', Health)).toEqual({ current: 100, max: 100 });
+
+    // 哈希形态（兼容旧写法）：按确定性 id 直存
+    const w2 = createTestWorld({
+      entities: [{ id: 'hero2', components: { [Health.id]: { current: 10, max: 10 } } }],
+    });
+    expect(w2.entities.getComponent('hero2', Health)).toEqual({ current: 10, max: 10 });
   });
 
   /* ---------- V1 v0.5.0：系统内造物与销毁 ---------- */

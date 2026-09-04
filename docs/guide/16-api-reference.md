@@ -39,15 +39,18 @@
 | --- | --- | --- |
 | `defineEvent(name)<T>()` | 事件定义（柯里化：名字字面量 → 载荷） | [04](./04-events.md) |
 | `defineSystem({ name?, on?, priority?, every?, onError?, handle })` | 系统定义（on 传事件定义 → 类型贯通） | [05](./05-systems.md) |
+| `ctx.after(delayMs, defOrToken, data)` → `ScheduledEventHandle` / `ctx.cancel(handle)` | 延时调度与幂等取消（0.12 起） | [05](./05-systems.md) |
 | `defineCommand({ verbs, abbrev?, args?, handle })` | 命令定义（args 类型自动推导） | [06](./06-commands.md) |
-| `createDeveloperCommands()` | `/tp` `/heal` `/dev-help` | [06](./06-commands.md) |
+| `registerDeveloperKit(world)` | 开发者套件一步注册：命令 + 效果系统（0.12 起） | [06](./06-commands.md) |
+| `createDeveloperCommands()` | 仅命令组（效果系统不注册时状态不落） | [06](./06-commands.md) |
 
 ### 输出
 
 | API | 说明 | 详 |
 | --- | --- | --- |
 | `world.output.narrative / dialogue / error / status / title / prompt / system` | 各类输出 | [07](./07-output.md) |
-| `world.output.ofKind(kind)` / `.getAll()` / `.count` | 读取 | [07](./07-output.md) |
+| `world.output.ofKind(kind)` / `.getAll()` / `.count` | 读取（不清空） | [07](./07-output.md) |
+| `world.drainOutput()` | 取走全部输出并复位缓冲（0.12 起；execute 不再自动清空） | [07](./07-output.md) |
 | `renderAnsi(msgs, opts?)` / `renderSemanticHtml(msgs)` / `renderPlainText(msgs)` | 三种渲染纯函数 | [07](./07-output.md) |
 | `s(text)` / `seg(text, style?)` | 段落构造快捷函数 | [07](./07-output.md) |
 
@@ -57,7 +60,7 @@
 | --- | --- | --- |
 | `new SavePort(backend, version)` | `save / load / exists / delete` | [12](./12-save-rollback.md) |
 | `save.registerMigrations(...)` | 版本迁移链 | [12](./12-save-rollback.md) |
-| `FsBackend` / `LocalStorageBackend` | Node / 浏览器 | [12](./12-save-rollback.md) |
+| `FsBackend`（`@mud/ecs-engine/node`） / `LocalStorageBackend` | Node 子路径 / 浏览器 | [12](./12-save-rollback.md) |
 
 ### 确定性
 
@@ -81,7 +84,8 @@
 
 | API | 说明 | 详 |
 | --- | --- | --- |
-| `createTestWorld({ systems?, commands?, entities?, clock?, tickInterval? })` | 测试世界 | [14](./14-testing.md) |
+| `createTestWorld({ systems?, commands?, entities?, clock?, tickInterval? })` | 测试世界（夹具支持元组形态 `[[Comp, data?]]`） | [14](./14-testing.md) |
+| `w.run(input, player)` / `w.emit(Def, data)` / `TestWorld.wrap(world)` | 执行 / 事件直传 / 接手既有世界探针（0.12 起） | [14](./14-testing.md) |
 | `w.emit(token, data)` / `w.runChain()` / `w.getLog()` | 驱动与断言 | [14](./14-testing.md) |
 | `w.tick(n)` / `w.advance(ms)` / `w.currentTime` | 推进世界时间 | [14](./14-testing.md) |
 | `ManualClock`（可选注入） | `advance(ms)` 驱动世界时间并同步读数；未注入时自动创建 | [14](./14-testing.md) |

@@ -109,6 +109,17 @@ export class OutputCollector {
   }
 
   /**
+   * 取走全部消息并清空（0.12 起）
+   *
+   * World.execute 不再自动 clear（多命令输出累积是合法形态——
+   * 批量处理/回合结算场景依赖它）；消费者用 drain 显式接管：
+   * 一次取走全部并复位缓冲，比 getAll()+clear() 少一次拷贝。
+   */
+  drain(): OutputMessage[] {
+    return this.messages.splice(0);
+  }
+
+  /**
    * 获取消息数量
    */
   get count(): number {

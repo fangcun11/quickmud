@@ -16,7 +16,7 @@ export { TICK_TOKEN };
 import type { AnyCommand, CommandContext } from '../commands/types';
 import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
 import type { SnapshotData } from '../persistence/types';
-import type { Segment } from '../output/types';
+import type { Segment, OutputMessage } from '../output/types';
 
 /** 任意泛型参数的系统定义（register 运行时入口用；唯一豁免点） */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,6 +63,9 @@ export class World {
     this.entities = new EntityManager();
     this.eventPump = new EventPump({
       maxEventsPerCommand: config?.maxEventsPerCommand,
+      // 事件 timestamp 统一为入队时的世界时间（0.12 起）；
+      // beforeSave/restore 时 timeMs 随快照回放，timestamp 天然随之走
+      now: () => this.timeMs,
     });
     this.output = new OutputCollector();
     this.tickInterval = config?.tickInterval ?? DEFAULT_TICK_INTERVAL;
@@ -124,8 +127,9 @@ export class World {
       output: this.makeOutputView(),
       after: (delayMs, definitionOrToken, data) => {
         const token = typeof definitionOrToken === 'string' ? definitionOrToken : definitionOrToken.token;
-        this.eventPump.schedule(token, data, delayMs, this.timeMs);
+        return this.eventPump.schedule(token, data, delayMs, this.timeMs);
       },
+      cancel: (handle) => this.eventPump.cancel(handle),
     };
     return this.systemContext;
   }
@@ -247,8 +251,9 @@ export class World {
    */
   async execute(input: string, playerId: EntityId): Promise<string | null> {
     // 重置事件计数
+    // 0.12 起不再自动清空输出——多次 execute 的输出累积（批量处理/
+    // 回合结算依赖它）；消费者用 drainOutput() 显式取走
     this.eventPump.resetEventCount();
-    this.output.clear();
 
     // 解析输入
     const trimmed = input.trim();
@@ -303,6 +308,17 @@ export class World {
 
     // 返回 null，输出由事件链产出
     return null;
+  }
+
+  /**
+   * 取走并清空累计输出（0.12 起）
+   *
+   * execute 不再每次自动清空（输出跨命令累积），宿主在渲染时机
+   * 显式 drain——一次拿走全部消息并复位缓冲。
+   * 只读检查可用 output.getAll()/ofKind()/last()（不清空）。
+   */
+  drainOutput(): OutputMessage[] {
+    return this.output.drain();
   }
 
   /**

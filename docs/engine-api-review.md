@@ -148,3 +148,24 @@ BuffCleanupSystem 的单事件断言与 3 处 every 载荷断言），examples �
   `const TName` 推断字面量、第二层显式载荷，P1-1 完整达成。
 
 第二批（P0-2/P1-3/P1-4/P1-5/P1-6/P3-8）仍待拍板。
+
+---
+
+## 实施状态（v0.12.0 收口，2026-09-04）
+
+**第二批已全部落地**（CHANGELOG `[0.12.0]`，engine 0.8.0 / prefabs 停 0.9.0）：
+P0-2、P1-3、P1-4、P1-5、P1-6、P3-8 ✓。红测试先行（timestamp/cancel/dev 命令
+事件化三组先写先失败），实现后 277 例全绿（engine 126 / prefabs 134 /
+examples 17）+ 文档示例双验证 10/10 + 外部消费者契约测试（`./node` 子路径
+三路覆盖）通过。
+
+两处与报告建议的偏差：
+
+- **P1-5 取"增强"而非"重做"**。报告痛点 ①~⑤ 全部解决（元组夹具、`run`
+  委托、`emit(EventDef)` 重载、`emitImmediate` 进日志、`TestWorld.wrap`
+  接手 fork 产物），但保留 TestWorld 现有骨架与哈希夹具兼容——重做
+  成本高、收益集中在缺失能力上。
+- **P1-6 事件 token 命名跟随 prefabs 惯例**（`dev_teleported`/`dev_healed`
+  snake_case），事件定义与效果系统从 `commands/developer.ts` 导出、经
+  `registerDeveloperKit(world)` 一步装配；只注册命令组时事件悬空、状态不落
+  （fail-safe），比报告设想的"文档豁免"更彻底地落实了铁律。

@@ -2,6 +2,93 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.12.0] - 2026-09-04
+
+主题：**引擎 API 审查修复（第二批）**——全部有行为变化（P0-2/P1-3/P1-4/
+P1-5/P1-6/P3-8）。三处 breaking（输出累积、FsBackend 子路径、开发者命令
+事件化）随 0.x minor 发布，均附迁移说明；`@mud/prefabs` 停在 0.9.0
+（仅测试适配，API 无变化）。
+
+### 事件 timestamp 统一为世界毫秒（@mud/ecs-engine 0.8.0，审查 P0-2）
+
+- 此前普通事件的 `timestamp` 是泵内部单调计数器（0,1,2…），TICK 事件却是
+  世界毫秒——同一张事件日志两套时间轴。现在 World 构造时向事件泵注入
+  `now: () => this.timeMs`，**所有事件的 timestamp 统一为入队时的世界毫秒**；
+  `EventPump` 独立使用（脱离 World）仍保持单调计数器语义，确定性不受影响
+- timestamp 此前无消费者，属纯语义修正，无下游破坏
+
+### 延时事件可取消（@mud/ecs-engine 0.8.0，审查 P1-4）
+
+- `ctx.after(...)` 返回**句柄** `ScheduledEventHandle { id }`（纯数据，
+  可存进组件、随快照走）；`ctx.cancel(handle)` 幂等取消——已触发、已取消、
+  句柄不属于本世界时返回 `false`
+- 取消只是打标记：标记随 scheduled 进快照，回滚/录像重放/分叉后语义保持；
+  到点的已取消事件直接丢弃——不 emit、不占事件预算
+- 快照 `PendingEvent` 新增可选 `id`/`cancelled` 字段；**旧快照无 id 时恢复
+  时自动分配新 id**（旧档没有句柄，不损失任何语义），idSeq 推进到已恢复的
+  最大 id 之后，保证后续新调度不撞号
+
+### 开发者命令走事件（@mud/ecs-engine 0.8.0，breaking，审查 P1-6）
+
+- `/tp` `/heal` 改为**只翻译意图**：读状态拼反馈文案 + emit 新事件
+  `dev_teleported` / `dev_healed`（`DevTeleported` / `DevHealed` 类型化定义
+  导出）；写状态的是引擎内置 `DeveloperEffectSystem`——"改状态的唯一通道
+  是系统"铁律的第一示范位不再是反面教材，顺带消除 4 处 `as never`
+- **breaking**：`createDeveloperCommands()` 只给命令、不给效果系统——
+  事件悬空时反馈照给、**状态不落**（fail-safe）。迁移：改用
+  `registerDeveloperKit(world)` 一步注册命令 + 效果系统（约一行替换）
+- 事件路径可观测：`/tp` 的传送意图出现在 `w.eventLog`，可断言
+
+### FsBackend 拆 Node 子路径（@mud/ecs-engine 0.8.0，breaking，审查 P3-8）
+
+- **breaking**：`FsBackend` 从主入口移除，归位 `@mud/ecs-engine/node` 子路径——
+  主入口保持浏览器可安全引用（此前带着动态 `import('node:fs')`，打包不报错、
+  运行时调用才炸）。`SavePort` / `LocalStorageBackend` 仍在主入口
+- 迁移（一行）：
+
+  ```ts
+  // 旧
+  import { SavePort, FsBackend } from '@mud/ecs-engine';
+  // 新
+  import { SavePort } from '@mud/ecs-engine';
+  import { FsBackend } from '@mud/ecs-engine/node';
+  ```
+
+- 构建矩阵新增 node 入口（ESM + CJS + d.ts）；外部消费者契约测试同步——
+  ESM 运行时、CJS require、strict tsc（Node16 解析）三路覆盖 `./node` 子路径
+
+### execute 不再自动清空输出（@mud/ecs-engine 0.8.0，breaking，审查 P1-3）
+
+- **breaking**：`world.execute()` 开头的 `output.clear()` 删除——多轮执行的
+  输出在缓冲里**累积**（批量处理、回合结算场景的直接受益者）；消费者用
+  新增的 `world.drainOutput(): OutputMessage[]` 一次取走全部并复位
+  （`OutputCollector.drain()` 比 getAll()+clear() 少一次拷贝）
+- 迁移：单轮"每轮渲染后复位"的宿主，在渲染时机显式 `drainOutput()`；
+  测试里依赖"缓冲只有本轮"的索引型断言（`ofKind(...)[0]`、`toEqual` 全量）
+  在段落边界补 `output.clear()` 或 `drainOutput()`——`toContain` 类断言天然免疫
+- 引擎/示例同步：guide 06/07/16 章更新语义，08 示例借机演示 `drainOutput`
+
+### TestWorld 探针增强（@mud/ecs-engine 0.8.0，审查 P1-5）
+
+- `w.run(input, player)`：`world.execute` 直通委托，不再 `w.world.execute` 两跳
+- `w.emit(Healed, {...})`：接受 `EventDefinition`（类型贯通），token 字符串照旧
+- **`emitImmediate` 路径进 eventLog**：此前 monkey-patch 只包了 `emit`，
+  DFS 立即传播的事件对日志隐形
+- `TestWorld.wrap(world)` / `fromWorld`：接手既有世界（fork 产物、已组装完毕的
+  世界）为探针形态——eventLog 拦截、clock 接管、`run/emit` 便利全套照装，
+  系统/命令/实体不重复注册
+- 夹具 `entities[].components` 支持**元组形态** `[[Health, { current: 30 }]]`
+  （走 addComponent 正路，data 省略用组件默认值；哈希形态 `{ [Health.id]: ... }`
+  仍兼容）
+
+### 适配与文档
+
+- `@mud/prefabs` 0.9.0：prefabs.test.ts 夹具改用 `registerDeveloperKit`
+- 3 个示例应用（mini-rpg / tide-cellar / demo-adventure）bootstrap 迁移
+- guide 05（cancel 句柄）/06（开发者套件）/07（输出累积与 drainOutput）/
+  12（FsBackend 子路径）/14（TestWorld 新能力）/16（速查表）章同步；
+  主 README 包表 0.8.0
+
 ## [0.11.0] - 2026-09-04
 
 主题：**引擎 API 审查修复（第一批）**。对 `packages/engine` 全量审查

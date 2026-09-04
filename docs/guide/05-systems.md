@@ -63,11 +63,21 @@ assert.strictEqual(rainCount, 2, `every:300 在 700ms 内触发 2 次：${fired.
 assert.ok(fired.includes('boom@hall'), 'after 延时事件到点触发');
 ```
 
+延时事件返回**句柄**，随时可取消（0.12 起）——取消只是打标记，随快照走，
+回滚/录像/分叉后语义保持；已触发或已取消时 `cancel` 返回 `false`（幂等无害）：
+
+```ts
+const fuse = ctx.after(3000, Explosion, { room: 'hall' });
+ctx.cancel(fuse); // 拆除引信：到点不再触发、不占事件预算
+```
+
 要点：
 
 - **世界时间是唯一时钟**——`Date.now` 被禁用，测试里 `clock.advance(ms)` 真实驱动
   tick（见 [14 测试](./14-testing.md)）。
 - `every` 与 `after` 的计时全部进快照：存档、回滚、录像重放、fork 后定时行为依然一致。
+- `ctx.after` 返回句柄（`ScheduledEventHandle`），`ctx.cancel(handle)` 幂等取消；
+  句柄是纯数据，可以存进组件、随快照走（0.12 起）。
 
 ## 错误策略：一个系统炸了，不炸整条链
 

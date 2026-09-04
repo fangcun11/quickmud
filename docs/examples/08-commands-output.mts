@@ -43,6 +43,7 @@ const player = w.entities.createWithId('player-1');
 w.entities.addComponent(player, Name, { text: '勇者', aliases: [] });
 
 // 按声明顺序依次吃词；entity 类型给的是原始词（要实体用 world.findEntity）
+// （新建世界首轮 execute 前缓冲为空，[0] 即本轮消息；多轮场景见下文 drainOutput）
 await w.world.execute('probe move north 金币 酒保 剩下的全都进 note', player);
 const status = w.world.output.ofKind('status')[0];
 assert.deepEqual(status!.meta, {
@@ -54,6 +55,9 @@ assert.deepEqual(status!.meta, {
 });
 
 // 词不够时：word/direction/rest 缺省 ''，entity/optional_entity 缺省 null
+// 0.12 起 execute 不再自动清空输出：多轮输出在缓冲里累积，
+// 渲染/断言完一轮就用 drainOutput() 取走全部并复位——下一轮从干净状态开始
+w.world.drainOutput();
 await w.world.execute('probe', player);
 assert.deepEqual(w.world.output.ofKind('status')[0]!.meta, {
   action: '',
@@ -64,12 +68,13 @@ assert.deepEqual(w.world.output.ofKind('status')[0]!.meta, {
 });
 
 // ---- 3. 返回串进反馈，output 消息进输出流，两不耽误 ----
+w.world.drainOutput();
 const feedback = await w.world.execute('score', player);
 assert.strictEqual(feedback, '—— score 完毕 ——');
 assert.deepEqual(
   w.world.output.getAll().map((m) => m.kind),
   ['narrative', 'error'],
-  'execute 前输出自动清空，本轮只有 score 写入的两条',
+  'drainOutput() 接管后，缓冲里只有本轮 score 写入的两条',
 );
 assert.strictEqual(
   w.world.output.ofKind('narrative')[0]!.segments[0]!.text,

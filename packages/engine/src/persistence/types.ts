@@ -40,6 +40,10 @@ export interface PendingEvent {
   token: string;
   data: unknown;
   triggerAt: number;
+  /** 调度句柄 id（0.12 起）：随快照持久化，cancel 靠它定位；旧快照无此字段 */
+  id?: number;
+  /** 已取消标记（0.12 起）：到点丢弃、不 emit、不占预算 */
+  cancelled?: boolean;
 }
 
 /**

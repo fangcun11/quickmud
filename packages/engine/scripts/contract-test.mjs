@@ -49,7 +49,8 @@ try {
   step('ESM 运行时冒烟');
   await writeFile(
     join(consumer, 'smoke-esm.mjs'),
-    `import { World, Name, trait, defineEvent, defineSystem, defineCommand, SavePort, FsBackend } from '@mud/ecs-engine';
+    `import { World, Name, trait, defineEvent, defineSystem, defineCommand, SavePort } from '@mud/ecs-engine';
+import { FsBackend } from '@mud/ecs-engine/node';
 import assert from 'node:assert';
 import { join } from 'node:path';
 
@@ -106,10 +107,12 @@ console.log('ESM 契约 ✓');
   await writeFile(
     join(consumer, 'smoke-cjs.cjs'),
     `const engine = require('@mud/ecs-engine');
+const nodeBackend = require('@mud/ecs-engine/node');
 const assert = require('node:assert');
-for (const name of ['World', 'trait', 'defineEvent', 'defineSystem', 'defineCommand', 'SavePort', 'FsBackend']) {
+for (const name of ['World', 'trait', 'defineEvent', 'defineSystem', 'defineCommand', 'SavePort']) {
   assert.strictEqual(typeof engine[name], 'function', \`missing export: \${name}\`);
 }
+assert.strictEqual(typeof nodeBackend.FsBackend, 'function', 'missing export: node/FsBackend');
 const world = new engine.World({ seed: 1 });
 assert.ok(world, 'CJS 可实例化');
 console.log('CJS 契约 ✓');
@@ -122,6 +125,7 @@ console.log('CJS 契约 ✓');
   await writeFile(
     join(consumer, 'contract.ts'),
     `import { defineCommand, defineEvent, trait, type ParsedArgs } from '@mud/ecs-engine';
+import type { FsBackend } from '@mud/ecs-engine/node';
 
 const Health = trait('health', () => ({ current: 100, max: 100 }));
 const Look = defineEvent('look')<{ entity: string; target?: string }>();
@@ -144,6 +148,9 @@ const probe: LookArgs = { target: null };
 void probe;
 void LookCommand;
 void Health;
+// node 子路径类型在 Node16 解析下可达（仅类型面验证，运行时见 smoke-esm）
+declare const nodeBackend: FsBackend;
+void nodeBackend;
 `,
   );
   await writeFile(

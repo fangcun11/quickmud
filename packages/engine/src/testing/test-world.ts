@@ -3,7 +3,8 @@ import { EntityManager } from '../core/entity';
 import { OutputCollector } from '../output/output-collector';
 import type { SystemDefinition } from '../systems/types';
 import type { AnyCommand } from '../commands/types';
-import type { EventToken } from '../core/types';
+import type { ComponentDefinition, EntityId, EventToken } from '../core/types';
+import type { EventDefinition } from '../events/types';
 
 /**
  * 手动时钟 - 用于测试的时间控制
@@ -63,15 +64,31 @@ export class ManualClock {
  * 构造器与 createTestWorld 工厂共用此类型——
  * 两处各写一份签名曾导致 commands 在工厂侧丢失（类型未兑现运行时能力）。
  */
+/**
+ * 实体夹具的组件形态：
+ * - **元组（推荐）**：`[[Health, { current: 10 }]]`——直接用 trait 定义挂载，
+ *   走 addComponent 正路（类型贯通，data 省略时用组件默认值）；
+ * - **哈希（兼容旧写法）**：`{ [Health.id]: { current: 10 } }`——按确定性 id 直存。
+ */
+export type EntityComponentsFixture =
+  | Record<string, unknown>
+  | ReadonlyArray<readonly [ComponentDefinition<unknown>, unknown?]>;
+
 export interface TestWorldConfig {
   // 与 World.register 同款收敛点：系统是"任一具体载荷"的定义，而非仅 unknown
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   systems?: Array<SystemDefinition<unknown> | SystemDefinition<any>>;
   commands?: AnyCommand[];
-  entities?: Array<{ id?: string; components?: Record<string, unknown> }>;
+  entities?: Array<{ id?: string; components?: EntityComponentsFixture }>;
   clock?: ManualClock;
   /** tick 间隔（毫秒）；省略则用引擎默认（500） */
   tickInterval?: number;
+  /**
+   * 接手既有世界（0.12 起）：如 fork() 产物。提供时跳过新建/注册/夹具，
+   * 只装探针（eventLog 拦截与 clock 接管照常）——
+   * 便利入口见 TestWorld.wrap / TestWorld.fromWorld。
+   */
+  world?: World;
 }
 
 /**
@@ -81,14 +98,14 @@ export interface TestWorldConfig {
  * ```typescript
  * const w = createTestWorld({
  *   systems: [CombatSystem],
- *   entities: [goblinFixture],
+ *   entities: [{ id: 'goblin', components: [[Health, { current: 30 }]] }],
  *   clock: manualClock,
  * })
  *
- * w.emit(AttackCommand, { attacker: player, target: goblin })
+ * w.emit(Attack, { attacker: player, target: goblin })  // 事件定义直传（0.12 起）
  * w.runChain()
  *
- * expect(w.eventLog).toEqual([AttackCommand, Damage])
+ * expect(w.eventLog).toEqual([Attack.token])
  * expect(goblin.get(Health)!.current).toBe(0)
  * ```
  */
@@ -111,44 +128,61 @@ export class TestWorld {
   constructor(config: TestWorldConfig) {
     this.clock = config.clock ?? new ManualClock();
     this.tickInterval = config.tickInterval ?? DEFAULT_TICK_INTERVAL;
-    this.world = new World({ tickInterval: this.tickInterval });
-    // 兑现"手动时钟"承诺：clock 推进即驱动世界（every 系统 / 延时事件随之触发）
-    this.clock.attachSink((ms) => this.advance(ms));
+    // 接手模式（config.world）：跳过新建/注册/夹具，只装探针——
+    // fork 产物、已组装完毕的世界直接获得 TestWorld 全套便利
+    this.world = config.world ?? new World({ tickInterval: this.tickInterval });
+    if (!config.world) {
+      // 兑现"手动时钟"承诺：clock 推进即驱动世界（every 系统 / 延时事件随之触发）
+      this.clock.attachSink((ms) => this.advance(ms));
 
-    // 注册系统
-    if (config.systems) {
-      this.world.register(...config.systems);
-    }
+      // 注册系统
+      if (config.systems) {
+        this.world.register(...config.systems);
+      }
 
-    // 注册命令
-    if (config.commands) {
-      this.world.registerCommands(...config.commands);
-    }
+      // 注册命令
+      if (config.commands) {
+        this.world.registerCommands(...config.commands);
+      }
 
-    // 创建测试实体
-    if (config.entities) {
-      for (const entityDef of config.entities) {
-        // 固定 id 应被尊重（此前被静默丢弃、一律 create() 计数 id）
-        const id = entityDef.id
-          ? this.world.entities.createWithId(entityDef.id)
-          : this.world.entities.create();
-        if (entityDef.components) {
-          for (const [componentId, data] of Object.entries(entityDef.components)) {
-            // 暂时直接存储组件数据
-            const entity = this.world.entities.get(id);
-            if (entity) {
-              entity.components.set(componentId, data);
+      // 创建测试实体
+      if (config.entities) {
+        for (const entityDef of config.entities) {
+          // 固定 id 应被尊重（此前被静默丢弃、一律 create() 计数 id）
+          const id = entityDef.id
+            ? this.world.entities.createWithId(entityDef.id)
+            : this.world.entities.create();
+          if (entityDef.components) {
+            if (Array.isArray(entityDef.components)) {
+              // 元组形态：走 addComponent 正路（data 省略时用组件默认值）
+              for (const [definition, data] of entityDef.components) {
+                this.world.entities.addComponent(id, definition, data);
+              }
+            } else {
+              // 哈希形态（兼容旧写法）：按确定性 id 直存
+              for (const [componentId, data] of Object.entries(entityDef.components)) {
+                const entity = this.world.entities.get(id);
+                if (entity) {
+                  entity.components.set(componentId, data);
+                }
+              }
             }
           }
         }
       }
     }
 
-    // 拦截事件泵以记录事件日志
+    // 拦截事件泵以记录事件日志——emit 与 emitImmediate 两条路径都要拦，
+    // 否则 DFS 传播的事件对 eventLog 隐形（0.12 起补齐）
     const originalEmit = this.world.eventPump.emit.bind(this.world.eventPump);
     this.world.eventPump.emit = <T>(token: EventToken, data: T, timestamp?: number) => {
       this._eventLog.push(token);
       originalEmit(token, data, timestamp);
+    };
+    const originalEmitImmediate = this.world.eventPump.emitImmediate.bind(this.world.eventPump);
+    this.world.eventPump.emitImmediate = <T>(token: EventToken, data: T, timestamp?: number) => {
+      this._eventLog.push(token);
+      originalEmitImmediate(token, data, timestamp);
     };
   }
 
@@ -197,9 +231,21 @@ export class TestWorld {
    *
    * 构造器已包装 eventPump.emit 统一记录日志，这里直接转发即可——
    * 不要再次 push，否则与命令路径（只记一次）语义不一致。
+   * 0.12 起接受 EventDefinition（类型贯通，推荐）或 token 字符串。
    */
-  emit<T>(token: EventToken, data: T): void {
+  emit<T>(definition: EventDefinition<T>, data: T): void;
+  emit<T>(token: EventToken, data: T): void;
+  emit<T>(definitionOrToken: EventDefinition<T> | EventToken, data: T): void {
+    const token = typeof definitionOrToken === 'string' ? definitionOrToken : definitionOrToken.token;
     this.world.eventPump.emit(token, data);
+  }
+
+  /**
+   * 执行玩家输入（0.12 起）——world.execute 的直通委托。
+   * 测试里不再需要 `w.world.execute(...)` 的两跳。
+   */
+  run(input: string, playerId: EntityId): Promise<string | null> {
+    return this.world.execute(input, playerId);
   }
 
   /**
@@ -246,6 +292,32 @@ export class TestWorld {
    */
   clearLog(): void {
     this._eventLog = [];
+  }
+
+  /**
+   * 包装既有世界为探针形态（0.12 起）
+   *
+   * 典型用途：`TestWorld.wrap(world.fork())`——fork 产物获得 eventLog
+   * 拦截、clock 接管与 run/emit 便利；系统/命令/实体随 fork 继承，
+   * 不重复注册。普通世界同样适用（如主世界已组装完毕的场景）。
+   *
+   * 注意：接手世界拿不到私有 tickInterval，advance() 的 tick 预算
+   * 按显式 `config.tickInterval`（或引擎默认 500）估算——真实间隔
+   * 与预算基数不符时预算会偏松/偏紧，但只影响护栏数值不影响正确性。
+   */
+  static wrap(
+    world: World,
+    config?: Pick<TestWorldConfig, 'clock' | 'tickInterval'>,
+  ): TestWorld {
+    return new TestWorld({ ...config, world });
+  }
+
+  /** wrap 的别名——fork 世界探针的常用叫法 */
+  static fromWorld(
+    world: World,
+    config?: Pick<TestWorldConfig, 'clock' | 'tickInterval'>,
+  ): TestWorld {
+    return TestWorld.wrap(world, config);
   }
 }
 

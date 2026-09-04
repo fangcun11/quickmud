@@ -19,7 +19,7 @@
  */
 import {
   World,
-  createDeveloperCommands,
+  registerDeveloperKit,
   blueprint,
   trait,
   Name,
@@ -88,8 +88,10 @@ export function bootstrap(): BootstrapResult {
     // RoomEventSystem / RoomTickSystem 由 buildRoomBehaviors 幂等注册
   );
 
+  // 开发者套件一步注册：命令 + 效果系统（0.12 起写状态走事件链）
+  registerDeveloperKit(world);
+
   world.registerCommands(
-    ...createDeveloperCommands(),
     GoCommand,
     LookCommand,
     InventoryCommand,

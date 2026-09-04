@@ -13,6 +13,9 @@
       "@mud/ecs-engine/testing": [
         "../../packages/engine/src/testing.ts"
       ],
+      "@mud/ecs-engine/node": [
+        "../../packages/engine/src/node.ts"
+      ],
       "@mud/prefabs": [
         "../../packages/prefabs/src/index.ts"
       ]

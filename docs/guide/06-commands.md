@@ -100,12 +100,13 @@ const ScoreCommand = defineCommand({
   },
 });
 
+w.world.drainOutput(); // 0.12 起 execute 不再自动清空输出：渲染完一轮显式接管
 const feedback = await w.world.execute('score', player);
 assert.strictEqual(feedback, '—— score 完毕 ——');
 assert.deepEqual(
   w.world.output.getAll().map((m) => m.kind),
   ['narrative', 'error'],
-  'execute 前输出自动清空，本轮只有 score 写入的两条',
+  'drainOutput() 接管后，缓冲里只有本轮 score 写入的两条',
 );
 ```
 
@@ -129,12 +130,20 @@ assert.throws(
 
 ## 开发者命令
 
-`createDeveloperCommands()` 提供 `/tp`、`/heal`、`/dev-help`（按 `position`/`health`
-组件命名约定工作），调试用，随包分发：
+开发者套件提供 `/tp`、`/heal`、`/dev-help`（按 `position`/`health` 组件命名约定
+工作），调试用，随包分发。0.12 起**命令走事件链**——命令只翻译意图（读状态拼
+反馈 + emit `dev_teleported`/`dev_healed` 事件），写状态的是内置
+`DeveloperEffectSystem`，一步注册：
 
 ```ts
-world.registerCommands(...createDeveloperCommands());
+import { registerDeveloperKit } from '@mud/ecs-engine';
+
+registerDeveloperKit(world); // 命令 + 效果系统
 ```
+
+只注册命令组（`world.registerCommands(...createDeveloperCommands())`）依然合法，
+但事件悬空——反馈照给、状态不落（fail-safe，也是"改状态的唯一通道是系统"
+铁律的自然示范）。
 
 ---
 

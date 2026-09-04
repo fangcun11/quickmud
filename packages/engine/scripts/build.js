@@ -47,6 +47,22 @@ async function main() {
     outfile: 'dist/testing.cjs',
   });
 
+  // node 子入口（@mud/ecs-engine/node：FsBackend 等 Node 专属物）ESM
+  await build({
+    ...shared,
+    entryPoints: ['src/node.ts'],
+    format: 'esm',
+    outfile: 'dist/node.js',
+  });
+
+  // node 子入口 CJS
+  await build({
+    ...shared,
+    entryPoints: ['src/node.ts'],
+    format: 'cjs',
+    outfile: 'dist/node.cjs',
+  });
+
   // 修正 .d.ts 相对导入：补 .js 扩展名
   // tsc 对扩展名导入不重写，产物在 node16/nodenext 解析下会编译失败
   // （外部消费者契约测试发现的真实缺陷，见 scripts/contract-test.mjs）。

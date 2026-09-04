@@ -8,6 +8,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ManualClock, createTestWorld, TestWorld } from './test-world';
 import { defineSystem } from '../systems/define-system';
+import { defineEvent } from '../events/define-event';
+import { defineCommand } from '../commands/define-command';
 import { trait } from '../core/trait';
 
 const Counter = trait('counter', () => ({ value: 0 }));
@@ -125,5 +127,76 @@ describe('ManualClock / TestWorld 时间推进', () => {
     tw.advance(500);
 
     expect(tw.entities.getComponent(e, Counter)?.value).toBe(5);
+  });
+});
+
+describe('P1-5 TestWorld 探针增强（0.12）', () => {
+  const Ping = defineEvent('ping')<{ n: number }>();
+  const Pong = defineEvent('pong')<{ n: number }>();
+  const Health = trait('health', () => ({ current: 10, max: 10 }));
+
+  const Echo = defineSystem({
+    name: 'echo',
+    on: [Ping],
+    handle(event, ctx) {
+      ctx.emit(Pong, { n: event.data.n * 2 });
+    },
+  });
+
+  const Hi = defineCommand({
+    verbs: ['hi'],
+    handle: () => '你好',
+  });
+
+  it('emit 接受 EventDefinition（类型贯通），token 形态行为不变', () => {
+    const w = createTestWorld({ systems: [Echo] });
+
+    w.emit(Ping, { n: 21 });
+    w.runChain();
+
+    expect(w.getLog()).toEqual(['ping', 'pong']);
+  });
+
+  it('run(input, player) 直通 world.execute，不再需要两跳', async () => {
+    const w = createTestWorld({ commands: [Hi] });
+    const p = w.entities.createWithId('p');
+
+    expect(await w.run('hi', p)).toBe('你好');
+  });
+
+  it('emitImmediate 路径也进 eventLog（此前 DFS 传播对日志隐形）', () => {
+    const w = createTestWorld();
+
+    w.world.eventPump.emitImmediate('immediate', {});
+
+    expect(w.getLog()).toContain('immediate');
+  });
+
+  it('元组夹具走 addComponent 正路，data 省略时用组件默认值', () => {
+    const w = createTestWorld({
+      entities: [
+        { id: 'a', components: [[Health, { current: 5 }]] },
+        { id: 'b', components: [[Health]] },
+      ],
+    });
+
+    // addComponent 语义：data 整存替换，不与默认值深合并（补丁合并请用 blueprint）
+    expect(w.entities.getComponent('a', Health)).toEqual({ current: 5 });
+    expect(w.entities.getComponent('b', Health)).toEqual({ current: 10, max: 10 });
+  });
+
+  it('TestWorld.wrap/fromWorld 给 fork 世界装探针，继承件照常可用', async () => {
+    const base = createTestWorld({ systems: [Echo], commands: [Hi] });
+    const forked = base.world.fork();
+
+    const probe = TestWorld.wrap(forked);
+    probe.emit(Ping, { n: 3 });
+    probe.runChain();
+    expect(probe.getLog()).toEqual(['ping', 'pong']); // 探针拦截生效
+
+    const p = probe.entities.createWithId('p');
+    expect(await probe.run('hi', p)).toBe('你好'); // fork 继承的命令可用
+
+    expect(TestWorld.fromWorld(forked)).toBeInstanceOf(TestWorld);
   });
 });

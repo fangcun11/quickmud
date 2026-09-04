@@ -17,7 +17,7 @@ export type { Entity, EntityId, ComponentDefinition, ComponentId, EventToken } f
 // 事件
 export { defineEvent } from './events/define-event';
 export { EventPump } from './events/event-pump';
-export type { SystemErrorRecord } from './events/event-pump';
+export type { SystemErrorRecord, ScheduledEventHandle } from './events/event-pump';
 export type { EventDefinition, EventHandler, EventPayload, EventContext, TypedEmit } from './events/types';
 
 // 系统
@@ -26,7 +26,13 @@ export type { SystemDefinition, SystemContext, OutputView } from './systems/type
 
 // 命令
 export { defineCommand } from './commands/define-command';
-export { createDeveloperCommands } from './commands/developer';
+export {
+  createDeveloperCommands,
+  registerDeveloperKit,
+  DeveloperEffectSystem,
+  DevTeleported,
+  DevHealed,
+} from './commands/developer';
 export type { CommandDefinition, CommandContext, ArgumentDefinition, AnyCommand, ParsedArgs, ParsedArgValue } from './commands/types';
 
 // 输出
@@ -35,8 +41,9 @@ export { renderAnsi, renderSemanticHtml, renderPlainText } from './output/render
 export type { AnsiRenderOptions } from './output/render';
 export type { OutputMessage, Segment, OutputKind, SemanticColor, SegmentTag } from './output/types';
 
-// 持久化
-export { SavePort, FsBackend, LocalStorageBackend } from './persistence/save-port';
+// 持久化（FsBackend 已拆至 @mud/ecs-engine/node 子路径——0.12 breaking，
+// 主入口保持浏览器可安全引用）
+export { SavePort, LocalStorageBackend } from './persistence/save-port';
 export type { SnapshotData, SnapshotMigration, SaveBackend } from './persistence/types';
 
 // 测试工具

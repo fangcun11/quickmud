@@ -11,7 +11,8 @@
 组件是纯数据（三铁律的红利），所以整个世界可以拍成一份纯 JSON：
 
 ```ts
-import { SavePort, FsBackend } from '@mud/ecs-engine';
+import { SavePort } from '@mud/ecs-engine';
+import { FsBackend } from '@mud/ecs-engine/node'; // 0.12 起：Node 专属后端拆至子路径
 
 const save = new SavePort(new FsBackend(), '0.1.0'); // 第二个参数 = 内容架构版本
 // ↑ 由**游戏方**管理（与 @mud/ecs-engine 的 package.json 版本解耦）；

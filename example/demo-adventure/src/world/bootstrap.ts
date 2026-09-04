@@ -9,7 +9,7 @@
 import {
   World,
   Name,
-  createDeveloperCommands,
+  registerDeveloperKit,
   createDialogueCommands,
   DialogueSystem,
   Dialogue,
@@ -82,9 +82,11 @@ export function bootstrap(): BootstrapResult {
     BarkeepEffectsSystem,
   );
 
-  // 注册命令：开发者命令 + 对话 + prefabs 通用命令 + 四方向 + demo help
+  // 开发者套件一步注册：命令 + 效果系统（0.12 起写状态走事件链）
+  registerDeveloperKit(world);
+
+  // 注册命令：对话 + prefabs 通用命令 + 四方向 + demo help
   world.registerCommands(
-    ...createDeveloperCommands(),
     ...createDialogueCommands(),
     GoCommand,
     LookCommand,

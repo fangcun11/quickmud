@@ -18,6 +18,8 @@ export interface SystemErrorRecord {
 interface QueuedEvent {
   token: EventToken;
   payload: unknown;
+  /** 事件入队时的宿主时间。World 注入世界时钟 → 世界毫秒；
+   * EventPump 独立使用时为内部单调计数器（0,1,2…）。 */
   timestamp: number;
 }
 
@@ -27,9 +29,17 @@ interface QueuedEvent {
 export interface EventPumpConfig {
   /** 单条命令最大事件数 */
   maxEventsPerCommand?: number;
-  /** 时间源。默认为内部单调计数器（0,1,2…），保证模拟确定性；
-   * 禁止默认使用 Date.now() 之类的外部时间。 */
+  /** 时间源，决定事件 timestamp 的语义。默认为内部单调计数器（0,1,2…），
+   * 保证模拟确定性；禁止默认使用 Date.now() 之类的外部时间。
+   * World 构造时注入 `() => this.timeMs`（世界毫秒）——P0-2 起
+   * 事件 timestamp 与 TICK 事件统一为"入队时的世界毫秒"。 */
   now?: () => number;
+}
+
+/** 延时事件句柄（P1-4）。纯数据可存进组件、随快照走；
+ * 仅对创建它的那个世界有效（fork 出的世界是独立副本）。 */
+export interface ScheduledEventHandle {
+  id: number;
 }
 
 /**
@@ -54,8 +64,9 @@ export class EventPump {
   private monoCounter = 0;
   private systemErrors: SystemErrorRecord[] = [];
   /** 延时事件队列：triggerAt 升序，同刻按插入序（确定性） */
-  private scheduled: Array<PendingEvent & { seq: number }> = [];
+  private scheduled: Array<PendingEvent & { seq: number; id: number }> = [];
   private scheduledSeq = 0;
+  private scheduledIdSeq = 0;
 
   constructor(config?: EventPumpConfig) {
     this.maxEvents = config?.maxEventsPerCommand ?? 1000;
@@ -241,38 +252,72 @@ export class EventPump {
   }
 
   /**
-   * 调度延时事件：currentMs + delayMs 后触发（触发时走 emit，受预算与策略约束）
+   * 调度延时事件：currentMs + delayMs 后触发（触发时走 emit，受预算与策略约束）。
+   * 返回句柄供 cancel 取消（P1-4）；句柄可存进组件、随快照走。
    */
-  schedule(token: EventToken, data: unknown, delayMs: number, currentMs: number): void {
+  schedule(token: EventToken, data: unknown, delayMs: number, currentMs: number): ScheduledEventHandle {
+    const id = ++this.scheduledIdSeq;
     this.scheduled.push({
       token,
       data,
       triggerAt: currentMs + delayMs,
       seq: ++this.scheduledSeq,
+      id,
     });
     this.scheduled.sort((a, b) => a.triggerAt - b.triggerAt || a.seq - b.seq);
+    return { id };
   }
 
   /**
-   * 触发所有到期的延时事件（World.tick 驱动；同刻按调度顺序）
+   * 取消未触发的延时事件（P1-4）。
+   * 已触发/已取消/句柄不属于本世界时返回 false（幂等无害）；
+   * 取消只是打标记——标记随 scheduled 进快照，回滚/录像/分叉后语义保持。
+   */
+  cancel(handle: ScheduledEventHandle): boolean {
+    const item = this.scheduled.find((e) => e.id === handle.id);
+    if (!item) return false;
+    if (item.cancelled) return false;
+    item.cancelled = true;
+    return true;
+  }
+
+  /**
+   * 触发所有到期的延时事件（World.tick 驱动；同刻按调度顺序）。
+   * 已取消的条目到点直接丢弃——不 emit、不占事件预算。
    */
   fireDue(currentMs: number): void {
     while (this.scheduled.length > 0 && this.scheduled[0]!.triggerAt <= currentMs) {
       const due = this.scheduled.shift()!;
+      if (due.cancelled) continue;
       this.emit(due.token, due.data, due.triggerAt);
     }
   }
 
-  /** 当前未触发的延时事件（快照用，seq 剥离） */
+  /** 当前未触发的延时事件（快照用，seq 剥离；id/cancelled 保留以支持取消语义） */
   getScheduled(): PendingEvent[] {
-    return this.scheduled.map(({ token, data, triggerAt }) => ({ token, data, triggerAt }));
+    return this.scheduled.map(({ token, data, triggerAt, id, cancelled }) => ({
+      token,
+      data,
+      triggerAt,
+      id,
+      cancelled,
+    }));
   }
 
-  /** 从快照恢复延时队列（seq 重排以保持 triggerAt+原顺序的确定性） */
+  /** 从快照恢复延时队列（seq 重排以保持 triggerAt+原顺序的确定性；
+   * 旧快照无 id 时分配新 id（旧档没有句柄，不损失任何语义）；
+   * idSeq 推进到已恢复的最大 id 之后，保证后续新调度不撞号） */
   restoreScheduled(events: PendingEvent[]): void {
     this.scheduled = events
-      .map((e, i) => ({ ...e, seq: i }))
+      .map((e, i) => ({
+        ...e,
+        id: e.id ?? ++this.scheduledIdSeq,
+        seq: i,
+      }))
       .sort((a, b) => a.triggerAt - b.triggerAt || a.seq - b.seq);
+    for (const e of this.scheduled) {
+      if (e.id > this.scheduledIdSeq) this.scheduledIdSeq = e.id;
+    }
   }
 
   /**

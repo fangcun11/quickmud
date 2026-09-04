@@ -42,20 +42,23 @@ assert.ok(w.getLog().includes(Healed.token), '事件日志可断言');
 
 - `w.runChain()` 同步跑完整个事件链，**没有隐藏的异步**，断言可以紧跟其后；
 - `w.getLog()` 拿事件日志——事件驱动架构里，"发生了什么"本身就是断言材料；
+- `w.emit(Healed, {...})` 事件定义直传（0.12 起，token 字符串也行）；
 - `createTestWorld` 接受 `systems` / `commands` / `entities` / `clock` /
-  `tickInterval`。
+  `tickInterval`；`entities` 夹具支持元组形态 `[[Health, { current: 30 }]]`
+  （0.12 起，data 省略用组件默认值；哈希形态 `{ [Health.id]: ... }` 仍兼容）。
 
 ## 测命令与输出
 
-测命令就直接 `await w.world.execute('rest 30', p)`，断言 `w.world.output`：
+测命令用 `w.run(input, player)`（0.12 起，`world.execute` 的直通委托）：
 
 ```ts
-const feedback = await w.world.execute('score', player);
+const feedback = await w.run('score', player);
 assert.strictEqual(feedback, '—— 完毕 ——');
-assert.ok(w.world.output.ofKind('narrative').length > 0);
+assert.ok(w.output.ofKind('narrative').length > 0);
 ```
 
-（v0.11 起命令也有 `output` 通道，见 [06 命令](./06-commands.md)。）
+（v0.11 起命令也有 `output` 通道，见 [06 命令](./06-commands.md)；
+`drainOutput()` 的取舍见 [07 输出与渲染](./07-output.md)。）
 
 ## 可控时钟：世界时间是唯一真相
 
@@ -72,6 +75,19 @@ assert.strictEqual(w.currentTime, 3000); // 世界时间是唯一真相，clock 
 
 0.5 及更早版本 `clock.advance` 只改自己的计数器、不驱动世界；0.6 起兑现。
 结合 Buff 的网格结算实例见 [10 物品、战斗与任务](./10-items-combat-quests.md)。
+
+## fork 出的世界也要探针
+
+`world.fork()` 的产物用 `TestWorld.wrap`（别名 `fromWorld`）接手（0.12 起）——
+eventLog 拦截、clock 接管、`run/emit` 便利全套照装；系统与命令随 fork 继承，
+不重复注册：
+
+```ts
+const forked = TestWorld.wrap(base.world.fork());
+forked.emit(Attack, { attacker: a, target: b });
+forked.runChain();
+assert.ok(forked.getLog().includes('died'), '分叉世界里的事件同样可断言');
+```
 
 ## 更硬的回归：录像重放
 

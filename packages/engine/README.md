@@ -65,14 +65,16 @@ t.currentTime;         // 1000，世界时间与 clock 保持同步
 ```ts
 // 定时系统：every 周期 + ctx.after 延时（World.tick 驱动，纳入快照/回滚）
 defineSystem({ name: 'poison', every: 2000, handle: (p, ctx) => { /* ... */ } });
-ctx.after(3000, Explosion, { room: 'hall' });
+const fuse = ctx.after(3000, Explosion, { room: 'hall' }); // 0.12 起返回句柄
+ctx.cancel(fuse);                                          // 随时可取消（幂等）
 
 // 系统错误策略：不炸主链路的容错
 defineSystem({ name: 'render', on: [Moved.token], onError: 'degrade', handle /* ... */ });
 
 // 开发者命令：/tp /heal /dev-help（按 position/health 约定；/give 自 0.3-C 起
 // 随 Inventory 退役而迁出，物品版开发命令归 @mud/prefabs）
-world.registerCommands(...createDeveloperCommands());
+// 0.12 起命令走事件链：registerDeveloperKit 一步注册命令 + 内置效果系统
+registerDeveloperKit(world);
 
 // 录像重放：确定性回归的调试利器
 const rec = record(world);
