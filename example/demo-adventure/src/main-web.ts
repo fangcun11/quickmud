@@ -3,15 +3,16 @@
  *
  * 与 main.ts (REPL) 共享相同的世界组装（bootstrap），
  * 但使用 WebRenderer 而非 readline。
+ *
+ * 命令建议（web-client 0.3）：数据面由 bootstrap 导出的命令表 + 方向词
+ * 生成（createSuggester）；状态栏已按 MUD 传统移除，属性看 score 命令。
  */
 import { bootstrap } from './world/bootstrap';
 import { WebRenderer } from '@mud/web-client';
-import { Name } from '@mud/ecs-engine';
-import type { EntityId } from '@mud/ecs-engine';
-import { Health, Position } from '@mud/prefabs';
+import { createSuggester } from '@mud/prefabs';
 
 function main() {
-  const { world, playerId } = bootstrap();
+  const { world, playerId, commands, directionWords } = bootstrap();
 
   // 挂载渲染器
   const app = document.getElementById('app');
@@ -20,23 +21,11 @@ function main() {
     return;
   }
 
-  // 状态栏文本：用 trait 定义读取组件（key 为 trait 的确定性哈希 id）
-  const status = (pid: EntityId): string | undefined => {
-    const health = world.getComponent(pid, Health);
-    const pos = world.getComponent(pid, Position);
-    const roomName = pos ? world.getComponent(pos.roomId, Name) : undefined;
-
-    const parts: string[] = [];
-    if (health) parts.push(`HP: ${health.current}/${health.max}`);
-    if (roomName) parts.push(`位置: ${roomName.text}`);
-    return parts.length ? parts.join('  |  ') : undefined;
-  };
-
   const renderer = new WebRenderer({
     container: app,
     world,
     playerId,
-    status,
+    suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
   });
 
   renderer.showWelcome();

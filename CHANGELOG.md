@@ -7,8 +7,36 @@
 主题：**新内容包开工 + 首批真实游玩反馈的体验修复 + 地图改版**——侠客行
 （武侠题材文字 RPG）M0 骨架落地后实机试玩，浏览器端撞出的渲染器缺陷与
 移动/地图信息缺口一并修掉；地图从符号网格重做成地名直书；M1 内功根基
-（打坐回气 + 纯公式战斗内核）接着落地。
-引擎（`@mud/ecs-engine`）零变更。
+（打坐回气 + 纯公式战斗内核）接着落地；随后按 MUD 传统整理网页端——
+移除常驻状态栏、新增输入命令建议。引擎（`@mud/ecs-engine`）零变更。
+
+### web-client：去顶部状态栏 + 命令建议（@mud/web-client 0.3.0，breaking）
+
+- **顶部状态栏移除（breaking）**：MUD 传统没有常驻 chrome——屏面就是
+  一整面文字流。`status` 回调与 `#status-bar` 删除（构造参数 `status`
+  停用），属性看游戏内命令（侠客行「状态」、demo `score`）
+- **命令建议**：输入时输入框上方弹出候选条。数据由游戏侧 `suggest`
+  提供器注入（渲染器不感知世界，与 status/persistence 同模式），内容
+  用 prefabs `createSuggester` 生成。红线：**被动出现**（Esc 收起到
+  下一次输入变化）、**Tab/点击才补进输入框**（绝不自动补全）、
+  **Enter 永远执行当前输入**（候选选中也不执行候选）、↑↓ 开=候选导航
+  /关=历史召回（现状不破坏）；候选上限 8，提供器抛错静默收起不挡打字
+- **IME 防护**：中文输入法组合期间（`isComposing`）Enter/↑↓ 不触发
+  命令——顺带修掉「拼音组合确认误执行半截命令」的潜在 bug
+- **DOM 测试从零到一**（engine-feedback F5 落地）：vitest + happy-dom
+  14 例锁死键盘契约（Enter/Tab/↑↓/Esc/IME）与布局；web-client 挂进
+  根 `pnpm test`
+
+### prefabs：createSuggester 命令建议器（@mud/prefabs 0.13.0）
+
+- `createSuggester({ commands, query, playerId, directions })`：动词从
+  注册的命令常量枚举 `.verbs`（与 `registerCommands` 同一数组即零漂移）；
+  第二词按命令 args 声明分流——`direction` 参数补方向词，
+  `entity`/`optional_entity` 参数补房间内实体名（`Position` 活体 +
+  `Located` 地上物，主名+别名去重，排除玩家与别房）
+- 通用件触碰即下沉：两个 example 的 bootstrap 把注册命令表导出为单一
+  数据源（`commands` + `directionWords`），main-web 用它生成建议器
+- 7 个新单测（第一词全集/方向第二词/实体第二词/排除项/边界）
 
 ### 新增 example/xiake-xing（0.1.0 → 0.2.0）
 

@@ -1,6 +1,6 @@
 {
   "name": "@mud/prefabs",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "MUD 引擎开箱即用的领域预制件：移动/房间、查看/描述、物品/背包、状态",
   "repository": {
     "type": "git",

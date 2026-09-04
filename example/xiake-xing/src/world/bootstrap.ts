@@ -20,6 +20,7 @@ import {
   World,
   registerDeveloperKit,
   Name,
+  type AnyCommand,
 } from '@mud/ecs-engine';
 import {
   // 系统
@@ -77,6 +78,10 @@ import {
 export interface BootstrapResult {
   world: World;
   playerId: string;
+  /** 注册的全部命令（与 registerCommands 同一份数组——网页版命令建议用它枚举动词，零漂移） */
+  commands: AnyCommand[];
+  /** 方向词全集（go <方向> 的第二词候选；单字中文在前） */
+  directionWords: string[];
 }
 
 export function bootstrap(): BootstrapResult {
@@ -107,7 +112,22 @@ export function bootstrap(): BootstrapResult {
   // 开发者套件一步注册：命令 + 效果系统（/tp /heal 等调试件）
   registerDeveloperKit(world);
 
-  world.registerCommands(
+  // 口语方向别名：中文玩家不会先想到敲 north——往东/向东/东边都能走。
+  // 别名表是单一数据源：方向命令与网页版的建议词都从这里来
+  const DIRECTION_ALIASES: Record<string, string[]> = {
+    north: ['north', 'n', '北', '往北', '向北', '朝北', '北边', '往北走'],
+    south: ['south', 's', '南', '往南', '向南', '朝南', '南边', '往南走'],
+    east: ['east', 'e', '东', '往东', '向东', '朝东', '东边', '往东走'],
+    west: ['west', 'w', '西', '往西', '向西', '朝西', '西边', '往西走'],
+  };
+  const directionCommands = Object.entries(DIRECTION_ALIASES).map(([dir, aliases]) =>
+    createDirectionCommand(dir, aliases),
+  );
+  const directionWords = Array.from(
+    new Set(['北', '南', '东', '西', 'north', 'south', 'east', 'west', ...Object.values(DIRECTION_ALIASES).flat()]),
+  );
+
+  const commands: AnyCommand[] = [
     GoCommand,
     LookCommand,
     MapCommand,
@@ -122,12 +142,9 @@ export function bootstrap(): BootstrapResult {
     FleeCommand,
     HelpCommand,
     QuitHintCommand,
-    // 口语方向别名：中文玩家不会先想到敲 north——往东/向东/东边都能走
-    createDirectionCommand('north', ['north', 'n', '北', '往北', '向北', '朝北', '北边', '往北走']),
-    createDirectionCommand('south', ['south', 's', '南', '往南', '向南', '朝南', '南边', '往南走']),
-    createDirectionCommand('east', ['east', 'e', '东', '往东', '向东', '朝东', '东边', '往东走']),
-    createDirectionCommand('west', ['west', 'w', '西', '往西', '向西', '朝西', '西边', '往西走']),
-  );
+    ...directionCommands,
+  ];
+  world.registerCommands(...commands);
 
   // ---- 区域：三张平面，从北往南一条线 ----
   const areas = [
@@ -300,5 +317,5 @@ export function bootstrap(): BootstrapResult {
     });
   }
 
-  return { world, playerId };
+  return { world, playerId, commands, directionWords };
 }

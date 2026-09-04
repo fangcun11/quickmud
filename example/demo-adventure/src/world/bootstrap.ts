@@ -14,6 +14,7 @@ import {
   DialogueSystem,
   Dialogue,
   Memory,
+  type AnyCommand,
 } from '@mud/ecs-engine';
 import {
   MovementSystem,
@@ -59,6 +60,10 @@ import { BarkeepEffectsSystem } from './effects';
 export interface BootstrapResult {
   world: World;
   playerId: string;
+  /** 注册的全部命令（与 registerCommands 同一份数组——网页版命令建议用它枚举动词，零漂移） */
+  commands: AnyCommand[];
+  /** 方向词全集（go <方向> 的第二词候选；单字中文在前） */
+  directionWords: string[];
 }
 
 export function bootstrap(): BootstrapResult {
@@ -85,8 +90,22 @@ export function bootstrap(): BootstrapResult {
   // 开发者套件一步注册：命令 + 效果系统（0.12 起写状态走事件链）
   registerDeveloperKit(world);
 
-  // 注册命令：对话 + prefabs 通用命令 + 四方向 + demo help
-  world.registerCommands(
+  // 注册命令：对话 + prefabs 通用命令 + 四方向 + demo help。
+  // 命令表是单一数据源：注册与网页版的建议词都从这里来。
+  // 方向别名表同理（demo 侧别名比侠客行短：north/n/北 三式）。
+  const DIRECTION_ALIASES: Record<string, string[]> = {
+    north: ['north', 'n', '北'],
+    south: ['south', 's', '南'],
+    east: ['east', 'e', '东'],
+    west: ['west', 'w', '西'],
+  };
+  const directionCommands = Object.entries(DIRECTION_ALIASES).map(([dir, aliases]) =>
+    createDirectionCommand(dir, aliases),
+  );
+  const directionWords = Array.from(
+    new Set(['北', '南', '东', '西', 'north', 'south', 'east', 'west', ...Object.values(DIRECTION_ALIASES).flat()]),
+  );
+  const commands: AnyCommand[] = [
     ...createDialogueCommands(),
     GoCommand,
     LookCommand,
@@ -99,11 +118,9 @@ export function bootstrap(): BootstrapResult {
     TurnInCommand,
     MapCommand,
     HelpCommand,
-    createDirectionCommand('north', ['north', 'n', '北']),
-    createDirectionCommand('south', ['south', 's', '南']),
-    createDirectionCommand('east', ['east', 'e', '东']),
-    createDirectionCommand('west', ['west', 'w', '西']),
-  );
+    ...directionCommands,
+  ];
+  world.registerCommands(...commands);
 
   // 创建房间（v0.8：defineRoom + 入口锚定 + 坐标自动推断）
   const layout = layoutRooms(
@@ -213,5 +230,5 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(barmanId, Dialogue, BarkeepDialogue);
   world.addComponent(barmanId, Memory, { flags: [] });
 
-  return { world, playerId };
+  return { world, playerId, commands, directionWords };
 }

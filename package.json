@@ -16,7 +16,7 @@
     "dev": "pnpm --filter demo-adventure dev",
     "dev:rpg": "pnpm --filter mini-rpg dev",
     "build": "pnpm --filter @mud/ecs-engine build && pnpm --filter @mud/prefabs build",
-    "test": "pnpm --filter @mud/ecs-engine test && pnpm --filter @mud/prefabs test && pnpm --filter mini-rpg test",
+    "test": "pnpm --filter @mud/ecs-engine test && pnpm --filter @mud/prefabs test && pnpm --filter @mud/web-client test && pnpm --filter mini-rpg test",
     "test:contract": "pnpm --filter @mud/ecs-engine test:contract && pnpm --filter @mud/prefabs test:contract",
     "test:docs": "node docs/examples/verify-doc-examples.mjs",
     "lint": "pnpm --filter @mud/ecs-engine lint && pnpm --filter @mud/prefabs lint"

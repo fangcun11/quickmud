@@ -378,6 +378,38 @@ handle(event, ctx) {
 单事件系统（`on: [Attack]`）的 `event.data` 同样直接就是载荷类型。
 `on: [X.token]` 旧写法继续可用（data 退化为 unknown）。
 
+## 命令建议器（v0.13）
+
+Web 输入补全的**数据面**：输入时"该补什么"由这里回答，渲染器（web-client）
+只管展示候选与键盘契约。与 `status`/存档接线同一纪律——渲染器不感知世界，
+建议由游戏侧注入：
+
+```ts
+import { createSuggester } from '@mud/prefabs';
+
+// commands 与 registerCommands 用**同一份数组**（动词从 .verbs 枚举，零漂移）；
+// directions 是 go <方向> 的第二词候选（canonical 短词放前面）
+const suggest = createSuggester({
+  commands,            // bootstrap 导出的注册命令表
+  query: world,        // World 顶层方法直接满足只读查询接口
+  playerId,
+  directions: ['北', '南', '东', '西', 'north', 'south', 'east', 'west'],
+});
+
+new WebRenderer({ container, world, playerId, suggest });
+```
+
+行为：
+
+- 第一个词 → 补**动词**（含方向口语别名，如「往东」）；
+- 第二个词 → 按该动词的 args 声明分流：`direction` 参数补方向词；
+  `entity` / `optional_entity` 参数补**房间内实体名**（`Position` 活体 +
+  `Located` 地上物，主名与别名都给，去重、排除玩家）；
+- 提供器返回**全集**，前缀过滤与候选上限（8）由渲染器做。
+
+键盘契约在渲染器：候选条被动出现（Esc 收起）；Tab/点击才补进输入框；
+Enter 永远执行当前输入，↑↓ 在候选间导航（关着时仍是历史召回）。
+
 ## 开发
 
 ```bash

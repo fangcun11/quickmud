@@ -41,25 +41,33 @@ export interface WelcomeOptions {
  * 职责：
  * 1. 输出消息 → DOM 节点（语义色/标签渲染）
  * 2. 用户输入 → world.execute()（↑/↓ 输入历史、实体标签点击查看）
- * 3. 状态栏常驻显示
+ * 3. 命令建议：边输入边弹出候选条（数据由游戏侧 suggest 提供器注入，
+ *    渲染器只管展示与前缀过滤；Tab/点击补进输入框，Enter 永远执行
+ *    当前输入——建议不替玩家打字）
  * 4. 可选存档接线（启动恢复 / 自动保存 / 重开确认）
  *
- * 状态栏内容由 status 回调提供（渲染器不感知具体组件结构，
- * 由游戏侧用各自的 trait 定义读取并拼装文本）。
+ * 与 status/persistence 同一纪律：渲染器不感知世界，世界相关的数据面
+ * 全部由游戏侧注入。屏幕上没有常驻状态栏——MUD 传统就是一整面文字流，
+ * 属性靠命令查（如 状态/score）。
  */
 export class WebRenderer {
   private container: HTMLElement;
   private outputEl: HTMLElement;
   private inputEl: HTMLInputElement;
-  private statusEl: HTMLElement;
+  private suggestRowEl: HTMLElement;
   private world: RendererWorld;
   private playerId: string;
-  private statusProvider?: (playerId: string) => string | undefined;
+  private suggestProvider?: (input: string) => string[];
   private persistence?: RendererPersistence;
 
   // 输入历史（↑/↓ 召回；MUD 最高频的操作就是重复上一条）
   private history: string[] = [];
   private historyIndex = -1;
+  // 命令建议（suggest 提供器给全集，这里做前缀过滤、上限与键盘契约）
+  private suggestItems: string[] = [];
+  private suggestIndex = -1;
+  /** Esc/接受后暂不弹（直到下一次输入变化）；避免补全刚收起又被顶回来 */
+  private suggestDismissed = false;
   /** 重开两段式确认：第一次输入只提示，第二次才真清档 */
   private restartArmed = false;
   /** 读档结果：true=恢复了存档 / false=存档存在但读不出来（showWelcome 时输出说明） */
@@ -70,8 +78,12 @@ export class WebRenderer {
     container: HTMLElement;
     world: RendererWorld;
     playerId: string;
-    /** 状态栏文本提供者（可选），返回 undefined 则显示兜底文案 */
-    status?: (playerId: string) => string | undefined;
+    /**
+     * 命令建议提供器（可选，游戏侧注入）。入参 = 输入框当前全文，
+     * 返回**候选全集**（渲染器按光标前最后一个词做前缀过滤、取前 8 个）；
+     * 建议用 prefabs 的 createSuggester 生成。
+     */
+    suggest?: (input: string) => string[];
     /** 浏览器标签页标题（不传保持 HTML 模板默认） */
     title?: string;
     /** 存档接线（不传 = 无存档，刷新即重开） */
@@ -80,7 +92,7 @@ export class WebRenderer {
     this.container = config.container;
     this.world = config.world;
     this.playerId = config.playerId;
-    this.statusProvider = config.status;
+    this.suggestProvider = config.suggest;
     this.persistence = config.persistence;
 
     if (config.title) {
@@ -100,18 +112,6 @@ export class WebRenderer {
       padding: 0;
     `;
 
-    // 状态栏
-    this.statusEl = document.createElement('div');
-    this.statusEl.id = 'status-bar';
-    this.statusEl.style.cssText = `
-      background: #16213e;
-      padding: 8px 16px;
-      border-bottom: 1px solid #0f3460;
-      font-size: 14px;
-      color: #a0a0a0;
-    `;
-    this.container.appendChild(this.statusEl);
-
     // 输出区域（限宽居中：宽屏上一行拉满 1200px+ 没法读）
     this.outputEl = document.createElement('div');
     this.outputEl.id = 'output';
@@ -126,12 +126,29 @@ export class WebRenderer {
     `;
     this.container.appendChild(this.outputEl);
 
-    // 输入区域
+    // 底部簇：命令建议条（有候选时才出现）+ 输入行
+    const bottomWrap = document.createElement('div');
+    bottomWrap.style.cssText = `
+      border-top: 1px solid #0f3460;
+      background: #16213e;
+    `;
+
+    this.suggestRowEl = document.createElement('div');
+    this.suggestRowEl.id = 'suggest-row';
+    this.suggestRowEl.style.cssText = `
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px 16px 0;
+      width: 100%;
+      max-width: 68em;
+      margin: 0 auto;
+    `;
+    bottomWrap.appendChild(this.suggestRowEl);
+
     const inputArea = document.createElement('div');
     inputArea.style.cssText = `
       display: flex;
-      background: #16213e;
-      border-top: 1px solid #0f3460;
       padding: 8px 16px;
     `;
 
@@ -155,20 +172,34 @@ export class WebRenderer {
       caret-color: #53a8b6;
     `;
     inputArea.appendChild(this.inputEl);
-    this.container.appendChild(inputArea);
+    bottomWrap.appendChild(inputArea);
+    this.container.appendChild(bottomWrap);
 
     // 绑定事件
     this.inputEl.addEventListener('keydown', (e) => {
+      // 中文 IME 组合期间：确认候选词的 Enter、翻候选的 ↑↓ 都不是命令操作
+      if (e.isComposing) return;
       if (e.key === 'Enter') {
         this.handleInput();
+      } else if (e.key === 'Tab' && this.suggestVisible()) {
+        // Tab 接受候选（不执行）；无候选时保留浏览器默认行为
+        e.preventDefault();
+        this.acceptSuggestion();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        this.recallHistory(-1);
+        // 候选条开着时 ↑↓ 在候选间移动，关着时才是历史召回
+        if (this.suggestVisible()) this.moveSuggestSelection(-1);
+        else this.recallHistory(-1);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        this.recallHistory(1);
+        if (this.suggestVisible()) this.moveSuggestSelection(1);
+        else this.recallHistory(1);
+      } else if (e.key === 'Escape' && this.suggestVisible()) {
+        e.preventDefault();
+        this.dismissSuggestions();
       }
     });
+    this.inputEl.addEventListener('input', () => this.refreshSuggestions());
 
     // 点击容器聚焦输入
     this.container.addEventListener('click', () => {
@@ -263,6 +294,7 @@ export class WebRenderer {
     this.echo(input);
     this.inputEl.value = '';
     this.historyIndex = -1;
+    this.hideSuggestions();
 
     await this.runCommand(input);
   }
@@ -305,6 +337,125 @@ export class WebRenderer {
     this.inputEl.setSelectionRange(this.inputEl.value.length, this.inputEl.value.length);
   }
 
+  // ---------- 命令建议 ----------
+  //
+  // 红线：建议被动出现、绝不替玩家打字——Tab/点击才补进输入框，
+  // Enter 永远执行输入框当前内容；Esc 收起到下一次输入变化。
+
+  private suggestVisible(): boolean {
+    return this.suggestRowEl.style.display !== 'none' && this.suggestItems.length > 0;
+  }
+
+  /** 输入变化 → 取候选全集 → 按光标前最后一个词前缀过滤 → 渲染（上限 8） */
+  private refreshSuggestions(): void {
+    this.suggestDismissed = false;
+    const input = this.inputEl.value;
+    if (!input.trim() || !this.suggestProvider) {
+      this.hideSuggestions();
+      return;
+    }
+    let candidates: string[];
+    try {
+      candidates = this.suggestProvider(input);
+    } catch {
+      candidates = []; // 游戏侧建议出错不能挡住打字
+    }
+    const lastWord = input.endsWith(' ') ? '' : this.lastWordOf(input);
+    const filtered = candidates.filter(
+      (c) => c !== lastWord && c.toLowerCase().startsWith(lastWord.toLowerCase()),
+    );
+    this.renderSuggestions(filtered.slice(0, 8));
+  }
+
+  private lastWordOf(input: string): string {
+    const cut = input.lastIndexOf(' ');
+    return cut === -1 ? input : input.slice(cut + 1);
+  }
+
+  private renderSuggestions(tokens: string[]): void {
+    this.suggestItems = tokens;
+    this.suggestIndex = -1;
+    this.suggestRowEl.innerHTML = '';
+    if (tokens.length === 0 || this.suggestDismissed) {
+      this.hideSuggestions();
+      return;
+    }
+    tokens.forEach((token, i) => {
+      const chip = document.createElement('span');
+      chip.textContent = token;
+      chip.style.cssText = `
+        border: 1px solid #34456b;
+        background: #20293f;
+        color: #c7d5e8;
+        border-radius: 4px;
+        padding: 1px 10px;
+        font-size: 13px;
+        line-height: 1.6;
+        cursor: pointer;
+        user-select: none;
+      `;
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.acceptSuggestion(token);
+      });
+      this.suggestRowEl.appendChild(chip);
+      if (i === this.suggestIndex) this.styleChip(chip, true);
+    });
+    this.suggestRowEl.style.display = 'flex';
+  }
+
+  private moveSuggestSelection(delta: -1 | 1): void {
+    const len = this.suggestItems.length;
+    if (len === 0) return;
+    if (delta === -1) {
+      // 未选中时 ↑ 直接到最末一个（与历史召回同款手感），再 ↑ 往回走
+      this.suggestIndex = this.suggestIndex === -1 ? len - 1 : Math.max(0, this.suggestIndex - 1);
+    } else {
+      this.suggestIndex += 1;
+      if (this.suggestIndex >= len) this.suggestIndex = -1; // 越过最末回到未选中
+    }
+    this.updateChipStyles();
+  }
+
+  private updateChipStyles(): void {
+    const chips = this.suggestRowEl.children;
+    for (let i = 0; i < chips.length; i++) {
+      this.styleChip(chips[i] as HTMLElement, i === this.suggestIndex);
+    }
+  }
+
+  private styleChip(chip: HTMLElement, selected: boolean): void {
+    chip.style.borderColor = selected ? '#53a8b6' : '#34456b';
+    chip.style.color = selected ? '#ffffff' : '#c7d5e8';
+    chip.style.background = selected ? '#1b3a55' : '#20293f';
+  }
+
+  /** 把候选补进输入框（替换最后一个词）；不执行，Enter 仍由玩家敲 */
+  private acceptSuggestion(token?: string): void {
+    const pick = token ?? this.suggestItems[this.suggestIndex >= 0 ? this.suggestIndex : 0];
+    if (!pick) return;
+    const input = this.inputEl.value;
+    const cut = input.lastIndexOf(' ');
+    this.inputEl.value = cut === -1 ? pick : input.slice(0, cut + 1) + pick;
+    this.suggestDismissed = true;
+    this.hideSuggestions();
+    this.inputEl.focus();
+    const end = this.inputEl.value.length;
+    this.inputEl.setSelectionRange(end, end);
+  }
+
+  private dismissSuggestions(): void {
+    this.suggestDismissed = true;
+    this.hideSuggestions();
+  }
+
+  private hideSuggestions(): void {
+    this.suggestItems = [];
+    this.suggestIndex = -1;
+    this.suggestRowEl.style.display = 'none';
+    this.suggestRowEl.innerHTML = '';
+  }
+
   /**
    * 执行一条命令并渲染结果（键盘输入、实体标签点击与游戏侧编程调用共用）
    */
@@ -327,10 +478,9 @@ export class WebRenderer {
     }
     this.world.output.clear();
 
-    // 存档 + 滚动 + 状态
+    // 存档 + 滚动
     this.autosave();
     this.scrollToBottom();
-    this.updateStatus();
   }
 
   private scrollToBottom(): void {
@@ -420,17 +570,6 @@ export class WebRenderer {
   }
 
   /**
-   * 更新状态栏
-   *
-   * 文本由构造时注入的 status 回调提供；渲染器自身不读取任何组件，
-   * 避免硬编码组件 key（组件的存储 key 是哈希 id，不是组件名）。
-   */
-  private updateStatus(): void {
-    const text = this.statusProvider?.(this.playerId);
-    this.statusEl.textContent = text ?? `MUD 引擎 v${ENGINE_VERSION}`;
-  }
-
-  /**
    * 显示欢迎消息（可定制游戏名与开场文案；不传保持引擎默认）
    */
   showWelcome(options?: WelcomeOptions): void {
@@ -457,6 +596,5 @@ export class WebRenderer {
       kind: 'narrative',
       segments: [{ text: '' }],
     });
-    this.updateStatus();
   }
 }

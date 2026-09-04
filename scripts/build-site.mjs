@@ -110,7 +110,7 @@ ${GAMES.map(card).join('\n')}
         <h2>说明</h2>
         <ul>
           <li>游戏完全运行在你的浏览器里，进度自动存入 localStorage——刷新或下次打开可接着玩；「重开」两段确认后清档。</li>
-          <li>输入 <code>help</code> 查看指令。</li>
+          <li>输入 <code>help</code> 查看命令；输入时输入框上方会弹命令补全，<code>Tab</code> 或点击补进输入框。</li>
           <li>仓库内另有终端示例 mini-rpg、tide-cellar，需本地 pnpm 运行，见仓库 README。</li>
         </ul>
       </section>
