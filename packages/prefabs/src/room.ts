@@ -355,57 +355,24 @@ const V_LINE = '│';
  * 探明时画实线；指向未探明/图外（含跨区域）的出口画一小段**断线**——
  * 告诉玩家"这边还有路"，但看不清通向哪里。
  *
- * 布局：同一 x 坐标的节点共享一列，列内**每个名字以裸名（不含标注）
- * 中心统一对齐**（锚点 = colX + 最大左伸，列宽 = 左伸 + 右伸的内容跨度，
- * 中文名按显示宽 2 列计），同一 y 坐标共享一行；行块之间夹一行放垂直
- * 连线。垂直线画在锚点上，列内所有名字都精确对准。坐标是全图定 bounds
- * 的（相对位置固定，地图不随探索跳动）。
+ * 布局是**约束排版**而非坐标网格：位置只由可见格子互相约束——同一 x 的
+ * 格子共享中心（垂直线才能是一条直线），同一行相邻排布的两格之间至少留
+ * ` ─── ` 的连线位；连线与东西断线**点对点贴着名字两端**画。迷雾外的
+ * 格子不占位，地图随探索长出。行块之间夹一行放垂直连线；中文名按显示
+ * 宽 2 列计。
  */
 export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): string {
   const placed = nodes.filter((node) => node.coords);
   if (placed.length === 0) return '';
 
   const visible = opts.visited ? new Set(opts.visited) : new Set(placed.map((n) => n.id));
+  const vis = placed.filter((n) => visible.has(n.id));
   const label = (n: MapNode): string => (n.id === opts.current ? `${n.name ?? n.id}(你)` : n.name ?? n.id);
   const bareW = (n: MapNode): number => displayWidth(n.name ?? n.id); // 裸名宽（不含标注）
 
-  // 可见格查询（迷雾外的房间对连线/断线判定隐形）
+  // 可见格查询（迷雾外的房间对布局/连线/断线完全隐形）
   const at = (x: number, y: number): MapNode | undefined =>
-    placed.find((n) => visible.has(n.id) && n.coords!.x === x && n.coords!.y === y);
-
-  // ---- 列布局：裸名中心统一对齐 ----
-  // 每个格子以自身裸名（不含 `(你)` 标注）的中心放置，同列共用一个锚点：
-  // 锚点 = colX + L，其中 L = 列内最大左伸（max floor(裸名宽/2)），
-  // 列宽 = L + R（R = 列内最大右伸 = max (label宽 − floor(裸名宽/2))）。
-  // 这样名字长短不一、带不带标注，裸名中心都精确落在锚点上——
-  // 垂直线只画一处，列内每个名字都对得齐。
-  const xs = [...new Set(placed.map((n) => n.coords!.x))].sort((a, b) => a - b);
-  const ys = [...new Set(placed.map((n) => n.coords!.y))].sort((a, b) => a - b);
-  const colL = new Map<number, number>();
-  const colR = new Map<number, number>();
-  for (const x of xs) {
-    let l = 0;
-    let r = 0;
-    for (const y of ys) {
-      const n = at(x, y);
-      if (!n) continue;
-      const half = Math.floor(bareW(n) / 2);
-      l = Math.max(l, half);
-      r = Math.max(r, displayWidth(label(n)) - half);
-    }
-    colL.set(x, l);
-    colR.set(x, r);
-  }
-  const colW = new Map<number, number>();
-  for (const x of xs) colW.set(x, colL.get(x)! + colR.get(x)!);
-  const colX = new Map<number, number>();
-  let acc = 0;
-  for (const x of xs) {
-    colX.set(x, acc);
-    acc += colW.get(x)! + H_GAP;
-  }
-  // 垂直线锚点：列内所有裸名中心的公共位置
-  const vertAnchor = (x: number) => colX.get(x)! + colL.get(x)!;
+    vis.find((n) => n.coords!.x === x && n.coords!.y === y);
 
   // ---- 行画布：视觉列 → 字符（宽字符占 2 格，第二格写空串占位）----
   const newRow = (): Map<number, string> => new Map();
@@ -426,6 +393,8 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
     return s.replace(/\s+$/, '');
   };
 
+  const xs = [...new Set(vis.map((n) => n.coords!.x))].sort((a, b) => a - b);
+  const ys = [...new Set(vis.map((n) => n.coords!.y))].sort((a, b) => a - b);
   // 行块（y 偶数索引）放名字，夹行（奇数索引）放垂直连线
   const rows: Map<number, string>[] = Array.from({ length: 2 * ys.length - 1 }, newRow);
   const blockRow = (y: number) => rows[2 * ys.indexOf(y)]!;
@@ -433,12 +402,42 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
   const topRow = newRow();
   const bottomRow = newRow();
 
-  // ---- 名字：以裸名中心对齐锚点放置（`(你)` 标注向右悬挂）----
-  for (const n of placed) {
-    if (!visible.has(n.id)) continue;
-    const x = n.coords!.x;
-    const start = vertAnchor(x) - Math.floor(bareW(n) / 2);
-    writeText(blockRow(n.coords!.y), start, label(n));
+  // ---- 约束排版：格子以裸名中心放在列锚点上，`(你)` 标注向右悬挂 ----
+  // 同一 x 的格子共享中心（垂直线才能是一条直线）；同一行排布相邻的两
+  // 格之间至少留 ` ─── ` 的连线位。名字长短只影响自己，不撑大"整列"。
+  const geo = (n: MapNode) => {
+    const half = Math.floor(bareW(n) / 2);
+    return { left: half, right: displayWidth(label(n)) - half };
+  };
+
+  // 列中心求解：左→右递推。每列取「自身最大左伸」与「同行左邻约束
+  // cx' + 右伸 + H_GAP + 左伸」的较大者；同行跨空档的对经 lastInRow
+  // 传递约束，保证同行格子永不重叠。
+  const cx = new Map<number, number>();
+  {
+    const lastInRow = new Map<number, { x: number; n: MapNode }>();
+    for (const x of xs) {
+      let cand = 0;
+      for (const y of ys) {
+        const n = at(x, y);
+        if (!n) continue;
+        cand = Math.max(cand, geo(n).left);
+        const prev = lastInRow.get(y);
+        if (prev && prev.x !== x) {
+          cand = Math.max(cand, cx.get(prev.x)! + geo(prev.n).right + H_GAP + geo(n).left);
+        }
+      }
+      cx.set(x, cand);
+      for (const y of ys) {
+        const n = at(x, y);
+        if (n) lastInRow.set(y, { x, n });
+      }
+    }
+  }
+
+  // ---- 名字 ----
+  for (const n of vis) {
+    writeText(blockRow(n.coords!.y), cx.get(n.coords!.x)! - geo(n).left, label(n));
   }
 
   // ---- 连线判定：存在任一方向的出口边使两格坐标相邻 ----
@@ -455,15 +454,16 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
     });
   const linked = (a: MapNode, b: MapNode): boolean => hasStep(a, b) || hasStep(b, a);
 
-  // ---- 水平连线：同行相邻列 ----
+  // ---- 水平连线：同行相邻排布对，点对点贴着两端名字 ----
   for (let i = 0; i < xs.length - 1; i++) {
     for (const y of ys) {
       const a = at(xs[i]!, y);
       const b = at(xs[i + 1]!, y);
       if (!a || !b || !linked(a, b)) continue;
-      const start = colX.get(xs[i]!)! + colW.get(xs[i]!)!;
+      const from = cx.get(xs[i]!)! + geo(a).right + 1;
+      const to = cx.get(xs[i + 1]!)! - geo(b).left - 2;
       const row = blockRow(y);
-      for (let k = 1; k <= 3; k++) putCell(row, start + k, H_DASH);
+      for (let k = from; k <= to; k++) putCell(row, k, H_DASH);
     }
   }
 
@@ -473,32 +473,31 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
       const a = at(x, ys[yi]!);
       const b = at(x, ys[yi + 1]!);
       if (!a || !b || !linked(a, b)) continue;
-      putCell(midRow(yi), vertAnchor(x), V_LINE);
+      putCell(midRow(yi), cx.get(x)!, V_LINE);
     }
   }
 
   // ---- 断线：出口指向迷雾外/图外（含跨区域）——画一小段，暗示"这边有路" ----
-  for (const n of placed) {
-    if (!visible.has(n.id)) continue;
+  for (const n of vis) {
     const { x, y } = n.coords!;
     const yi = ys.indexOf(y);
+    const g = geo(n);
     for (const [dir] of Object.entries(n.exits)) {
       const d = DIRS[dir];
       if (!d) continue; // up/down 跨层无平面坐标，不画
       if (at(x + d.x, y + d.y)) continue; // 邻格可见：归实线逻辑
       if (dir === 'north') {
-        putCell(yi === 0 ? topRow : midRow(yi - 1), vertAnchor(x), V_LINE);
+        putCell(yi === 0 ? topRow : midRow(yi - 1), cx.get(x)!, V_LINE);
       } else if (dir === 'south') {
-        putCell(yi === ys.length - 1 ? bottomRow : midRow(yi), vertAnchor(x), V_LINE);
+        putCell(yi === ys.length - 1 ? bottomRow : midRow(yi), cx.get(x)!, V_LINE);
       } else if (dir === 'west') {
         const row = blockRow(y);
-        putCell(row, colX.get(x)! - 2, H_DASH);
-        putCell(row, colX.get(x)! - 1, H_DASH);
+        putCell(row, cx.get(x)! - g.left - 1, H_DASH);
+        putCell(row, cx.get(x)! - g.left - 2, H_DASH);
       } else if (dir === 'east') {
         const row = blockRow(y);
-        const start = colX.get(x)! + colW.get(x)!;
-        putCell(row, start, H_DASH);
-        putCell(row, start + 1, H_DASH);
+        putCell(row, cx.get(x)! + g.right, H_DASH);
+        putCell(row, cx.get(x)! + g.right + 1, H_DASH);
       }
     }
   }
@@ -508,8 +507,8 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
   if (topRow.size > 0) out.push(topRow);
   out.push(...rows);
   if (bottomRow.size > 0) out.push(bottomRow);
-  // 西断线写在 colX-2/-1：首列（colX=0）时会落到负数位——按全图最小列统一
-  // 各行左边界，保证带前导断线的行与普通行视觉对齐
+  // 西断线可能落到 0 左侧（首列锚点 = 左伸时为 -1/-2）——按全图最小列
+  // 统一各行左边界，保证带前导断线的行与普通行视觉对齐
   const minCol = Math.min(0, ...out.flatMap((r) => [...r.keys()]));
   const lines = out.map((r) => renderRow(r, minCol));
   while (lines.length > 0 && lines[0]!.trim() === '') lines.shift();
@@ -517,11 +516,6 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
   return lines.join('\n');
 }
 
-/**
- * 记一次探索（seed 用：玩家的初始位置没有 `Moved` 事件可订阅）
- *
- * 没挂 `Visited` 的实体直接忽略——系统不能替内容补组件。
- */
 export function markVisited(world: World, entity: EntityId, roomId?: EntityId): void {
   const visited = world.getComponent(entity, Visited);
   if (!visited) return;

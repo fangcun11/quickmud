@@ -85,7 +85,7 @@ describe('renderAsciiMap · 迷雾', () => {
 
   it('连线两端都去过才画——单端Known也不泄漏邻接', () => {
     // 去过 a、c，但没去过中间的 b → a 与 c 之间不该出现连线
-    expect(renderAsciiMap(line().rooms, { visited: ['a', 'c'] })).toBe('a──      ──c');
+    expect(renderAsciiMap(line().rooms, { visited: ['a', 'c'] })).toBe('a── ──c');
   });
 
   it('二维迷雾：竖线同样要求两端都探明', () => {

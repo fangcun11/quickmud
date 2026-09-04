@@ -100,13 +100,13 @@ assert.throws(
 // 全图渲染：地名直书，(你) 标当前位置
 assert.equal(
   renderAsciiMap(layout.rooms, { current: 'cave' }),
-  ['村庄 ─── 森林小径', '             │', '           沼泽   ─── 蛛巢洞穴(你)'].join('\n'),
+  ['村庄 ─── 森林小径', '             │', '           沼泽 ─── 蛛巢洞穴(你)'].join('\n'),
 );
 
 // 迷雾：没探明的洞穴不出现，但沼泽东侧画断线暗示洞口方向
 assert.equal(
   renderAsciiMap(layout.rooms, { visited: ['village', 'forest', 'swamp'] }),
-  ['村庄 ─── 森林小径', '             │', '           沼泽  ──'].join('\n'),
+  ['村庄 ─── 森林小径', '             │', '           沼泽──'].join('\n'),
 );
 ```
 
