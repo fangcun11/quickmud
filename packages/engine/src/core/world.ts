@@ -384,7 +384,10 @@ export class World {
    * （`剑` 命中 `生锈的剑`），玩家输入的精确名字反而找不到东西。
    */
   private findEntityByName(name: string): EntityId | undefined {
-    const entities = this.entities.getAll();
+    // 0.14 起走组件反查索引：只扫挂了 Name 的实体（创建序），不再遍历全表——
+    // 世界里大量无名字的内部实体（计数器、buff、区域数据…）从此零开销。
+    // 候选仍是创建序，五级分级"首个命中"的语义与全表扫描逐点一致。
+    const entities = this.entities.findByComponent(Name);
     // 索引 = 优先级层级，值 = 该层首个命中
     const hits: (EntityId | undefined)[] = [undefined, undefined, undefined, undefined, undefined];
 
@@ -392,33 +395,29 @@ export class World {
       if (hits[level] === undefined) hits[level] = id;
     };
 
-    for (const entity of entities) {
-      const nameComp = entity.components.get(Name.id) as
-        | { text?: string; aliases?: string[] }
-        | undefined;
-      if (!nameComp) continue;
-
+    for (const id of entities) {
+      const nameComp = this.entities.getComponent(id, Name)!; // 索引保证存在
       const text = nameComp.text;
       const aliases = nameComp.aliases ?? [];
 
       if (text === name) {
         // 最高优先级，可以立即返回
-        return entity.id;
+        return id;
       }
       if (aliases.includes(name)) {
-        take(1, entity.id);
+        take(1, id);
         continue;
       }
       if (text && text.includes(name)) {
-        take(2, entity.id);
+        take(2, id);
         continue;
       }
       if (aliases.some((a) => a.includes(name))) {
-        take(3, entity.id);
+        take(3, id);
         continue;
       }
       if (aliases.some((a) => name.includes(a))) {
-        take(4, entity.id);
+        take(4, id);
       }
     }
 

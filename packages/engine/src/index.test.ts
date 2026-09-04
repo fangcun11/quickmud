@@ -241,6 +241,43 @@ describe('MUD Engine', () => {
     expect(w.world.findEntity('小二')).toBe(waiter);
   });
 
+  it('findEntity 索引化后与全表扫描参照逐点一致（0.14）', () => {
+    const w = createTestWorld();
+    // 参照实现：0.13 及之前的全表扫描语义
+    const scanByName = (name: string): string | undefined => {
+      const hits: (string | undefined)[] = [undefined, undefined, undefined, undefined, undefined];
+      const take = (level: number, id: string): void => {
+        if (hits[level] === undefined) hits[level] = id;
+      };
+      for (const entity of w.entities.getAll()) {
+        const c = entity.components.get(Name.id) as { text?: string; aliases?: string[] } | undefined;
+        if (!c) continue;
+        if (c.text === name) return entity.id;
+        if ((c.aliases ?? []).includes(name)) { take(1, entity.id); continue; }
+        if (c.text && c.text.includes(name)) { take(2, entity.id); continue; }
+        if ((c.aliases ?? []).some((a) => a.includes(name))) { take(3, entity.id); continue; }
+        if ((c.aliases ?? []).some((a) => name.includes(a))) { take(4, entity.id); }
+      }
+      return hits.find((id) => id !== undefined);
+    };
+
+    // 大量无 Name 实体混入（索引化后应零开销跳过）+ 空 text 实体 + 空别名
+    for (let i = 0; i < 100; i++) w.entities.create();
+    const unnamed = w.entities.create();
+    w.addComponent(unnamed, Name, { text: '', aliases: [] });
+    const innkeeper = w.entities.create();
+    w.addComponent(innkeeper, Name, { text: '客栈老板', aliases: ['掌柜', '老王'] });
+    const letter = w.entities.create();
+    w.addComponent(letter, Name, { text: '一封信' });
+
+    const probes = ['客栈老板', '掌柜', '老王', '老板', '一封', '', '不存在', '客栈', '一封信的'];
+    for (const q of probes) {
+      expect(w.world.findEntity(q)).toBe(scanByName(q));
+    }
+    // 空串不命中任何实体（text: '' 与 name: '' 全等是唯一陷阱——参照实现同样会命中，
+    // 引擎语义保持一致即可； probes 里包含 '' 正是锁死这一点）
+  });
+
   it('createTestWorld 工厂支持 commands（类型与运行时一致）', async () => {
     const Probe = defineCommand({ verbs: ['probe'], handle: () => 'PROBED' });
     const w = createTestWorld({ commands: [Probe] });
