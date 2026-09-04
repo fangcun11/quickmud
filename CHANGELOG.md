@@ -2,6 +2,22 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [Unreleased]
+
+主题：**新内容包开工**——侠客行（武侠题材文字 RPG）M0 骨架。
+`@mud/ecs-engine` / `@mud/prefabs` 零变更。
+
+- 新增 `example/xiake-xing`（0.1.0）：三区域 12 房世界骨架——青石镇
+  （安全区：悦来客栈出生点 / 杂货铺 / 望岳武馆）、终南山道（过渡）、
+  野狼林（M1 野怪区）；只注册 prefabs 基础系统与移动/查看/地图命令，
+  零新组件零新系统。冒烟测试 9 例：走遍三区域、跨区域往返、撞墙、
+  区域图/世界地图渲染（跨区域四方向出口在区域图上有连线）
+- 新增 `docs/roadmap-xiake-xing.md`：M0~M2 定稿规格（指令回合制、
+  纯公式三态判定、核心循环主线），M3~M6 概览
+- 新增 `docs/engine-feedback.md`：侠客行开发过程的引擎/工具集改进记录
+  （首条 F1：example 脚手架样板复制——REPL/walk/help/玩家出生拼装
+  四处样板逐包重复，候选抽 `createRepl`/`spawnPlayer` 进 prefabs）
+
 ## [0.16.0] - 2026-09-04
 
 主题：**prefabs 工具集关系化**——把 prefabs 里"实体指向实体"的四处数据
