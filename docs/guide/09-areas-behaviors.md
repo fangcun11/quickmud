@@ -164,7 +164,7 @@ const candleRooms = [
 // …注入后：
 tw.advance(4500); // 跨过 2000ms 与 4000ms 两个网格；剩余 500ms 不够一格（drift-free）
 assert.equal(
-  tw.entities.getComponent('shrine', CandleState)!.fuel,
+  tw.getComponent('shrine', CandleState)!.fuel,
   1,
   'every 应恰好在每个网格点触发一次，不漂移不多烧',
 );

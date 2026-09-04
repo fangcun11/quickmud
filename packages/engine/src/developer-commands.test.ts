@@ -15,9 +15,9 @@ function setup() {
   const w = new World();
   registerDeveloperKit(w);
   const player = w.entities.createWithId('dev-player');
-  w.entities.addComponent(player, Position, { roomId: 'hall' });
-  w.entities.addComponent(player, Health, { current: 30, max: 100 });
-  w.entities.addComponent(player, Name, { text: '勇者', aliases: [] });
+  w.addComponent(player, Position, { roomId: 'hall' });
+  w.addComponent(player, Health, { current: 30, max: 100 });
+  w.addComponent(player, Name, { text: '勇者', aliases: [] });
   return { w, player };
 }
 
@@ -26,20 +26,20 @@ describe('A4 开发者命令', () => {
     const { w, player } = setup();
     const out = await w.execute('/tp dungeon', player);
     expect(out).toContain('hall → dungeon');
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('dungeon');
+    expect(w.getComponent(player, Position)!.roomId).toBe('dungeon');
   });
 
   it('/heal 默认自己，支持按名字指定目标', async () => {
     const { w, player } = setup();
     const npc = w.entities.create();
-    w.entities.addComponent(npc, Health, { current: 1, max: 50 });
-    w.entities.addComponent(npc, Name, { text: '酒保', aliases: [] });
+    w.addComponent(npc, Health, { current: 1, max: 50 });
+    w.addComponent(npc, Name, { text: '酒保', aliases: [] });
 
     expect(await w.execute('/heal', player)).toContain('30 → 100');
-    expect(w.entities.getComponent(player, Health)!.current).toBe(100);
+    expect(w.getComponent(player, Health)!.current).toBe(100);
 
     expect(await w.execute('/heal 酒保', player)).toContain('1 → 50');
-    expect(w.entities.getComponent(npc, Health)!.current).toBe(50);
+    expect(w.getComponent(npc, Health)!.current).toBe(50);
   });
 
   it('/give 已移除（Inventory 退役），不再注册', async () => {
@@ -61,9 +61,9 @@ describe('A4 开发者命令', () => {
     await w.execute('/tp dungeon', player);
     const snap = w.createSnapshot();
 
-    w.entities.getComponent(player, Position)!.roomId = 'elsewhere';
+    w.getComponent(player, Position)!.roomId = 'elsewhere';
     w.rollbackWorld(snap);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('dungeon');
+    expect(w.getComponent(player, Position)!.roomId).toBe('dungeon');
   });
 });
 
@@ -76,10 +76,10 @@ describe('P1-6 开发者命令走事件（铁律示范位）', () => {
     // 事件路径可观测：命令只翻译意图，效果系统消费事件
     // （DevTeleported/DevHealed 的 token 见 developer.ts；此处经组件效果间接验证——
     //   状态确实变了，而命令本身没有改组件的通道）
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('dungeon');
+    expect(w.getComponent(player, Position)!.roomId).toBe('dungeon');
 
     await w.execute('/heal', player);
-    expect(w.entities.getComponent(player, Health)!.current).toBe(100);
+    expect(w.getComponent(player, Health)!.current).toBe(100);
   });
 
   it('不注册效果系统时事件悬空，但命令不炸、状态不变（fail-safe）', async () => {
@@ -87,10 +87,10 @@ describe('P1-6 开发者命令走事件（铁律示范位）', () => {
     const w = new World();
     w.registerCommands(...createDeveloperCommands()); // 只注册命令
     const player = w.entities.createWithId('dev-player');
-    w.entities.addComponent(player, Position, { roomId: 'hall' });
-    w.entities.addComponent(player, Health, { current: 30, max: 100 });
+    w.addComponent(player, Position, { roomId: 'hall' });
+    w.addComponent(player, Health, { current: 30, max: 100 });
 
     expect(await w.execute('/tp dungeon', player)).toContain('hall → dungeon');
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('hall'); // 未落位
+    expect(w.getComponent(player, Position)!.roomId).toBe('hall'); // 未落位
   });
 });

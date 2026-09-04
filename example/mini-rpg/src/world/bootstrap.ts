@@ -240,22 +240,22 @@ export function bootstrap(): BootstrapResult {
 
   // ---- 玩家（QuestLog 是参与任务的前提；Visited 决定地图迷雾）----
   const playerId = world.entities.create();
-  world.entities.addComponent(playerId, Health, { current: 100, max: 100 });
+  world.addComponent(playerId, Health, { current: 100, max: 100 });
   // 出生点直接用 layout.entry：房间拓扑与玩家初始位置不可能写歪
-  world.entities.addComponent(playerId, Position, { roomId: layout.entry });
-  world.entities.addComponent(playerId, Name, { text: '冒险者' });
-  world.entities.addComponent(playerId, QuestLog);
-  world.entities.addComponent(playerId, Visited);
+  world.addComponent(playerId, Position, { roomId: layout.entry });
+  world.addComponent(playerId, Name, { text: '冒险者' });
+  world.addComponent(playerId, QuestLog);
+  world.addComponent(playerId, Visited);
   markVisited(world, playerId); // seed 入口（初始位置没有 Moved 事件可订阅）
 
   // ---- 村长：挂两条任务（主线 kill 巨蛛 / 支线 collect 狼皮）----
   const elderId = world.entities.createWithId('elder');
-  world.entities.addComponent(elderId, Name, { text: '村长', aliases: ['长老', 'elder'] });
-  world.entities.addComponent(elderId, Description, {
+  world.addComponent(elderId, Name, { text: '村长', aliases: ['长老', 'elder'] });
+  world.addComponent(elderId, Description, {
     text: '佝偻着背的老人，手里攥着一根磨得发亮的拐杖，眼神里全是心事。',
   });
-  world.entities.addComponent(elderId, Located, { at: 'village' });
-  world.entities.addComponent(elderId, QuestGiver, {
+  world.addComponent(elderId, Located, { at: 'village' });
+  world.addComponent(elderId, QuestGiver, {
     quests: [
       {
         id: 'spider-bounty',
@@ -271,16 +271,16 @@ export function bootstrap(): BootstrapResult {
       },
     ],
   });
-  world.entities.addComponent(elderId, Dialogue, ElderDialogue);
+  world.addComponent(elderId, Dialogue, ElderDialogue);
 
   // ---- 药婆：讨茶回春（HerbalistEffectsSystem）----
   const herbalistId = world.entities.createWithId('herbalist');
-  world.entities.addComponent(herbalistId, Name, { text: '药婆', aliases: ['药师', 'herbalist'] });
-  world.entities.addComponent(herbalistId, Description, {
+  world.addComponent(herbalistId, Name, { text: '药婆', aliases: ['药师', 'herbalist'] });
+  world.addComponent(herbalistId, Description, {
     text: '干瘦的老妇人，面前的粗布上摊着成捆的草药，空气里都是苦味。',
   });
-  world.entities.addComponent(herbalistId, Located, { at: 'village' });
-  world.entities.addComponent(herbalistId, Dialogue, HerbalistDialogue);
+  world.addComponent(herbalistId, Located, { at: 'village' });
+  world.addComponent(herbalistId, Dialogue, HerbalistDialogue);
 
   // ---- 野狼×2：森林游荡（v0.5 Wander），死后掉狼皮（v0.6 Loot）----
   const wolves = [
@@ -299,12 +299,12 @@ export function bootstrap(): BootstrapResult {
   ];
   for (const w of wolves) {
     const id = world.entities.createWithId(w.id);
-    world.entities.addComponent(id, Name, w.name);
-    world.entities.addComponent(id, Description, w.desc);
-    world.entities.addComponent(id, Position, { roomId: 'forest' });
-    world.entities.addComponent(id, Health, { current: w.hp, max: w.hp });
-    world.entities.addComponent(id, Wander);
-    world.entities.addComponent(id, Loot, {
+    world.addComponent(id, Name, w.name);
+    world.addComponent(id, Description, w.desc);
+    world.addComponent(id, Position, { roomId: 'forest' });
+    world.addComponent(id, Health, { current: w.hp, max: w.hp });
+    world.addComponent(id, Wander);
+    world.addComponent(id, Loot, {
       drops: [
         { name: '狼皮', aliases: ['皮'], description: '一张带腥味的狼皮，毛色油亮，能卖个好价钱。' },
       ],
@@ -313,17 +313,17 @@ export function bootstrap(): BootstrapResult {
 
   // ---- 洞穴巨蛛（boss）：毒攻击（内容系统）+ 掉传家宝 ----
   const spiderId = world.entities.createWithId('spider');
-  world.entities.addComponent(spiderId, Name, {
+  world.addComponent(spiderId, Name, {
     text: '洞穴巨蛛',
     aliases: ['巨蛛', '蜘蛛', 'boss'],
   });
-  world.entities.addComponent(spiderId, Description, {
+  world.addComponent(spiderId, Description, {
     text: '小牛犊子大的蜘蛛，八条腿撑满半个洞穴。腹部斑纹像一张扭曲的人脸。',
   });
-  world.entities.addComponent(spiderId, Position, { roomId: 'cave' });
-  world.entities.addComponent(spiderId, Health, { current: 40, max: 40 });
-  world.entities.addComponent(spiderId, Weapon, { damage: 6 });
-  world.entities.addComponent(spiderId, Loot, {
+  world.addComponent(spiderId, Position, { roomId: 'cave' });
+  world.addComponent(spiderId, Health, { current: 40, max: 40 });
+  world.addComponent(spiderId, Weapon, { damage: 6 });
+  world.addComponent(spiderId, Loot, {
     drops: [
       {
         name: '平安玉佩',

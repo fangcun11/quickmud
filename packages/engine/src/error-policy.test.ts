@@ -31,7 +31,7 @@ describe('系统错误策略（onError）', () => {
     w.register(makeSystem('bad'));
     w.register(makeSystem('good'));
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
 
     expect(() => w.eventPump.emit(Boom.token, { target: p })).toThrow(/bad exploded/);
     expect(w.getSystemErrors()).toHaveLength(0); // propagate 不走日志
@@ -43,7 +43,7 @@ describe('系统错误策略（onError）', () => {
     w.register(makeSystem('bad', 'skip', () => order.push('bad')));
     w.register(makeSystem('good', 'skip', () => order.push('good')));
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
 
     w.eventPump.emit(Boom.token, { target: p });
 
@@ -51,7 +51,7 @@ describe('系统错误策略（onError）', () => {
     const errors = w.getSystemErrors();
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatchObject({ token: 'boom', message: 'bad exploded', policy: 'skip' });
-    expect(w.entities.getComponent(p, Counter)!.value).toBe(1);
+    expect(w.getComponent(p, Counter)!.value).toBe(1);
   });
 
   it('degrade：出错后该系统被隔离，此后不再响应任何事件', () => {
@@ -59,7 +59,7 @@ describe('系统错误策略（onError）', () => {
     const w = new World();
     w.register(makeSystem('bad', 'degrade', calls));
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
 
     w.eventPump.emit(Boom.token, { target: p });
     expect(calls).toHaveBeenCalledTimes(1);
@@ -76,7 +76,7 @@ describe('系统错误策略（onError）', () => {
     const w = new World();
     w.register(makeSystem('bad'));
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
 
     try {
       w.eventPump.emit(Boom.token, { target: p });
@@ -93,7 +93,7 @@ describe('系统错误策略（onError）', () => {
     const w = new World();
     w.register(makeSystem('bad', 'skip'));
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
 
     w.eventPump.emit(Boom.token, { target: p });
     const errors = w.getSystemErrors();
@@ -107,7 +107,7 @@ describe('系统错误策略（onError）', () => {
     const w = new World();
     w.register(makeSystem('bad', 'skip'));
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
     w.eventPump.emit(Boom.token, { target: p });
     expect(w.getSystemErrors()).toHaveLength(1);
     w.clearSystemErrors();

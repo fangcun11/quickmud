@@ -122,11 +122,11 @@ describe('ManualClock / TestWorld 时间推进', () => {
     });
     const tw = createTestWorld({ tickInterval: 100, systems: [ticker] });
     const e = tw.entities.createWithId('e');
-    tw.entities.addComponent(e, Counter, { value: 0 });
+    tw.addComponent(e, Counter, { value: 0 });
 
     tw.advance(500);
 
-    expect(tw.entities.getComponent(e, Counter)?.value).toBe(5);
+    expect(tw.getComponent(e, Counter)?.value).toBe(5);
   });
 });
 
@@ -181,8 +181,8 @@ describe('P1-5 TestWorld 探针增强（0.12）', () => {
     });
 
     // addComponent 语义：data 整存替换，不与默认值深合并（补丁合并请用 blueprint）
-    expect(w.entities.getComponent('a', Health)).toEqual({ current: 5 });
-    expect(w.entities.getComponent('b', Health)).toEqual({ current: 10, max: 10 });
+    expect(w.getComponent('a', Health)).toEqual({ current: 5 });
+    expect(w.getComponent('b', Health)).toEqual({ current: 10, max: 10 });
   });
 
   it('TestWorld.wrap/fromWorld 给 fork 世界装探针，继承件照常可用', async () => {

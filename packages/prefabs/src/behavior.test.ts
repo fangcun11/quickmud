@@ -63,7 +63,7 @@ function lineWorld(
   buildRoomBehaviors(w.world, rooms);
 
   const player = w.entities.createWithId('player');
-  w.entities.addComponent(player, Position, { roomId: 'a' });
+  w.addComponent(player, Position, { roomId: 'a' });
   return { w, player };
 }
 
@@ -107,7 +107,7 @@ describe('房间行为 · 生命周期', () => {
     await w.world.execute('east', player);
     expect(seen).toEqual([player]);
     expect(textOf(w.output.getAll())).toContain('你踏进了乙房间。');
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('b');
+    expect(w.getComponent(player, Position)!.roomId).toBe('b');
   });
 
   it('撞墙（出口不存在）不触发 enter——Moved 是结果不是意图', async () => {
@@ -118,7 +118,7 @@ describe('房间行为 · 生命周期', () => {
 
     await w.world.execute('north', player); // a 没有 north
     expect(entered).toBe(0);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('a');
+    expect(w.getComponent(player, Position)!.roomId).toBe('a');
   });
 
   it('leave 先于 enter，ctx.from 分别是去处与来处', async () => {
@@ -197,11 +197,11 @@ describe('房间行为 · 生命周期', () => {
     });
 
     w.advance(500); // t=500：没到 1000 网格
-    expect(w.entities.getComponent('a', State)!.count).toBe(0);
+    expect(w.getComponent('a', State)!.count).toBe(0);
 
     w.advance(1500); // t=2000：跨过 1000 与 2000 两个网格点
-    expect(w.entities.getComponent('a', State)!.count).toBe(2);
-    expect(w.entities.getComponent('a', RoomClock)!.lastTickedAt).toBe(2000);
+    expect(w.getComponent('a', State)!.count).toBe(2);
+    expect(w.getComponent('a', RoomClock)!.lastTickedAt).toBe(2000);
   });
 
   it('访问未声明的 ctx.state → 运行期炸一句人话（而非 undefined 上赋值的诡异报错）', async () => {
@@ -218,7 +218,7 @@ describe('房间行为 · 生命周期', () => {
     });
 
     await expect(w.world.execute('east', player)).rejects.toThrow(/没有声明 state/);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('a');
+    expect(w.getComponent(player, Position)!.roomId).toBe('a');
   });
 
   it('一个房间的处理器炸了，不连坐其他房间（派发器故障域 = 单房间）', async () => {
@@ -231,10 +231,10 @@ describe('房间行为 · 生命周期', () => {
     });
 
     await w.world.execute('east', player); // 炸掉，但不中断世界
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('b');
+    expect(w.getComponent(player, Position)!.roomId).toBe('b');
     // 玩家走回 a 再出去：a 的 enter 照常（下一轮加 a 的行为验证派发器还活着）
     await w.world.execute('west', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('a');
+    expect(w.getComponent(player, Position)!.roomId).toBe('a');
   });
 });
 
@@ -243,11 +243,11 @@ describe('房间守卫 · 同步拦截', () => {
     const { w, player } = lineWorld((rooms) => {
       rooms[1]!.on = { canEnter: () => '洞口被一张巨大的蛛网封死了。' };
     });
-    w.entities.addComponent(player, Visited);
+    w.addComponent(player, Visited);
 
     await w.world.execute('east', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('a');
-    expect(w.entities.getComponent(player, Visited)!.rooms).toEqual([]); // 没记账
+    expect(w.getComponent(player, Position)!.roomId).toBe('a');
+    expect(w.getComponent(player, Visited)!.rooms).toEqual([]); // 没记账
     expect(textOf(w.output.getAll())).toContain('蛛网封死');
   });
 
@@ -258,7 +258,7 @@ describe('房间守卫 · 同步拦截', () => {
     });
 
     await w.world.execute('east', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('a');
+    expect(w.getComponent(player, Position)!.roomId).toBe('a');
     expect(textOf(w.output.getAll())).toContain('吊桥'); // canLeave 先于 canEnter
   });
 
@@ -287,11 +287,11 @@ describe('房间守卫 · 同步拦截', () => {
     });
 
     await w.world.execute('east', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('a');
+    expect(w.getComponent(player, Position)!.roomId).toBe('a');
 
     await w.world.execute('unbolt', player);
     await w.world.execute('east', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('b');
+    expect(w.getComponent(player, Position)!.roomId).toBe('b');
   });
 });
 
@@ -331,10 +331,10 @@ describe('房间命令', () => {
 
     await w.world.execute('search', player);
     await w.world.execute('take 火把', player);
-    expect(w.entities.getComponent('火把' as never, Located)).toBeUndefined(); // 名字不是 id
+    expect(w.getComponent('火把' as never, Located)).toBeUndefined(); // 名字不是 id
     const held = w.entities
       .findByComponent(Located)
-      .find((id) => w.entities.getComponent(id, Located)?.at === player);
+      .find((id) => w.getComponent(id, Located)?.at === player);
     expect(held).toBeDefined();
   });
 
@@ -371,7 +371,7 @@ describe('房间状态 · 快照与回滚', () => {
     });
 
     await w.world.execute('east', player);
-    expect(w.entities.getComponent('b', TrapState)!.collapsed).toBe(true);
+    expect(w.getComponent('b', TrapState)!.collapsed).toBe(true);
 
     const snap = w.world.createSnapshot();
     expect(() => JSON.parse(JSON.stringify(snap.entities))).not.toThrow(); // 可 JSON
@@ -380,7 +380,7 @@ describe('房间状态 · 快照与回滚', () => {
     const snapBefore = w.world.createSnapshot();
     void snapBefore;
     w.world.rollbackWorld(snap);
-    expect(w.entities.getComponent('b', TrapState)!.collapsed).toBe(true); // 快照时已是 true
+    expect(w.getComponent('b', TrapState)!.collapsed).toBe(true); // 快照时已是 true
 
     const snapEarlier = w.world.createSnapshot();
     void snapEarlier;
@@ -406,7 +406,7 @@ describe('房间状态 · 快照与回滚', () => {
     expect(textOf(w.output.getAll())).toContain('轰然塌陷');
 
     w.world.rollbackWorld(before);
-    expect(w.entities.getComponent('b', TrapState)!.collapsed).toBe(false);
+    expect(w.getComponent('b', TrapState)!.collapsed).toBe(false);
 
     w.output.clear();
     await w.world.execute('east', player);
@@ -425,17 +425,17 @@ describe('房间状态 · 快照与回滚', () => {
     });
 
     await w.world.execute('east', player);
-    expect(w.entities.getComponent('b', TrapState)!.sprung).toBe(true);
+    expect(w.getComponent('b', TrapState)!.sprung).toBe(true);
 
     // fork 的世界里：状态被复制、行为照常可用（RoomBehaviorRef 指向模块级注册表，
     // 实体 id 与主世界一致）
     const fork = w.world.fork();
-    fork.entities.getComponent('b', TrapState)!.sprung = false;
-    expect(w.entities.getComponent('b', TrapState)!.sprung).toBe(true); // 主世界不受影响
+    fork.getComponent('b', TrapState)!.sprung = false;
+    expect(w.getComponent('b', TrapState)!.sprung).toBe(true); // 主世界不受影响
 
     await fork.execute('west', player);
     await fork.execute('east', player);
-    expect(fork.entities.getComponent('b', TrapState)!.sprung).toBe(true); // fork 里行为照常记账
+    expect(fork.getComponent('b', TrapState)!.sprung).toBe(true); // fork 里行为照常记账
   });
 });
 
@@ -495,7 +495,7 @@ describe('派发架构 · 查表而非一房一系统', () => {
     buildRooms(w.world, layoutRooms(rooms, { entry: 'a' }));
     buildRoomBehaviors(w.world, rooms);
 
-    expect(w.entities.getComponent('a', Exits)).toBeDefined();
-    expect(w.entities.findByComponent(RoomClock)).toEqual([]);
+    expect(w.getComponent('a', Exits)).toBeDefined();
+    expect(w.findByComponent(RoomClock)).toEqual([]);
   });
 });

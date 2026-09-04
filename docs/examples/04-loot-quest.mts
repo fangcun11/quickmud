@@ -60,23 +60,23 @@ w.world.registerCommands(
 );
 
 const player = w.entities.createWithId('player');
-w.entities.addComponent(player, Health, { current: 50, max: 100 });
-w.entities.addComponent(player, Position, { roomId: 'town' });
-w.entities.addComponent(player, Name, { text: '勇者' });
-w.entities.addComponent(player, QuestLog); // 没有它就不参与任务
+w.addComponent(player, Health, { current: 50, max: 100 });
+w.addComponent(player, Position, { roomId: 'town' });
+w.addComponent(player, Name, { text: '勇者' });
+w.addComponent(player, QuestLog); // 没有它就不参与任务
 
 const town = w.entities.createWithId('town');
-w.entities.addComponent(town, Name, { text: '城镇' });
-w.entities.addComponent(town, Exits, { north: 'tavern' });
+w.addComponent(town, Name, { text: '城镇' });
+w.addComponent(town, Exits, { north: 'tavern' });
 const tavern = w.entities.createWithId('tavern');
-w.entities.addComponent(tavern, Name, { text: '酒馆' });
-w.entities.addComponent(tavern, Exits, { south: 'town' });
+w.addComponent(tavern, Name, { text: '酒馆' });
+w.addComponent(tavern, Exits, { south: 'town' });
 
 // 常驻 NPC 用 Located 锚定房间
 const barman = w.entities.createWithId('barman');
-w.entities.addComponent(barman, Name, { text: '酒保' });
-w.entities.addComponent(barman, Located, { at: 'tavern' });
-w.entities.addComponent(barman, QuestGiver, {
+w.addComponent(barman, Name, { text: '酒保' });
+w.addComponent(barman, Located, { at: 'tavern' });
+w.addComponent(barman, QuestGiver, {
   quests: [
     {
       id: 'dog-hunt',
@@ -88,17 +88,17 @@ w.entities.addComponent(barman, QuestGiver, {
 });
 
 const mob = w.entities.createWithId('mob');
-w.entities.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
-w.entities.addComponent(mob, Position, { roomId: 'town' });
-w.entities.addComponent(mob, Health, { current: 20, max: 20 });
-w.entities.addComponent(mob, Loot, { drops: [{ name: '狗肉' }] });
+w.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
+w.addComponent(mob, Position, { roomId: 'town' });
+w.addComponent(mob, Health, { current: 20, max: 20 });
+w.addComponent(mob, Loot, { drops: [{ name: '狗肉' }] });
 
 // ---- 3. 跑闭环：击杀 → 掉落 → 拾取 → 回酒馆交任务领奖 ----
 await w.world.execute('attack 野狗', player);
 await w.world.execute('attack 野狗', player); // HP 归零 → Died → 掉落 + 清场
 
 assert.ok(!w.entities.has('mob'), '死亡管线：目标被清场');
-const log = w.entities.getComponent(player, QuestLog)!;
+const log = w.getComponent(player, QuestLog)!;
 assert.ok(log.completed.includes('dog-hunt'), 'kill 目标已达成（进度全局追踪）');
 
 // 掉落物是真实体：此刻在城镇容器里
@@ -111,7 +111,7 @@ assert.strictEqual(await w.world.execute('turnin', player), null, '交付成功'
 assert.ok(log.turnedIn.includes('dog-hunt'), '任务已交付');
 assert.ok((await w.world.execute('inventory', player))!.includes('陈酿麦酒'), '奖励已入包');
 assert.strictEqual(
-  w.entities.getComponent(player, Health)!.current,
+  w.getComponent(player, Health)!.current,
   70,
   'heal 奖励已生效（50 + 20）',
 );
@@ -123,7 +123,7 @@ assert.strictEqual(clock.now(), 300, 'clock 与世界时间同步');
 
 // ---- 5. Buff：定时效果也是实体（v0.7），结算由世界时间网格驱动 ----
 // BuffSystem 每 1000ms 一跳；首跳激活（写计时起点），此后每格结算一次效果
-const hp = () => w.entities.getComponent(player, Health)!.current;
+const hp = () => w.getComponent(player, Health)!.current;
 w.world.spawn(
   buffBlueprint({
     victim: player,

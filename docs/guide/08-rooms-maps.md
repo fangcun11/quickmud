@@ -122,8 +122,8 @@ w.registerCommands(
 buildRooms(w, layout); // 注入：Name / Description / Exits / Coordinates
 
 const player = w.entities.createWithId('player');
-w.entities.addComponent(player, Position, { roomId: 'village' });
-w.entities.addComponent(player, Visited);
+w.addComponent(player, Position, { roomId: 'village' });
+w.addComponent(player, Visited);
 markVisited(w, player); // seed 出生房间（初始位置没有 Moved 事件可订阅）
 
 // 出生点：地图只有自己

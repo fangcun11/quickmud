@@ -61,7 +61,7 @@ describe('CommandContext.output', () => {
     const w = new World();
     w.registerCommands(ScoreCommand);
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Position, { roomId: 'hall' });
+    w.addComponent(p, Position, { roomId: 'hall' });
     await w.execute('score', p);
 
     // 事件照常可发（命令与系统的正式通信通道）

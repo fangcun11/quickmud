@@ -30,10 +30,10 @@ const Health = trait('health', { current: 100, max: 100 });
 // 创建世界与实体
 const world = new World({ tickInterval: 500 });
 const player = world.entities.create();
-world.entities.addComponent(player, Health, { current: 80, max: 100 });
+world.addComponent(player, Health, { current: 80, max: 100 });
 // Name 是引擎内置组件（单语言，findEntityByName 的查找契约）：
 // 形状为 { text: string; aliases?: string[] }
-world.entities.addComponent(player, Name, { text: '韩立' });
+world.addComponent(player, Name, { text: '韩立' });
 
 // 注册命令与系统，处理玩家输入
 world.register(...systems);
@@ -113,8 +113,8 @@ const tree = defineDialogue('start', [
 // 2. 挂到 NPC + 注册系统/命令
 world.register(DialogueSystem);
 world.registerCommands(...createDialogueCommands());
-world.entities.addComponent(npcId, Dialogue, tree);
-world.entities.addComponent(npcId, Memory, { flags: [] });
+world.addComponent(npcId, Dialogue, tree);
+world.addComponent(npcId, Memory, { flags: [] });
 
 // 3. 玩家输入：talk 酒保 → 1 → 2（选项序号）
 const feedback = await world.execute('talk 酒保', playerId);

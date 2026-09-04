@@ -156,7 +156,7 @@ export class TestWorld {
             if (Array.isArray(entityDef.components)) {
               // 元组形态：走 addComponent 正路（data 省略时用组件默认值）
               for (const [definition, data] of entityDef.components) {
-                this.world.entities.addComponent(id, definition, data);
+                this.world.addComponent(id, definition, data);
               }
             } else {
               // 哈希形态（兼容旧写法）：按确定性 id 直存
@@ -278,6 +278,38 @@ export class TestWorld {
    */
   get entities(): EntityManager {
     return this.world.entities;
+  }
+
+  // ---------- 组件访问转发（0.13 起与 World 顶层同款六件套） ----------
+  // 组件读写走 w.getComponent(...)，与宿主代码形态一致；
+  // 实体创建/销毁仍走 w.entities。
+
+  getComponent<T>(id: EntityId, component: ComponentDefinition<T>): T | undefined {
+    return this.world.getComponent(id, component);
+  }
+
+  hasComponent<T>(id: EntityId, component: ComponentDefinition<T>): boolean {
+    return this.world.hasComponent(id, component);
+  }
+
+  addComponent<T>(id: EntityId, component: ComponentDefinition<T>, data?: T): void {
+    this.world.addComponent(id, component, data);
+  }
+
+  removeComponent<T>(id: EntityId, component: ComponentDefinition<T>): boolean {
+    return this.world.removeComponent(id, component);
+  }
+
+  updateComponent<T>(
+    id: EntityId,
+    component: ComponentDefinition<T>,
+    updater: (current: T) => T
+  ): void {
+    this.world.updateComponent(id, component, updater);
+  }
+
+  findByComponent<T>(component: ComponentDefinition<T>): EntityId[] {
+    return this.world.findByComponent(component);
   }
 
   /**

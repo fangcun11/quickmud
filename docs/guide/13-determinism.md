@@ -25,7 +25,7 @@ const buildWorld = () => {
   w.register(HealSystem);
   w.registerCommands(RestCommand);
   const p = w.entities.createWithId('player-1');
-  w.entities.addComponent(p, Health, { current: 60, max: 100 });
+  w.addComponent(p, Health, { current: 60, max: 100 });
   return { world: w, player: p };
 };
 
@@ -77,12 +77,12 @@ const sandbox = main.world.fork(); // 实体 id 与主世界一致，状态是�
 await sandbox.execute('rest 99', main.player);
 
 assert.strictEqual(
-  main.world.entities.getComponent(main.player, Health)!.current,
+  main.world.getComponent(main.player, Health)!.current,
   90,
   '主世界没被沙箱里的操作影响',
 );
 assert.strictEqual(
-  sandbox.entities.getComponent(main.player, Health)!.current,
+  sandbox.getComponent(main.player, Health)!.current,
   100,
   '分叉世界走自己的时间线（90 + 50 = 140 → 截断 100）',
 );

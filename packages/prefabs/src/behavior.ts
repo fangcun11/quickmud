@@ -542,7 +542,7 @@ export function buildRoomBehaviors(world: World, defs: AnyRoomModuleDef[]): void
       );
     }
 
-    const existing = world.entities.getComponent(roomId, RoomBehaviorRef);
+    const existing = world.getComponent(roomId, RoomBehaviorRef);
     // 同一个世界重复构建时复用槽位，避免 BEHAVIORS 无限增长
     const index = existing && existing.index >= 0 ? existing.index : BEHAVIORS.length;
     BEHAVIORS[index] = {
@@ -554,12 +554,12 @@ export function buildRoomBehaviors(world: World, defs: AnyRoomModuleDef[]): void
     if (existing) {
       existing.index = index;
     } else {
-      world.entities.addComponent(roomId, RoomBehaviorRef, { index });
+      world.addComponent(roomId, RoomBehaviorRef, { index });
     }
 
-    if (def.state) world.entities.addComponent(roomId, def.state);
-    if (def.on?.every) world.entities.addComponent(roomId, RoomClock);
-    if (def.on?.firstEnter) world.entities.addComponent(roomId, RoomEnterLog);
+    if (def.state) world.addComponent(roomId, def.state);
+    if (def.on?.every) world.addComponent(roomId, RoomClock);
+    if (def.on?.firstEnter) world.addComponent(roomId, RoomEnterLog);
   }
 
   // 3. 房间命令：全局注册的**纯翻译层**——只做位置校验并 emit 派发事件，

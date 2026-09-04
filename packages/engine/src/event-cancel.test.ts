@@ -90,7 +90,7 @@ describe('P1-4 延时事件取消', () => {
 
     const w = createTestWorld({ systems: [BoomSystem, DefuserSystem], tickInterval: 100 });
     const holder = w.entities.createWithId('holder');
-    w.entities.addComponent(holder, Probe, {
+    w.addComponent(holder, Probe, {
       handle: w.world.eventPump.schedule(Exploded.token, { room: 'hall' }, 300, 0),
     });
 

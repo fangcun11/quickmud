@@ -44,9 +44,9 @@ const w = createTestWorld({ commands: createDialogueCommands() });
 w.world.register(DialogueSystem, EffectSystem);
 
 const barman = w.entities.createWithId('barman');
-w.entities.addComponent(barman, Name, { text: '酒保', aliases: [] });
-w.entities.addComponent(barman, Dialogue, tavernTree); // 对话树挂在 NPC 上
-w.entities.addComponent(barman, Memory, { flags: [] }); // 有 Memory 才支持 remember
+w.addComponent(barman, Name, { text: '酒保', aliases: [] });
+w.addComponent(barman, Dialogue, tavernTree); // 对话树挂在 NPC 上
+w.addComponent(barman, Memory, { flags: [] }); // 有 Memory 才支持 remember
 
 const player = w.entities.createWithId('player-1');
 
@@ -70,7 +70,7 @@ assert.ok(w.world.output.ofKind('error').length > 0, '没有听懂你的选择')
 await w.world.execute('talk 酒保 1', player);
 assert.ok(dialogueLines().includes('我叫老王，在这儿看了半辈子吧台。'));
 assert.deepEqual(
-  w.entities.getComponent(barman, Memory)!.flags,
+  w.getComponent(barman, Memory)!.flags,
   ['asked_name'],
   'remember 在选中时写入 Memory.flags',
 );
@@ -79,7 +79,7 @@ assert.deepEqual(
 await w.world.execute('talk 酒保', player); // who 无选项已自动结束 → 重新进入 start
 await w.world.execute('talk 酒保 2', player); // 来杯麦酒 → patron 记忆解锁传闻门
 assert.ok(dialogueLines().includes('酒来了，慢用。'));
-assert.deepEqual(w.entities.getComponent(barman, Memory)!.flags, ['asked_name', 'patron']);
+assert.deepEqual(w.getComponent(barman, Memory)!.flags, ['asked_name', 'patron']);
 
 // ---- 6. 门开之后：门控选项出现在编号 1，选中即听到传闻 ----
 await w.world.execute('talk 酒保', player); // beer 也无选项 → 再次重启

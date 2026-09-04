@@ -46,16 +46,16 @@ function untilTide(target: number): void {
 }
 
 function pos(): string {
-  return world.entities.getComponent(player, Position)!.roomId;
+  return world.getComponent(player, Position)!.roomId;
 }
 
 function hp(): number {
-  return world.entities.getComponent(player, Health)!.current;
+  return world.getComponent(player, Health)!.current;
 }
 
 /** 读**区域实体**上的水位（跨房间机制的状态载体，不是某个房间的私有变量） */
 function tide(): { level: number; rising: boolean; valveShut: boolean } {
-  return world.entities.getComponent(areaEntityId('cellar'), Tide)!;
+  return world.getComponent(areaEntityId('cellar'), Tide)!;
 }
 
 beforeAll(() => {
@@ -213,7 +213,7 @@ describe('潮汐地窖自动通关（v0.9 API 真实消费者）', () => {
 
     expect(await run('score')).toContain('生命值');
     expect(pos()).toBe('courtyard');
-    expect(world.entities.findByComponent(Ending)).toHaveLength(1); // 终局只结算一次
+    expect(world.findByComponent(Ending)).toHaveLength(1); // 终局只结算一次
 
     // 三层都点亮了
     expect(await run('worldmap')).toBe(
@@ -225,7 +225,7 @@ describe('潮汐地窖自动通关（v0.9 API 真实消费者）', () => {
 describe('潮汐节奏（独立世界，避免污染主线 tick 计数）', () => {
   it('每 4 tick 一格，涨到顶后转退', () => {
     const b = bootstrap();
-    const t = () => b.world.entities.getComponent(areaEntityId('cellar'), Tide)!;
+    const t = () => b.world.getComponent(areaEntityId('cellar'), Tide)!;
     b.world.output.clear();
 
     for (let i = 0; i < 4; i++) b.world.tick();
@@ -244,7 +244,7 @@ describe('潮汐节奏（独立世界，避免污染主线 tick 计数）', () =
 
   it('关闸后水位锁死在 1：涨不上去，也退不干净', () => {
     const b = bootstrap();
-    const t = () => b.world.entities.getComponent(areaEntityId('cellar'), Tide)!;
+    const t = () => b.world.getComponent(areaEntityId('cellar'), Tide)!;
     b.world.output.clear();
 
     t().valveShut = true;

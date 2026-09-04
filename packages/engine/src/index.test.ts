@@ -58,7 +58,7 @@ describe('MUD Engine', () => {
 
     // 创建测试实体
     const entityId = w.entities.create();
-    w.entities.addComponent(entityId, Health, { current: 100, max: 100 });
+    w.addComponent(entityId, Health, { current: 100, max: 100 });
 
     // 发射伤害事件
     w.emit(Damage.token, { target: entityId, amount: 30 });
@@ -70,7 +70,7 @@ describe('MUD Engine', () => {
     expect(w.getLog()).toContain(Damage.token);
 
     // 验证状态变更
-    const health = w.entities.getComponent(entityId, Health);
+    const health = w.getComponent(entityId, Health);
     expect(health).toBeDefined();
     expect(health?.current).toBe(70);
   });
@@ -110,10 +110,10 @@ describe('MUD Engine', () => {
 
     // 快照前状态：两个实体
     const alice = w.entities.create();
-    w.entities.addComponent(alice, Health, { current: 80, max: 100 });
-    w.entities.addComponent(alice, Position, { roomId: 'town_square' });
+    w.addComponent(alice, Health, { current: 80, max: 100 });
+    w.addComponent(alice, Position, { roomId: 'town_square' });
     const item = w.entities.createWithId('fixed-item-001');
-    w.entities.addComponent(item, Position, { roomId: 'tavern' });
+    w.addComponent(item, Position, { roomId: 'tavern' });
     const keptId = alice; // 快照中记录的原始 ID
 
     const snapshot = w.world.createSnapshot();
@@ -121,11 +121,11 @@ describe('MUD Engine', () => {
     expect(snapshot.tickCount).toBe(0);
 
     // 篡改状态：改组件、删实体、加新实体、推进 tick
-    w.entities.updateComponent(alice, Health, (h) => ({ ...h, current: 1 }));
-    w.entities.removeComponent(alice, Position);
+    w.updateComponent(alice, Health, (h) => ({ ...h, current: 1 }));
+    w.removeComponent(alice, Position);
     w.entities.delete(item);
     const extra = w.entities.create();
-    w.entities.addComponent(extra, Health, { current: 999, max: 999 });
+    w.addComponent(extra, Health, { current: 999, max: 999 });
 
     // 回滚
     w.world.rollbackWorld(snapshot);
@@ -137,13 +137,13 @@ describe('MUD Engine', () => {
     expect(w.entities.has(extra)).toBe(false); // 快照后的新实体消失
 
     // 断言：组件数据恢复到快照值
-    const health = w.entities.getComponent(keptId, Health);
+    const health = w.getComponent(keptId, Health);
     expect(health).toEqual({ current: 80, max: 100 });
-    expect(w.entities.hasComponent(keptId, Position)).toBe(true);
-    expect(w.entities.getComponent('fixed-item-001', Position)).toEqual({ roomId: 'tavern' });
+    expect(w.hasComponent(keptId, Position)).toBe(true);
+    expect(w.getComponent('fixed-item-001', Position)).toEqual({ roomId: 'tavern' });
 
     // 断言：恢复的数据与快照对象不共享引用
-    w.entities.updateComponent(keptId, Health, (h) => ({ ...h, current: 77 }));
+    w.updateComponent(keptId, Health, (h) => ({ ...h, current: 77 }));
     const again = (snapshot.entities.find((e) => e.id === keptId)!.components[Health.id]) as { current: number };
     expect(again.current).toBe(80);
 
@@ -154,7 +154,7 @@ describe('MUD Engine', () => {
   it('should rollback from a JSON-serialized snapshot', () => {
     const w = createTestWorld();
     const id = w.entities.create();
-    w.entities.addComponent(id, Health, { current: 42, max: 100 });
+    w.addComponent(id, Health, { current: 42, max: 100 });
 
     // 模拟存档：序列化 → 反序列化 → 回滚到新世界
     const serialized = JSON.parse(JSON.stringify(w.world.createSnapshot()));
@@ -163,7 +163,7 @@ describe('MUD Engine', () => {
 
     expect(fresh.entities.size).toBe(1);
     expect(fresh.entities.has(id)).toBe(true);
-    expect(fresh.entities.getComponent(id, Health)).toEqual({ current: 42, max: 100 });
+    expect(fresh.getComponent(id, Health)).toEqual({ current: 42, max: 100 });
   });
 
   /* ---------- P0 回归（2026-09-01 审查） ---------- */
@@ -171,7 +171,7 @@ describe('MUD Engine', () => {
   it('P0-1: findEntity 能按名称/别名找到实体', async () => {
     const w = createTestWorld();
     const npc = w.entities.create();
-    w.entities.addComponent(npc, Name, {
+    w.addComponent(npc, Name, {
       text: '酒保',
       aliases: ['小二', 'barman'],
     });
@@ -224,9 +224,9 @@ describe('MUD Engine', () => {
     const w = createTestWorld();
     // 先注册长名（子串包含 '剑'），后注册精确同名实体
     const rusty = w.entities.createWithId('rusty');
-    w.entities.addComponent(rusty, Name, { text: '生锈的剑' });
+    w.addComponent(rusty, Name, { text: '生锈的剑' });
     const sword = w.entities.createWithId('sword');
-    w.entities.addComponent(sword, Name, { text: '剑' });
+    w.addComponent(sword, Name, { text: '剑' });
 
     // 精确命中必须胜出，而不是被先遍历到的长名子串抢走
     expect(w.world.findEntity('剑')).toBe(sword);
@@ -237,9 +237,9 @@ describe('MUD Engine', () => {
   it('findEntity: 别名精确匹配优先于主名子串匹配', () => {
     const w = createTestWorld();
     const board = w.entities.createWithId('board');
-    w.entities.addComponent(board, Name, { text: '公告板与小二的留言' });
+    w.addComponent(board, Name, { text: '公告板与小二的留言' });
     const waiter = w.entities.createWithId('waiter');
-    w.entities.addComponent(waiter, Name, { text: '酒保', aliases: ['小二'] });
+    w.addComponent(waiter, Name, { text: '酒保', aliases: ['小二'] });
 
     expect(w.world.findEntity('小二')).toBe(waiter);
   });
@@ -254,12 +254,12 @@ describe('MUD Engine', () => {
   it('runChain 显式排水且可重复调用（不忙等、不死循环）', () => {
     const w = createTestWorld({ systems: [CombatSystem] });
     const target = w.entities.create();
-    w.entities.addComponent(target, Health, { current: 50, max: 100 });
+    w.addComponent(target, Health, { current: 50, max: 100 });
 
     w.emit(Damage.token, { target, amount: 20 });
     w.runChain();
     w.runChain(); // 幂等：队列已空，立即返回
-    expect(w.entities.getComponent(target, Health)!.current).toBe(30);
+    expect(w.getComponent(target, Health)!.current).toBe(30);
     expect(w.world.eventPump.queueLength).toBe(0);
   });
 
@@ -276,10 +276,10 @@ describe('MUD Engine', () => {
     });
     const w = createTestWorld({ systems: [Probe] });
     const a = w.entities.createWithId('a');
-    w.entities.addComponent(a, Health, { current: 10, max: 10 });
+    w.addComponent(a, Health, { current: 10, max: 10 });
     w.entities.createWithId('bare');
     const c = w.entities.createWithId('c');
-    w.entities.addComponent(c, Health, { current: 20, max: 20 });
+    w.addComponent(c, Health, { current: 20, max: 20 });
 
     w.emit('probe' as never, {});
     w.runChain();
@@ -296,9 +296,9 @@ describe('MUD Engine', () => {
     const w = createTestWorld();
     w.world.registerCommands(ProbeCmd);
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Position, { roomId: 'hall' });
+    w.addComponent(p, Position, { roomId: 'hall' });
     const r = w.entities.createWithId('room-x');
-    w.entities.addComponent(r, Position, { roomId: 'room-x' });
+    w.addComponent(r, Position, { roomId: 'room-x' });
 
     expect(await w.world.execute('probe-c', p)).toBe('p,room-x');
   });
@@ -325,14 +325,14 @@ describe('MUD Engine', () => {
       ],
     });
     expect(w.entities.has('hero')).toBe(true);
-    expect(w.entities.getComponent('hero', Health)).toEqual({ current: 10, max: 10 });
-    expect(w.entities.getComponent('fresh', Health)).toEqual({ current: 100, max: 100 });
+    expect(w.getComponent('hero', Health)).toEqual({ current: 10, max: 10 });
+    expect(w.getComponent('fresh', Health)).toEqual({ current: 100, max: 100 });
 
     // 哈希形态（兼容旧写法）：按确定性 id 直存
     const w2 = createTestWorld({
       entities: [{ id: 'hero2', components: { [Health.id]: { current: 10, max: 10 } } }],
     });
-    expect(w2.entities.getComponent('hero2', Health)).toEqual({ current: 10, max: 10 });
+    expect(w2.getComponent('hero2', Health)).toEqual({ current: 10, max: 10 });
   });
 
   /* ---------- V1 v0.5.0：系统内造物与销毁 ---------- */
@@ -357,7 +357,7 @@ describe('MUD Engine', () => {
 
     expect(createdId).toBe('gob-1');
     expect(w.entities.has('gob-1')).toBe(true);
-    expect(w.entities.getComponent('gob-1', Health)).toEqual({ current: 30, max: 30 });
+    expect(w.getComponent('gob-1', Health)).toEqual({ current: 30, max: 30 });
     expect(w.world.findEntity('哥布林')).toBe('gob-1');
   });
 

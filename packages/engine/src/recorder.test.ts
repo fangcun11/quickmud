@@ -33,7 +33,7 @@ function buildWorld(): World {
   w.register(HealSystem);
   w.registerCommands(Rest);
   const p = w.entities.createWithId('player-1');
-  w.entities.addComponent(p, Health, { current: 50, max: 100 });
+  w.addComponent(p, Health, { current: 50, max: 100 });
   return w;
 }
 
@@ -53,8 +53,8 @@ describe('D1 录像重放', () => {
     const result = await verifyReplay(recording, buildWorld);
     expect(result.ok).toBe(true);
     expect(result.diff).toBeUndefined();
-    expect(result.world.entities.getComponent('player-1', Health)!.current)
-      .toBe(w.entities.getComponent('player-1', Health)!.current);
+    expect(result.world.getComponent('player-1', Health)!.current)
+      .toBe(w.getComponent('player-1', Health)!.current);
   });
 
   it('录像 JSON 序列化后重放仍一致（存档/传输场景）', async () => {
@@ -103,9 +103,9 @@ describe('D1 录像重放', () => {
     const recording = rec.stop();
 
     const w2 = await replay(recording, buildWorld);
-    const before = w2.entities.getComponent('player-1', Health)!.current;
+    const before = w2.getComponent('player-1', Health)!.current;
     await w2.execute('rest 10', 'player-1');
-    expect(w2.entities.getComponent('player-1', Health)!.current).toBe(before + 10);
+    expect(w2.getComponent('player-1', Health)!.current).toBe(before + 10);
   });
 
   it('tick 操作也被录制（every 系统的确定性可回放）', async () => {

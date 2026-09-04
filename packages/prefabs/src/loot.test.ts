@@ -29,19 +29,19 @@ function lootWorld(drops: LootData | null) {
   w.registerCommands(TakeCommand, InventoryCommand, AttackCommand, LookCommand);
 
   const player = w.entities.createWithId('player');
-  w.entities.addComponent(player, Position, { roomId: 'town' });
-  w.entities.addComponent(player, Name, { text: '勇者' });
+  w.addComponent(player, Position, { roomId: 'town' });
+  w.addComponent(player, Name, { text: '勇者' });
 
   const town = w.entities.createWithId('town');
-  w.entities.addComponent(town, Name, { text: '城镇' });
-  w.entities.addComponent(town, Exits, {});
+  w.addComponent(town, Name, { text: '城镇' });
+  w.addComponent(town, Exits, {});
 
   const mob = w.entities.createWithId('mob');
-  w.entities.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
-  w.entities.addComponent(mob, Position, { roomId: 'town' });
-  w.entities.addComponent(mob, Health, { current: 20, max: 20 });
+  w.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
+  w.addComponent(mob, Position, { roomId: 'town' });
+  w.addComponent(mob, Health, { current: 20, max: 20 });
   if (drops !== null) {
-    w.entities.addComponent(mob, Loot, drops);
+    w.addComponent(mob, Loot, drops);
   }
 
   return { w, player, mob };
@@ -61,12 +61,12 @@ describe('V4 掉落（v0.6-A1）', () => {
     const onGround = itemsInContainer(w.entities, 'town');
     expect(onGround).toHaveLength(1);
     expect(displayName(w.entities, onGround[0]!)).toBe('狗肉');
-    expect(w.entities.getComponent(onGround[0]!, Description)?.text).toBe('一块血淋淋的肉。');
-    expect(w.entities.getComponent(onGround[0]!, Portable)).toBeDefined();
+    expect(w.getComponent(onGround[0]!, Description)?.text).toBe('一块血淋淋的肉。');
+    expect(w.getComponent(onGround[0]!, Portable)).toBeDefined();
 
     // 真实体：能拿走
     await w.execute('take 狗肉', player);
-    expect(w.entities.getComponent(onGround[0]!, Located)?.at).toBe('player');
+    expect(w.getComponent(onGround[0]!, Located)?.at).toBe('player');
   });
 
   it('掉落输出与 LootDropped 事件（含掉落物 id 列表）', async () => {
@@ -108,7 +108,7 @@ describe('V4 掉落（v0.6-A1）', () => {
     await w.execute('attack 野狗', player);
 
     const item = itemsInContainer(w.entities, 'town')[0]!;
-    expect(w.entities.getComponent(item, Weapon)?.damage).toBe(4);
+    expect(w.getComponent(item, Weapon)?.damage).toBe(4);
   });
 
   it('掉落物可被 look 看见（进入房间的地上物列表）', async () => {

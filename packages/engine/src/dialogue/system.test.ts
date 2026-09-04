@@ -45,9 +45,9 @@ function buildWorld() {
 
   const player = w.entities.create();
   const npc = w.entities.createWithId('barkeep');
-  w.entities.addComponent(npc, Name, { text: '酒保', aliases: ['bartender'] });
-  w.entities.addComponent(npc, Dialogue, tavernDialogue());
-  w.entities.addComponent(npc, Memory, { flags: [] });
+  w.addComponent(npc, Name, { text: '酒保', aliases: ['bartender'] });
+  w.addComponent(npc, Dialogue, tavernDialogue());
+  w.addComponent(npc, Memory, { flags: [] });
   return { w, player, npc };
 }
 
@@ -106,7 +106,7 @@ describe('B2 对话系统与命令', () => {
 
     // 无 Dialogue 组件的实体
     const { w: w2, player: p2, npc } = buildWorld();
-    w2.entities.removeComponent(npc, Dialogue);
+    w2.removeComponent(npc, Dialogue);
     expect(await w2.execute('talk 酒保', p2)).toBe('ta 看起来不想和你说话。');
   });
 
@@ -122,7 +122,7 @@ describe('B2 对话系统与命令', () => {
     await w.execute('talk 酒保', player);
     await w.execute('talk 酒保 1', player); // 你是谁？
 
-    const memory = w.entities.getComponent(npc, Memory)!;
+    const memory = w.getComponent(npc, Memory)!;
     expect(memory.flags).toContain('asked_who');
     expect(textOf(w.output.getAll(), 'dialogue').slice(-2)).toEqual([
       '我是这里的酒保，见过无数冒险者。',
@@ -132,14 +132,14 @@ describe('B2 对话系统与命令', () => {
 
   it('requires 解锁：信任酒保后，隐藏选项在下次对话出现', async () => {
     const { w, player, npc } = buildWorld();
-    const dialogue = () => w.entities.getComponent(npc, Dialogue)!;
+    const dialogue = () => w.getComponent(npc, Dialogue)!;
 
     await w.execute('talk 酒保', player); // start
     expect(dialogue()!.active).toBe('start');
     await w.execute('talk 酒保 1', player); // → who（active=who）
     await w.execute('talk 酒保 1', player); // → name，无选项 → 结束
     expect(dialogue()!.active).toBeNull();
-    expect(w.entities.getComponent(npc, Memory)!.flags).toEqual(['asked_who', 'trusted']);
+    expect(w.getComponent(npc, Memory)!.flags).toEqual(['asked_who', 'trusted']);
 
     // 重新搭话：打听传闻现在可见（requires: trusted）
     // 0.12 起 execute 不再自动清空输出——段落边界显式清缓冲
@@ -156,7 +156,7 @@ describe('B2 对话系统与命令', () => {
     await w.execute('talk 酒保 2', player); // 再见。
 
     expect(textOf(w.output.getAll(), 'dialogue')).toContain('慢走，欢迎再来。');
-    expect(w.entities.getComponent(npc, Dialogue)!.active).toBeNull();
+    expect(w.getComponent(npc, Dialogue)!.active).toBeNull();
   });
 
   it('非法选项序号：反馈错误且对话状态不变', async () => {
@@ -168,7 +168,7 @@ describe('B2 对话系统与命令', () => {
     await w.execute('talk 酒保', player);
     await w.execute('talk 酒保 5', player);
     expect(textOf(w.output.getAll(), 'error')).toContain('ta 没有听懂你的选择。');
-    expect(w.entities.getComponent(npc, Dialogue)!.active).toBe('start');
+    expect(w.getComponent(npc, Dialogue)!.active).toBe('start');
   });
 
   it('没在对话中却选序号时给出反馈', async () => {
@@ -191,9 +191,9 @@ describe('B2 对话系统与命令', () => {
     w.registerCommands(...createDialogueCommands());
     const player = w.entities.create();
     const npc = w.entities.createWithId('barkeep');
-    w.entities.addComponent(npc, Name, { text: '酒保' });
-    w.entities.addComponent(npc, Dialogue, tavernDialogue());
-    w.entities.addComponent(npc, Memory, { flags: [] });
+    w.addComponent(npc, Name, { text: '酒保' });
+    w.addComponent(npc, Dialogue, tavernDialogue());
+    w.addComponent(npc, Memory, { flags: [] });
 
     await w.execute('talk 酒保', player);
     await w.execute('talk 酒保 1', player);
@@ -207,16 +207,16 @@ describe('B2 对话系统与命令', () => {
     await w.execute('talk 酒保 1', player); // 停 in who 节点，flags=[asked_who]
 
     const snap = w.createSnapshot();
-    const dialogueBefore = w.entities.getComponent(npc, Dialogue)!;
+    const dialogueBefore = w.getComponent(npc, Dialogue)!;
     expect(dialogueBefore.active).toBe('who');
 
     // 继续推进到结束，然后回滚
     await w.execute('talk 酒保 1', player);
-    expect(w.entities.getComponent(npc, Dialogue)!.active).toBeNull();
+    expect(w.getComponent(npc, Dialogue)!.active).toBeNull();
 
     w.rollbackWorld(snap);
-    expect(w.entities.getComponent(npc, Dialogue)!.active).toBe('who');
-    expect(w.entities.getComponent(npc, Memory)!.flags).toEqual(['asked_who']);
+    expect(w.getComponent(npc, Dialogue)!.active).toBe('who');
+    expect(w.getComponent(npc, Memory)!.flags).toEqual(['asked_who']);
   });
 
   it('录像重放：对话与记忆操作序列确定性一致', async () => {

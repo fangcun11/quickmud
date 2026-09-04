@@ -37,11 +37,11 @@ function runTicks(n: number): string {
 }
 
 function hp(): number {
-  return world.entities.getComponent(player, Health)!.current;
+  return world.getComponent(player, Health)!.current;
 }
 
 function buffCount(): number {
-  return world.entities.findByComponent(Afflicted).length;
+  return world.findByComponent(Afflicted).length;
 }
 
 beforeAll(() => {

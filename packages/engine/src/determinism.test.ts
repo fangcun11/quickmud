@@ -129,9 +129,9 @@ function runSteps(w: ReturnType<typeof createTestWorld>, rng: () => number, play
 
 function fullState(w: ReturnType<typeof createTestWorld>, player: string) {
   return {
-    health: w.entities.getComponent(player, Health),
-    position: w.entities.getComponent(player, Position),
-    gold: w.entities.getComponent(player, Gold),
+    health: w.getComponent(player, Health),
+    position: w.getComponent(player, Position),
+    gold: w.getComponent(player, Gold),
     ticks: w.world.getTickCount(),
     log: combatLog,
   };
@@ -143,9 +143,9 @@ describe('确定性金测试', () => {
       combatLog = [];
       const { w, clock, rng } = buildWorld(42);
       const player = w.entities.createWithId('player-1');
-      w.entities.addComponent(player, Health, { current: 100, max: 100 });
-      w.entities.addComponent(player, Position, { roomId: 'hall' });
-      w.entities.addComponent(player, Gold, { amount: 10 });
+      w.addComponent(player, Health, { current: 100, max: 100 });
+      w.addComponent(player, Position, { roomId: 'hall' });
+      w.addComponent(player, Gold, { amount: 10 });
       return { w, clock, rng, player };
     };
 
@@ -168,9 +168,9 @@ describe('确定性金测试', () => {
     combatLog = [];
     const { w, clock, rng } = buildWorld(42);
     const player = w.entities.createWithId('player-1');
-    w.entities.addComponent(player, Health, { current: 100, max: 100 });
-    w.entities.addComponent(player, Position, { roomId: 'hall' });
-    w.entities.addComponent(player, Gold, { amount: 10 });
+    w.addComponent(player, Health, { current: 100, max: 100 });
+    w.addComponent(player, Position, { roomId: 'hall' });
+    w.addComponent(player, Gold, { amount: 10 });
 
     runSteps(w, rng, player, 100);
     const midSnapshot = w.world.createSnapshot();
@@ -187,9 +187,9 @@ describe('确定性金测试', () => {
     combatLog = [];
     const { w: w2, clock: clock2, rng: rng2 } = buildWorld(42);
     const player2 = w2.entities.createWithId('player-1');
-    w2.entities.addComponent(player2, Health, { current: 100, max: 100 });
-    w2.entities.addComponent(player2, Position, { roomId: 'hall' });
-    w2.entities.addComponent(player2, Gold, { amount: 10 });
+    w2.addComponent(player2, Health, { current: 100, max: 100 });
+    w2.addComponent(player2, Position, { roomId: 'hall' });
+    w2.addComponent(player2, Gold, { amount: 10 });
     runSteps(w2, rng2, player2, 200);
     const straight = fullState(w2, player2);
 

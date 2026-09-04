@@ -137,42 +137,42 @@ export function bootstrap(): BootstrapResult {
   // 创建玩家（QuestLog 是参与任务的前提：系统不能替玩家补组件；
   // Visited 挂上 = 地图带迷雾）
   const playerId = world.entities.create();
-  world.entities.addComponent(playerId, Health, { current: 100, max: 100 });
-  world.entities.addComponent(playerId, Position, { roomId: layout.entry });
-  world.entities.addComponent(playerId, Name, { text: '冒险者' });
-  world.entities.addComponent(playerId, QuestLog);
-  world.entities.addComponent(playerId, Visited);
+  world.addComponent(playerId, Health, { current: 100, max: 100 });
+  world.addComponent(playerId, Position, { roomId: layout.entry });
+  world.addComponent(playerId, Name, { text: '冒险者' });
+  world.addComponent(playerId, QuestLog);
+  world.addComponent(playerId, Visited);
   markVisited(world, playerId); // seed 入口（初始位置没有 Moved 事件可订阅）
 
   // 创建物品实体（0.3-C 容器模型：Located 单源位置，物品真实存在于世界）
   const sword = world.entities.createWithId('sword');
-  world.entities.addComponent(sword, Name, {
+  world.addComponent(sword, Name, {
     text: '生锈的剑',
     aliases: ['剑', 'sword'],
   });
-  world.entities.addComponent(sword, Description, {
+  world.addComponent(sword, Description, {
     text: '一把生锈的旧剑，但仍然锋利。',
   });
-  world.entities.addComponent(sword, Portable);
-  world.entities.addComponent(sword, Weapon, { damage: 6 });
-  world.entities.addComponent(sword, Located, { at: 'town_square' });
+  world.addComponent(sword, Portable);
+  world.addComponent(sword, Weapon, { damage: 6 });
+  world.addComponent(sword, Located, { at: 'town_square' });
 
   const gold = world.entities.createWithId('gold');
-  world.entities.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
-  world.entities.addComponent(gold, Description, { text: '一枚闪闪发光的金币。' });
-  world.entities.addComponent(gold, Portable);
-  world.entities.addComponent(gold, Located, { at: 'town_square' });
+  world.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
+  world.addComponent(gold, Description, { text: '一枚闪闪发光的金币。' });
+  world.addComponent(gold, Portable);
+  world.addComponent(gold, Located, { at: 'town_square' });
 
   // 广场游荡的野狗：带 Wander + Position + Health，由 NpcWanderSystem 驱动巡逻，
   // 玩家可以攻击它（CombatSystem）。demo REPL 每 500ms tick → 每 3 秒跳一次房。
   // 带 Loot：死后掉落狗肉（v0.6 —— Died 钩子终于有消费者了）
   const dog = world.entities.createWithId('dog');
-  world.entities.addComponent(dog, Name, { text: '野狗', aliases: ['狗', 'dog'] });
-  world.entities.addComponent(dog, Description, { text: '一条瘦骨嶙峋的野狗，正警惕地盯着你。' });
-  world.entities.addComponent(dog, Position, { roomId: 'town_square' });
-  world.entities.addComponent(dog, Health, { current: 20, max: 20 });
-  world.entities.addComponent(dog, Wander);
-  world.entities.addComponent(dog, Loot, {
+  world.addComponent(dog, Name, { text: '野狗', aliases: ['狗', 'dog'] });
+  world.addComponent(dog, Description, { text: '一条瘦骨嶙峋的野狗，正警惕地盯着你。' });
+  world.addComponent(dog, Position, { roomId: 'town_square' });
+  world.addComponent(dog, Health, { current: 20, max: 20 });
+  world.addComponent(dog, Wander);
+  world.addComponent(dog, Loot, {
     drops: [
       { name: '狗肉', aliases: ['肉'], description: '一块血淋淋的肉，野狗身上割下来的。' },
       { name: '脏兮兮的项圈', aliases: ['项圈'], description: '磨得发亮的旧项圈，看不出主人的名字。' },
@@ -183,15 +183,15 @@ export function bootstrap(): BootstrapResult {
   // v0.6：常驻 NPC 用 Located 锚定房间（会动的才用 Position），这样 QuestGiver
   // 的"同房间才算数"规则才能落到酒保身上；顺带挂上悬赏任务。
   const barmanId = world.entities.createWithId('barman');
-  world.entities.addComponent(barmanId, Name, {
+  world.addComponent(barmanId, Name, {
     text: '酒保',
     aliases: ['bartender', '老王'],
   });
-  world.entities.addComponent(barmanId, Description, {
+  world.addComponent(barmanId, Description, {
     text: '一个系着围裙的中年男人，正用抹布擦着杯子。',
   });
-  world.entities.addComponent(barmanId, Located, { at: 'tavern' });
-  world.entities.addComponent(barmanId, QuestGiver, {
+  world.addComponent(barmanId, Located, { at: 'tavern' });
+  world.addComponent(barmanId, QuestGiver, {
     quests: [
       {
         id: 'dog-hunt',
@@ -210,8 +210,8 @@ export function bootstrap(): BootstrapResult {
       },
     ],
   });
-  world.entities.addComponent(barmanId, Dialogue, BarkeepDialogue);
-  world.entities.addComponent(barmanId, Memory, { flags: [] });
+  world.addComponent(barmanId, Dialogue, BarkeepDialogue);
+  world.addComponent(barmanId, Memory, { flags: [] });
 
   return { world, playerId };
 }

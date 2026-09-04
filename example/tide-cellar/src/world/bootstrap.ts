@@ -348,7 +348,7 @@ export function bootstrap(): BootstrapResult {
   buildRoomBehaviors(world, rooms);
 
   // 潮汐挂在**区域实体**上：它影响地窖四个房间，跨房间机制不归单个房间
-  world.entities.addComponent(areaEntityId('cellar'), Tide, {
+  world.addComponent(areaEntityId('cellar'), Tide, {
     level: 0,
     rising: true,
     valveShut: false,
@@ -356,10 +356,10 @@ export function bootstrap(): BootstrapResult {
 
   // ---- 玩家 ----
   const playerId = world.entities.create();
-  world.entities.addComponent(playerId, Health, { current: 100, max: 100 });
-  world.entities.addComponent(playerId, Position, { roomId: layout.entry });
-  world.entities.addComponent(playerId, Name, { text: '探访者' });
-  world.entities.addComponent(playerId, Visited);
+  world.addComponent(playerId, Health, { current: 100, max: 100 });
+  world.addComponent(playerId, Position, { roomId: layout.entry });
+  world.addComponent(playerId, Name, { text: '探访者' });
+  world.addComponent(playerId, Visited);
   markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
 
   return { world, playerId };

@@ -110,23 +110,23 @@ describe('探索记录（Visited / VisitationSystem）', () => {
     );
     buildRooms(w, line());
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'a' });
-    w.entities.addComponent(player, Visited);
+    w.addComponent(player, Position, { roomId: 'a' });
+    w.addComponent(player, Visited);
     markVisited(w, player); // seed 入口（初始位置没有 Moved 事件）
     return { w, player };
   }
 
   it('markVisited seed 当前房间，且可重复调用不去重', () => {
     const { w, player } = world();
-    expect(w.entities.getComponent(player, Visited)!.rooms).toEqual(['a']);
+    expect(w.getComponent(player, Visited)!.rooms).toEqual(['a']);
     markVisited(w, player);
-    expect(w.entities.getComponent(player, Visited)!.rooms).toEqual(['a']);
+    expect(w.getComponent(player, Visited)!.rooms).toEqual(['a']);
   });
 
   it('移动后记入目标房间（Moved.to 就是房间 id，与注册顺序无关）', async () => {
     const { w, player } = world();
     await w.execute('east', player);
-    expect(w.entities.getComponent(player, Visited)!.rooms).toEqual(['a', 'b']);
+    expect(w.getComponent(player, Visited)!.rooms).toEqual(['a', 'b']);
   });
 
   it('来回走不重复记账', async () => {
@@ -134,13 +134,13 @@ describe('探索记录（Visited / VisitationSystem）', () => {
     await w.execute('east', player);
     await w.execute('west', player);
     await w.execute('east', player);
-    expect(w.entities.getComponent(player, Visited)!.rooms).toEqual(['a', 'b']);
+    expect(w.getComponent(player, Visited)!.rooms).toEqual(['a', 'b']);
   });
 
   it('撞墙（出口校验失败）不记账', async () => {
     const { w, player } = world();
     await w.execute('north', player); // a 没有 north
-    expect(w.entities.getComponent(player, Visited)!.rooms).toEqual(['a']);
+    expect(w.getComponent(player, Visited)!.rooms).toEqual(['a']);
   });
 
   it('没挂 Visited 的实体不产生探索记录（也不报错）', async () => {
@@ -148,9 +148,9 @@ describe('探索记录（Visited / VisitationSystem）', () => {
     w.register(MovementSystem, VisitationSystem);
     buildRooms(w, line());
     const ghost = w.entities.createWithId('ghost');
-    w.entities.addComponent(ghost, Position, { roomId: 'a' });
+    w.addComponent(ghost, Position, { roomId: 'a' });
     await w.execute('east', ghost);
-    expect(w.entities.getComponent(ghost, Visited)).toBeUndefined();
+    expect(w.getComponent(ghost, Visited)).toBeUndefined();
   });
 });
 
@@ -166,8 +166,8 @@ describe('MapCommand', () => {
     );
     buildRooms(w, ell());
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'a' });
-    w.entities.addComponent(player, Visited);
+    w.addComponent(player, Position, { roomId: 'a' });
+    w.addComponent(player, Visited);
     markVisited(w, player);
 
     const out = await w.execute('map', player);
@@ -189,7 +189,7 @@ describe('MapCommand', () => {
     );
     buildRooms(w, ell());
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'a' });
+    w.addComponent(player, Position, { roomId: 'a' });
 
     const out = await w.execute('map', player);
     expect(out).toBe('@—·\n│\n·\n图例：@ 当前位置 · 已探明（未探明区域留白）');

@@ -77,7 +77,7 @@ describe('A1 定时系统', () => {
       }),
     );
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
 
     w.eventPump.emit(Boom.token, { target: p }); // t=0 调度
     expect(order).toEqual([]); // 尚未到期
@@ -107,7 +107,7 @@ describe('A1 定时系统', () => {
       },
     }));
     const p = w.entities.createWithId('p');
-    w.entities.addComponent(p, Counter, { value: 0 });
+    w.addComponent(p, Counter, { value: 0 });
     w.eventPump.emit(Boom.token, { target: p });
 
     const snap = w.createSnapshot();

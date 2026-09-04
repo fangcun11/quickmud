@@ -17,22 +17,26 @@ const Locked  = trait('locked');   // 无数据组件（标记用），如"门�
   存档不会漂移）；`defaults` 可传**对象模板或工厂**（等价——每次 `create()`
   返回独立深拷贝）。工厂适合默认值含函数/计算时；纯数据用对象模板更简洁。
 - 组件是**纯数据**，不放方法。行为写在系统里。
-- 读取/写入：
+- 读取/写入走 **World 顶层**（0.13 起组件访问统一入口）：
 
 ```ts
-const hp = world.entities.getComponent(player, Health);  // → { current, max } | undefined
-if (hp) hp.current -= 10;                                // 直接改，引擎不做代理
+const hp = world.getComponent(player, Health); // → { current, max } | undefined
+if (hp) hp.current -= 10;                      // 直接改，引擎不做代理
 ```
 
 > **永远用 `trait()` 的返回值作为 key**，不要手写字符串 ID——那会绕过确定性 ID 机制。
+>
+> **API 分工**：组件读写一律 `world.getComponent / addComponent / ...`（与系统侧
+> `ctx.getComponent` 同名同签名）；`world.entities` 只管实体的创建与销毁
+> （`create / createWithId / has / delete`）。
 
 ## 实体：只是一张"身份证"
 
 ```ts
 const id1 = world.entities.create();                 // 自动 ID
 const id2 = world.entities.createWithId('goblin-1'); // 指定 ID（可复现存档的关键）
-world.entities.addComponent(id2, Health, { current: 30, max: 30 });
-world.entities.addComponent(id2, Name, { text: '哥布林', aliases: ['小怪'] });
+world.addComponent(id2, Health, { current: 30, max: 30 });
+world.addComponent(id2, Name, { text: '哥布林', aliases: ['小怪'] });
 ```
 
 - 实体本身没有数据，只是组件的挂载点。

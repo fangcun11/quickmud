@@ -165,8 +165,8 @@ world.register(HealSystem);
 world.registerCommands(RestCommand);
 
 const player = world.entities.createWithId('player-1');
-world.entities.addComponent(player, Health, { current: 60, max: 100 });
-world.entities.addComponent(player, Name, { text: '勇者', aliases: [] });
+world.addComponent(player, Health, { current: 60, max: 100 });
+world.addComponent(player, Name, { text: '勇者', aliases: [] });
 
 await world.execute('休息 30', player);   // → "你恢复了 30 点生命。"
 ```
@@ -204,7 +204,7 @@ buildRooms(world, layout);
 
 | 包 | 版本 | 说明 |
 | --- | --- | --- |
-| [`@mud/ecs-engine`](./packages/engine/README.md) | 0.8.0 | 引擎核心：ECS、事件泵、命令、快照/回滚、录像重放、确定性时钟、对话树。**零第三方依赖**，ESM + CJS 双产物，Node 存档后端拆 `./node` 子路径 |
+| [`@mud/ecs-engine`](./packages/engine/README.md) | 0.9.0 | 引擎核心：ECS、事件泵、命令、快照/回滚、录像重放、确定性时钟、对话树。**零第三方依赖**，ESM + CJS 双产物，Node 存档后端拆 `./node` 子路径，组件访问走 `world.getComponent` 顶层 |
 | [`@mud/prefabs`](./packages/prefabs/README.md) | 0.9.0 | 领域预制件：移动/房间/地图、查看、物品/背包、战斗/掉落/死亡、任务、Buff、NPC 巡逻 |
 | `example/mini-rpg` | — | 完整小游戏：村庄 → 森林 → 沼泽 → 洞穴，含战斗、掉落、双任务、地图迷雾 |
 | `example/tide-cellar` | — | 内容验证包：潮汐地窖，三层三区域 + 守卫 + 房间心跳 + 区域实体状态 |

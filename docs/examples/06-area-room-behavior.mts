@@ -140,8 +140,8 @@ buildAreas(w, layout);
 buildRoomBehaviors(w, rooms);
 
 const player = w.entities.createWithId('player');
-w.entities.addComponent(player, Position, { roomId: layout.entry });
-w.entities.addComponent(player, Visited);
+w.addComponent(player, Position, { roomId: layout.entry });
+w.addComponent(player, Visited);
 markVisited(w, player); // seed 出生房间（初始位置没有 Moved 事件）
 
 // map 只画当前区域，抬头是【区域名】（跨区域坐标不该撞进同一张图）
@@ -162,7 +162,7 @@ assert.equal(
 await w.execute('east', player); // 村口广场 → 荒野小径
 await w.execute('south', player); // 想进毒雾泥沼
 assert.equal(
-  w.entities.getComponent(player, Position)!.roomId,
+  w.getComponent(player, Position)!.roomId,
   'path',
   '守卫拒绝后不应落位（无 Moved，更无 enter）',
 );
@@ -192,7 +192,7 @@ assert.ok(
 await w.execute('take 火把', player);
 const held = w.entities
   .findByComponent(Located)
-  .some((id) => w.entities.getComponent(id, Located)?.at === player);
+  .some((id) => w.getComponent(id, Located)?.at === player);
 assert.ok(held, 'spawn 出的火把应在玩家背包里');
 
 // 有火把了：守卫放行，enter 生命周期在真正落位后触发
@@ -201,7 +201,7 @@ assert.ok(
   (await narrate('south')).includes('毒雾无声无息'),
   'enter 应在真正落位后触发（Moved 是结果不是意图）',
 );
-assert.equal(w.entities.getComponent(player, Position)!.roomId, 'mire', '守卫放行后应落位');
+assert.equal(w.getComponent(player, Position)!.roomId, 'mire', '守卫放行后应落位');
 
 // 走进荒野后，世界地图点亮它
 assert.equal(
@@ -240,7 +240,7 @@ buildRoomBehaviors(tw.world, candleRooms);
 
 tw.advance(4500); // 跨过 2000ms 与 4000ms 两个网格；剩余 500ms 不够一格（drift-free）
 assert.equal(
-  tw.entities.getComponent('shrine', CandleState)!.fuel,
+  tw.getComponent('shrine', CandleState)!.fuel,
   1,
   'every 应恰好在每个网格点触发一次，不漂移不多烧',
 );

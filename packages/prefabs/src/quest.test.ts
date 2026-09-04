@@ -77,38 +77,38 @@ function questWorld(quests: QuestDef[] = [DOG_HUNT]) {
   );
 
   const player = w.entities.createWithId('player');
-  w.entities.addComponent(player, Health, { current: 50, max: 100 });
-  w.entities.addComponent(player, Position, { roomId: 'town' });
-  w.entities.addComponent(player, Name, { text: '勇者' });
-  w.entities.addComponent(player, QuestLog);
+  w.addComponent(player, Health, { current: 50, max: 100 });
+  w.addComponent(player, Position, { roomId: 'town' });
+  w.addComponent(player, Name, { text: '勇者' });
+  w.addComponent(player, QuestLog);
 
   const town = w.entities.createWithId('town');
-  w.entities.addComponent(town, Name, { text: '城镇' });
-  w.entities.addComponent(town, Exits, { east: 'square' });
+  w.addComponent(town, Name, { text: '城镇' });
+  w.addComponent(town, Exits, { east: 'square' });
 
   const square = w.entities.createWithId('square');
-  w.entities.addComponent(square, Name, { text: '广场' });
-  w.entities.addComponent(square, Exits, { west: 'town' });
+  w.addComponent(square, Name, { text: '广场' });
+  w.addComponent(square, Exits, { west: 'town' });
 
   // 酒保常驻酒馆（用 Located 锚定房间，不用 Position）
   const barman = w.entities.createWithId('barman');
-  w.entities.addComponent(barman, Name, { text: '酒保' });
-  w.entities.addComponent(barman, Located, { at: 'town' });
-  w.entities.addComponent(barman, QuestGiver, { quests });
+  w.addComponent(barman, Name, { text: '酒保' });
+  w.addComponent(barman, Located, { at: 'town' });
+  w.addComponent(barman, QuestGiver, { quests });
 
   const mob = w.entities.createWithId('mob');
-  w.entities.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
-  w.entities.addComponent(mob, Position, { roomId: 'town' });
-  w.entities.addComponent(mob, Health, { current: 20, max: 20 });
-  w.entities.addComponent(mob, Loot, {
+  w.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
+  w.addComponent(mob, Position, { roomId: 'town' });
+  w.addComponent(mob, Health, { current: 20, max: 20 });
+  w.addComponent(mob, Loot, {
     drops: [{ name: '狗肉', description: '一块血淋淋的肉。' }],
   });
 
   const meat = w.entities.createWithId('meat');
-  w.entities.addComponent(meat, Name, { text: '狗肉' });
-  w.entities.addComponent(meat, Description, { text: '一块血淋淋的肉。' });
-  w.entities.addComponent(meat, Portable);
-  w.entities.addComponent(meat, Located, { at: 'town' });
+  w.addComponent(meat, Name, { text: '狗肉' });
+  w.addComponent(meat, Description, { text: '一块血淋淋的肉。' });
+  w.addComponent(meat, Portable);
+  w.addComponent(meat, Located, { at: 'town' });
 
   return { w, player, barman, mob, meat };
 }
@@ -125,8 +125,8 @@ describe('V5 任务进度（v0.6-A2）', () => {
 
     await w.execute('take 狗肉', player);
 
-    expect(w.entities.getComponent(player, QuestLog)!.active['meat-errand']).toBe(1);
-    expect(w.entities.getComponent(player, QuestLog)!.completed).toEqual(['meat-errand']);
+    expect(w.getComponent(player, QuestLog)!.active['meat-errand']).toBe(1);
+    expect(w.getComponent(player, QuestLog)!.completed).toEqual(['meat-errand']);
     expect(seen).toEqual(['meat-errand', 'meat-errand', 'meat-errand']);
     expect(textOf(w.output.getAll(), 'narrative')).toContain('任务「送一块狗肉」完成。');
   });
@@ -137,7 +137,7 @@ describe('V5 任务进度（v0.6-A2）', () => {
     await w.execute('attack 野狗', player);
     await w.execute('attack 野狗', player);
 
-    const log = w.entities.getComponent(player, QuestLog)!;
+    const log = w.getComponent(player, QuestLog)!;
     expect(log.active['dog-hunt']).toBe(1);
     expect(log.completed).toEqual(['dog-hunt']);
     // 掉落照旧发生
@@ -147,11 +147,11 @@ describe('V5 任务进度（v0.6-A2）', () => {
   it('进度全局追踪：玩家与发任务者不在同一房间也记功', async () => {
     const { w, player } = questWorld([MEAT_ERRAND]);
     // 把酒保挪到广场，玩家留在城镇捡狗肉 —— 在酒馆接任务、别处办事是常态
-    w.entities.getComponent('barman', Located)!.at = 'square';
+    w.getComponent('barman', Located)!.at = 'square';
 
     await w.execute('take 狗肉', player);
 
-    expect(w.entities.getComponent(player, QuestLog)!.active['meat-errand']).toBe(1);
+    expect(w.getComponent(player, QuestLog)!.active['meat-errand']).toBe(1);
     // 但交付必须回到酒保身边
     expect(await w.execute('turnin', player)).toBe('这里没有可交付的任务。');
   });
@@ -159,11 +159,11 @@ describe('V5 任务进度（v0.6-A2）', () => {
   it('物品没真正到手 → 不推进（拿不动的东西不计数）', async () => {
     const { w, player } = questWorld([MEAT_ERRAND]);
     // 去掉 Portable → ItemSystem 会拒绝转移
-    w.entities.removeComponent('meat', Portable);
+    w.removeComponent('meat', Portable);
 
     await w.execute('take 狗肉', player);
 
-    expect(w.entities.getComponent(player, QuestLog)!.active['meat-errand']).toBeUndefined();
+    expect(w.getComponent(player, QuestLog)!.active['meat-errand']).toBeUndefined();
     expect(textOf(w.output.getAll(), 'error')).toContain('你拿不动「狗肉」。');
   });
 
@@ -188,9 +188,9 @@ describe('V5 任务进度（v0.6-A2）', () => {
 
     await w.execute('turnin', player);
 
-    const log = w.entities.getComponent(player, QuestLog)!;
+    const log = w.getComponent(player, QuestLog)!;
     expect(log.turnedIn).toEqual(['dog-hunt']);
-    expect(w.entities.getComponent(player, Health)!.current).toBe(60); // 50 + heal 10
+    expect(w.getComponent(player, Health)!.current).toBe(60); // 50 + heal 10
     const bag = itemsInContainer(w.entities, player);
     expect(bag.map((id) => displayName(w.entities, id))).toContain('麦酒');
     expect(textOf(w.output.getAll(), 'narrative')).toContain(
@@ -208,11 +208,11 @@ describe('V5 任务进度（v0.6-A2）', () => {
 
   it('玩家没有 QuestLog 时不参与任务（静默，不报错）', async () => {
     const { w, player } = questWorld([MEAT_ERRAND]);
-    w.entities.removeComponent(player, QuestLog);
+    w.removeComponent(player, QuestLog);
 
     await w.execute('take 狗肉', player);
 
-    expect(w.entities.getComponent(player, QuestLog)).toBeUndefined();
+    expect(w.getComponent(player, QuestLog)).toBeUndefined();
   });
 
   it('快照 → 推进任务 → 回滚 → 进度归零', async () => {
@@ -220,11 +220,11 @@ describe('V5 任务进度（v0.6-A2）', () => {
     const snap = w.createSnapshot();
 
     await w.execute('take 狗肉', player);
-    expect(w.entities.getComponent(player, QuestLog)!.completed).toEqual(['meat-errand']);
+    expect(w.getComponent(player, QuestLog)!.completed).toEqual(['meat-errand']);
 
     w.rollbackWorld(snap);
-    expect(w.entities.getComponent(player, QuestLog)!.completed).toEqual([]);
-    expect(w.entities.getComponent(player, QuestLog)!.active).toEqual({});
+    expect(w.getComponent(player, QuestLog)!.completed).toEqual([]);
+    expect(w.getComponent(player, QuestLog)!.active).toEqual({});
   });
 
   it('录像重放：collect → turnin 全链路确定性一致', async () => {

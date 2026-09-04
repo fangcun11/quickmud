@@ -22,11 +22,11 @@ const HealSystem = defineSystem({
 // w.emit + w.runChain() 同步驱动事件链，断言可直接跟在后面
 const w = createTestWorld({ systems: [HealSystem] });
 const p = w.entities.create();
-w.entities.addComponent(p, Health, { current: 90, max: 100 });
+w.addComponent(p, Health, { current: 90, max: 100 });
 
 w.emit(Healed.token, { target: p, amount: 30 });
 w.runChain(); // 手动驱动事件链，同步执行
 
-assert.strictEqual(w.entities.getComponent(p, Health)!.current, 100, '回血不超过上限');
+assert.strictEqual(w.getComponent(p, Health)!.current, 100, '回血不超过上限');
 assert.ok(w.getLog().includes(Healed.token), '事件日志可断言');
 console.log('03-test ✓ 测试工具用法全通过');

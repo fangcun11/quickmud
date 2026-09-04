@@ -98,9 +98,10 @@ export function spawnBlueprint(
     entities: {
       createWithId(id: string): EntityId;
       create(): EntityId;
-      addComponent<T>(id: EntityId, c: ComponentDefinition<T>, data?: T): void;
-      getComponent<T>(id: EntityId, c: ComponentDefinition<T>): T | undefined;
     };
+    // 0.13 起组件访问走 World 顶层（与外部调用面一致）
+    addComponent<T>(id: EntityId, c: ComponentDefinition<T>, data?: T): void;
+    getComponent<T>(id: EntityId, c: ComponentDefinition<T>): T | undefined;
   },
   bp: EntityBlueprint,
   opts?: SpawnOptions,
@@ -140,18 +141,18 @@ export function spawnBlueprint(
         ? { ...(base as Record<string, unknown>), ...patchEntry }
         : patchEntry ?? base;
     // 深拷贝后再挂载：同蓝图多次 spawn 的实体互不共享引用
-    world.entities.addComponent(entityId, entry.trait, deepClone(patchData) as never);
+    world.addComponent(entityId, entry.trait, deepClone(patchData) as never);
   }
 
   if (bp.name) {
-    const existing = world.entities.getComponent(
+    const existing = world.getComponent(
       entityId,
       NameRef as ComponentDefinition<{ text: string; aliases: string[] }>,
     );
     if (existing) {
       existing.text = bp.name;
     } else {
-      world.entities.addComponent(entityId, Name, deepClone({ text: bp.name, aliases: [] }));
+      world.addComponent(entityId, Name, deepClone({ text: bp.name, aliases: [] }));
     }
   }
 

@@ -257,24 +257,24 @@ describe('buildAreas · 区域是实体', () => {
     buildAreas(w, layout);
     buildRoomBehaviors(w, twoAreaRooms()); // 房间是静态的，这里只为走同一条构建路径
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'v1' });
+    w.addComponent(player, Position, { roomId: 'v1' });
     return { w, player };
   }
 
   it('区域实体带 Name/Exits/Coordinates，出口指向区域实体 id', () => {
     const { w } = world();
-    expect(w.entities.getComponent('area:village', Name)!.text).toBe('村庄');
-    expect(w.entities.getComponent('area:village', Exits)).toEqual({ east: 'area:wilds' });
-    expect(w.entities.getComponent('area:wilds', Exits)).toEqual({ west: 'area:village' });
-    expect(w.entities.getComponent('area:village', Coordinates)).toEqual({ x: 0, y: 0 });
+    expect(w.getComponent('area:village', Name)!.text).toBe('村庄');
+    expect(w.getComponent('area:village', Exits)).toEqual({ east: 'area:wilds' });
+    expect(w.getComponent('area:wilds', Exits)).toEqual({ west: 'area:village' });
+    expect(w.getComponent('area:village', Coordinates)).toEqual({ x: 0, y: 0 });
   });
 
   it('roomsOfArea / areaOf：归属永远是查出来的，不维护反表', () => {
     const { w, player } = world();
     // WorldQuery 形状兼容系统/命令上下文；测试里用 entities 适配出同款只读查询
     const q: WorldQuery = {
-      findByComponent: (c) => w.entities.findByComponent(c),
-      getComponent: (id, c) => w.entities.getComponent(id, c),
+      findByComponent: (c) => w.findByComponent(c),
+      getComponent: (id, c) => w.getComponent(id, c),
     };
     expect(roomsOfArea(q, 'area:village').sort()).toEqual(['v1', 'v2']);
     expect(roomsOfArea(q, 'area:wilds').sort()).toEqual(['w1', 'w2']);
@@ -296,9 +296,9 @@ describe('MapCommand · 按当前区域过滤', () => {
     buildRooms(w, layout);
     buildAreas(w, layout);
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'v1' });
+    w.addComponent(player, Position, { roomId: 'v1' });
     if (withVisited) {
-      w.entities.addComponent(player, Visited);
+      w.addComponent(player, Visited);
       markVisited(w, player);
     }
     return { w, player };
@@ -347,9 +347,9 @@ describe('WorldMapCommand · 区域级战争迷雾', () => {
     buildRooms(w, layout);
     buildAreas(w, layout);
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'v1' });
+    w.addComponent(player, Position, { roomId: 'v1' });
     if (withVisited) {
-      w.entities.addComponent(player, Visited);
+      w.addComponent(player, Visited);
       markVisited(w, player);
     }
     return { w, player };

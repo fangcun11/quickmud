@@ -34,9 +34,9 @@ function buildWorld(): World {
   w.register(HealSystem);
   w.registerCommands(Rest);
   const p = w.entities.createWithId('player-1');
-  w.entities.addComponent(p, Health, { current: 50, max: 100 });
-  w.entities.addComponent(p, Position, { roomId: 'hall' });
-  w.entities.addComponent(p, Inventory, { items: ['rope'] });
+  w.addComponent(p, Health, { current: 50, max: 100 });
+  w.addComponent(p, Position, { roomId: 'hall' });
+  w.addComponent(p, Inventory, { items: ['rope'] });
   return w;
 }
 
@@ -49,7 +49,7 @@ describe('D2 世界分叉（fork）', () => {
     // fork 世界里命令可用（系统/命令定义已复用）
     const feedback = await forked.execute('rest 30', 'player-1');
     expect(feedback).toBeNull();
-    expect(forked.entities.getComponent('player-1', Health)!.current).toBe(80);
+    expect(forked.getComponent('player-1', Health)!.current).toBe(80);
   });
 
   it('沙盒内任意操作不影响主世界（含快照与输出隔离）', async () => {
@@ -59,13 +59,13 @@ describe('D2 世界分叉（fork）', () => {
 
     // 沙盒里大动干戈
     await forked.execute('rest 50', 'player-1');
-    forked.entities.getComponent('player-1', Inventory)!.items.push('magic-sword');
-    forked.entities.getComponent('player-1', Position)!.roomId = 'dungeon';
+    forked.getComponent('player-1', Inventory)!.items.push('magic-sword');
+    forked.getComponent('player-1', Position)!.roomId = 'dungeon';
     forked.tick();
 
     // 主世界纹丝不动
     expect(firstDiff(mainSnapBefore, main.createSnapshot())).toBeUndefined();
-    expect(main.entities.getComponent('player-1', Health)!.current).toBe(50);
+    expect(main.getComponent('player-1', Health)!.current).toBe(50);
     expect(main.output.count).toBe(0); // 沙盒的输出不会串到主世界
   });
 
@@ -73,16 +73,16 @@ describe('D2 世界分叉（fork）', () => {
     const forked = buildWorld().fork();
     const snapA = forked.createSnapshot();
     await forked.execute('rest 40', 'player-1');
-    expect(forked.entities.getComponent('player-1', Health)!.current).toBe(90);
+    expect(forked.getComponent('player-1', Health)!.current).toBe(90);
     forked.rollbackWorld(snapA);
-    expect(forked.entities.getComponent('player-1', Health)!.current).toBe(50);
+    expect(forked.getComponent('player-1', Health)!.current).toBe(50);
   });
 
   it('主世界后续操作不影响已 fork 的沙盒（单向切断）', async () => {
     const main = buildWorld();
     const forked = main.fork();
-    main.entities.getComponent('player-1', Health)!.current = 10;
-    expect(forked.entities.getComponent('player-1', Health)!.current).toBe(50);
+    main.getComponent('player-1', Health)!.current = 10;
+    expect(forked.getComponent('player-1', Health)!.current).toBe(50);
   });
 
   it('fork 继承 every 系统时相：分叉世界与主世界的后续 tick 行为等价', () => {
@@ -117,8 +117,8 @@ describe('D2 世界分叉（fork）', () => {
   it('性能基线：1000 实体 fork < 100ms（无 COW 的已知限制）', () => {    const main = new World();
     for (let i = 0; i < 1000; i++) {
       const id = main.entities.createWithId(`e-${i}`);
-      main.entities.addComponent(id, Health, { current: i % 100, max: 100 });
-      main.entities.addComponent(id, Position, { roomId: `room-${i % 50}` });
+      main.addComponent(id, Health, { current: i % 100, max: 100 });
+      main.addComponent(id, Position, { roomId: `room-${i % 50}` });
     }
     // 性能计时是真实墙钟的合法场景（确定性约束针对的是模拟状态）
     // eslint-disable-next-line no-restricted-syntax

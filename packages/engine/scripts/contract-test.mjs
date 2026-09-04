@@ -82,13 +82,13 @@ const world = new World();
 world.register(HealSystem);
 world.registerCommands(Rest);
 const player = world.entities.createWithId('hero-001');
-world.entities.addComponent(player, Health, { current: 50, max: 100 });
-world.entities.addComponent(player, Name, { text: '勇者', aliases: [] });
+world.addComponent(player, Health, { current: 50, max: 100 });
+world.addComponent(player, Name, { text: '勇者', aliases: [] });
 
-const before = world.entities.getComponent(player, Health).current;
+const before = world.getComponent(player, Health).current;
 const out = await world.execute('rest 30', player);
 assert.strictEqual(out, null, '命令返回 null，输出走事件链');
-const after = world.entities.getComponent(player, Health).current;
+const after = world.getComponent(player, Health).current;
 assert.ok(after > before, \`治疗生效 \${before} -> \${after}\`);
 
 // 存档 round-trip

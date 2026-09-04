@@ -304,14 +304,14 @@ export function isReachable(nodes: PlaneNode[], from: string, to: string): boole
 export function buildRooms(world: World, layout: { rooms: LayoutRoom[] }): void {
   for (const room of layout.rooms) {
     const id = world.entities.createWithId(room.id as EntityId);
-    world.entities.addComponent(id, Name, { text: room.name, aliases: room.aliases ?? [] });
-    world.entities.addComponent(id, Description, { text: room.description });
-    world.entities.addComponent(id, Exits, { ...room.exits });
+    world.addComponent(id, Name, { text: room.name, aliases: room.aliases ?? [] });
+    world.addComponent(id, Description, { text: room.description });
+    world.addComponent(id, Exits, { ...room.exits });
     if (room.coords) {
-      world.entities.addComponent(id, Coordinates, { ...room.coords });
+      world.addComponent(id, Coordinates, { ...room.coords });
     }
     if (room.area) {
-      world.entities.addComponent(id, Area, { id: areaEntityId(room.area) });
+      world.addComponent(id, Area, { id: areaEntityId(room.area) });
     }
   }
 }
@@ -390,9 +390,9 @@ export function renderAsciiMap(
  * 没挂 `Visited` 的实体直接忽略——系统不能替内容补组件。
  */
 export function markVisited(world: World, entity: EntityId, roomId?: EntityId): void {
-  const visited = world.entities.getComponent(entity, Visited);
+  const visited = world.getComponent(entity, Visited);
   if (!visited) return;
-  const room = roomId ?? world.entities.getComponent(entity, Position)?.roomId;
+  const room = roomId ?? world.getComponent(entity, Position)?.roomId;
   if (!room) return;
   if (!visited.rooms.includes(room)) visited.rooms.push(room);
 }

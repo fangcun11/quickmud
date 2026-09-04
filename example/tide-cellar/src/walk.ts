@@ -22,8 +22,8 @@ const drain = () => {
   return t;
 };
 
-const level = () => world.entities.getComponent(areaEntityId('cellar'), Tide)!.level;
-const at = () => world.entities.getComponent(playerId, Position)!.roomId;
+const level = () => world.getComponent(areaEntityId('cellar'), Tide)!.level;
+const at = () => world.getComponent(playerId, Position)!.roomId;
 
 /** 推进到目标水位（10 秒上限，防死循环） */
 const untilTide = (target: number) => {

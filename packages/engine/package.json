@@ -1,6 +1,6 @@
 {
   "name": "@mud/ecs-engine",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "MUD文字游戏引擎核心 - 事件驱动、ECS架构的确定性游戏模拟",
   "repository": {
     "type": "git",

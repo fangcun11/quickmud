@@ -193,10 +193,10 @@ describe('buildRooms', () => {
     });
     buildRooms(w, layout);
 
-    expect(w.entities.getComponent('a', Name)!.text).toBe('A');
-    expect(w.entities.getComponent('a', Description)!.text).toBe('a 的描述');
-    expect(w.entities.getComponent('a', Exits)!).toEqual({ east: 'b' });
-    expect(w.entities.getComponent('a', Coordinates)!).toEqual({ x: 0, y: 0 });
-    expect(w.entities.getComponent('b', Coordinates)!).toEqual({ x: 1, y: 0 });
+    expect(w.getComponent('a', Name)!.text).toBe('A');
+    expect(w.getComponent('a', Description)!.text).toBe('a 的描述');
+    expect(w.getComponent('a', Exits)!).toEqual({ east: 'b' });
+    expect(w.getComponent('a', Coordinates)!).toEqual({ x: 0, y: 0 });
+    expect(w.getComponent('b', Coordinates)!).toEqual({ x: 1, y: 0 });
   });
 });

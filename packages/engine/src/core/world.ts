@@ -505,6 +505,48 @@ export class World {
     return spawnBlueprint(this, bp, opts);
   }
 
+  // ---------- 组件访问（0.13 起顶层统一入口） ----------
+  //
+  // 组件读写全部提升到 World 顶层，与 SystemContext（ctx.getComponent /
+  // ctx.findByComponent）和 CommandContext.world.getComponent 同名同签名——
+  // 同一个操作在三个层面只有一种写法。`world.entities` 降为实体存储与
+  // 内部机制（create/createWithId/has/get/delete/快照恢复），不再承载
+  // 组件访问；组件数据结构的物理存取仍是 EntityManager 的实现细节。
+
+  /** 读取组件（返回活引用——改字段即改世界状态；系统侧请走 ctx，命令侧禁止改） */
+  getComponent<T>(id: EntityId, component: ComponentDefinition<T>): T | undefined {
+    return this.entities.getComponent(id, component);
+  }
+
+  /** 组件存在性（不看数据，只看是否挂了） */
+  hasComponent<T>(id: EntityId, component: ComponentDefinition<T>): boolean {
+    return this.entities.hasComponent(id, component);
+  }
+
+  /** 挂组件（data 省略用组件默认值；测试/初始化/世界搭建用，游戏内改状态走系统） */
+  addComponent<T>(id: EntityId, component: ComponentDefinition<T>, data?: T): void {
+    this.entities.addComponent(id, component, data);
+  }
+
+  /** 摘组件（是否确实摘掉了） */
+  removeComponent<T>(id: EntityId, component: ComponentDefinition<T>): boolean {
+    return this.entities.removeComponent(id, component);
+  }
+
+  /** 函数式原位更新组件（组件不存在则抛错） */
+  updateComponent<T>(
+    id: EntityId,
+    component: ComponentDefinition<T>,
+    updater: (current: T) => T
+  ): void {
+    this.entities.updateComponent(id, component, updater);
+  }
+
+  /** 按组件查询实体（创建序；容器查询等场景） */
+  findByComponent<T>(component: ComponentDefinition<T>): EntityId[] {
+    return this.entities.findByComponent(component);
+  }
+
   /**
    * 执行一个 tick：
    * 1. 推进世界时间

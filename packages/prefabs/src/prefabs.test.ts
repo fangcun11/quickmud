@@ -57,9 +57,9 @@ function buildWorld() {
   );
 
   const player = w.entities.createWithId('player-1');
-  w.entities.addComponent(player, Health, { current: 80, max: 100 });
-  w.entities.addComponent(player, Position, { roomId: 'town_square' });
-  w.entities.addComponent(player, Name, { text: '冒险者' });
+  w.addComponent(player, Health, { current: 80, max: 100 });
+  w.addComponent(player, Position, { roomId: 'town_square' });
+  w.addComponent(player, Name, { text: '冒险者' });
 
   // 房间：town_square ⇄ tavern
   for (const room of [
@@ -77,34 +77,34 @@ function buildWorld() {
     },
   ]) {
     const rid = w.entities.createWithId(room.id);
-    w.entities.addComponent(rid, Name, room.name);
-    w.entities.addComponent(rid, Description, room.desc);
-    w.entities.addComponent(rid, Exits, room.exits);
+    w.addComponent(rid, Name, room.name);
+    w.addComponent(rid, Description, room.desc);
+    w.addComponent(rid, Exits, room.exits);
   }
 
   // 物品实体：单源位置 Located.at == 所在容器（房间/玩家）
   const sword = w.entities.createWithId('sword');
-  w.entities.addComponent(sword, Name, { text: '生锈的剑', aliases: ['剑', 'sword'] });
-  w.entities.addComponent(sword, Description, { text: '一把生锈的旧剑。' });
-  w.entities.addComponent(sword, Portable);
-  w.entities.addComponent(sword, Weapon, { damage: 6 });
-  w.entities.addComponent(sword, Located, { at: 'town_square' });
+  w.addComponent(sword, Name, { text: '生锈的剑', aliases: ['剑', 'sword'] });
+  w.addComponent(sword, Description, { text: '一把生锈的旧剑。' });
+  w.addComponent(sword, Portable);
+  w.addComponent(sword, Weapon, { damage: 6 });
+  w.addComponent(sword, Located, { at: 'town_square' });
 
   const gold = w.entities.createWithId('gold');
-  w.entities.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
-  w.entities.addComponent(gold, Portable);
-  w.entities.addComponent(gold, Located, { at: 'town_square' });
+  w.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
+  w.addComponent(gold, Portable);
+  w.addComponent(gold, Located, { at: 'town_square' });
 
   // 固定物（无 Portable）：演示"拿不动"
   const statue = w.entities.createWithId('statue');
-  w.entities.addComponent(statue, Name, { text: '石像' });
-  w.entities.addComponent(statue, Located, { at: 'town_square' });
+  w.addComponent(statue, Name, { text: '石像' });
+  w.addComponent(statue, Located, { at: 'town_square' });
 
   // 酒馆里的东西：不在广场，演示 take 校验"必须在当前房间"
   const mug = w.entities.createWithId('mug');
-  w.entities.addComponent(mug, Name, { text: '麦酒', aliases: ['ale'] });
-  w.entities.addComponent(mug, Portable);
-  w.entities.addComponent(mug, Located, { at: 'tavern' });
+  w.addComponent(mug, Name, { text: '麦酒', aliases: ['ale'] });
+  w.addComponent(mug, Portable);
+  w.addComponent(mug, Located, { at: 'tavern' });
 
   return { w, player, sword, gold, statue, mug };
 }
@@ -114,7 +114,7 @@ describe('prefabs 移动', () => {
     const { w, player } = buildWorld();
     await w.execute('go north', player);
 
-    const pos = w.entities.getComponent(player, Position)!;
+    const pos = w.getComponent(player, Position)!;
     expect(pos.roomId).toBe('tavern');
     const lines = textOf(w.output.getAll(), 'narrative');
     expect(lines[0]).toContain('你来到了酒馆');
@@ -124,7 +124,7 @@ describe('prefabs 移动', () => {
   it('出口方向不存在时拒绝移动且不落位', async () => {
     const { w, player } = buildWorld();
     await w.execute('go east', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('town_square');
+    expect(w.getComponent(player, Position)!.roomId).toBe('town_square');
     // 文案说人话：方向 id（east）不该原样拼进中文句子
     expect(textOf(w.output.getAll(), 'narrative')[0]).toBe('你不能往东走。');
   });
@@ -145,7 +145,7 @@ describe('prefabs 查看与物品', () => {
     const { w, player, sword } = buildWorld();
     await w.execute('take 剑', player); // 别名解析
 
-    expect(w.entities.getComponent(sword, Located)!.at).toBe(player);
+    expect(w.getComponent(sword, Located)!.at).toBe(player);
     expect(textOf(w.output.getAll(), 'narrative')).toContain('你拿起了「生锈的剑」。');
     expect(await w.execute('inventory', player)).toBe('你的背包里有：生锈的剑');
   });
@@ -154,14 +154,14 @@ describe('prefabs 查看与物品', () => {
     const { w, player, mug } = buildWorld();
     // 麦酒在 tavern，玩家在 town_square → 命令在房间作用域内解析不到
     expect(await w.execute('take 麦酒', player)).toBe('这里没有「麦酒」。');
-    expect(w.entities.getComponent(mug, Located)!.at).toBe('tavern');
+    expect(w.getComponent(mug, Located)!.at).toBe('tavern');
   });
 
   it('take 不可携带物（无 Portable）→ 拿不动', async () => {
     const { w, player, statue } = buildWorld();
     await w.execute('take 石像', player);
     expect(textOf(w.output.getAll(), 'error')).toContain('你拿不动「石像」。');
-    expect(w.entities.getComponent(statue, Located)!.at).toBe('town_square');
+    expect(w.getComponent(statue, Located)!.at).toBe('town_square');
   });
 
   it('drop 把背包物品放到当前房间；未持有则报错', async () => {
@@ -172,16 +172,16 @@ describe('prefabs 查看与物品', () => {
     await w.execute('take 剑', player);
     await w.execute('north', player); // 去酒馆再丢
     await w.execute('drop 剑', player);
-    expect(w.entities.getComponent(sword, Located)!.at).toBe('tavern');
+    expect(w.getComponent(sword, Located)!.at).toBe('tavern');
     expect(await w.execute('inventory', player)).toBe('你的背包是空的。');
   });
 
   it('开发者命令 /tp /heal 仍按约定生效，/give 不再注册', async () => {
     const { w, player } = buildWorld();
     await w.execute('/heal', player);
-    expect(w.entities.getComponent(player, Health)!.current).toBe(100);
+    expect(w.getComponent(player, Health)!.current).toBe(100);
     await w.execute('/tp tavern', player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('tavern');
+    expect(w.getComponent(player, Position)!.roomId).toBe('tavern');
     expect(await w.execute('/give sword', player)).toBe('我不明白你的意思。');
   });
 });
@@ -190,15 +190,15 @@ describe('prefabs 物品确定性', () => {
   it('快照 round-trip：take 之后回滚，物品回到地面', async () => {
     const { w, player, sword } = buildWorld();
     await w.execute('take 剑', player);
-    expect(w.entities.getComponent(sword, Located)!.at).toBe(player);
+    expect(w.getComponent(sword, Located)!.at).toBe(player);
 
     const snap = w.createSnapshot();
     // 再转移到酒馆，然后回滚到 take 后的状态
     await w.execute('north', player);
     await w.execute('drop 剑', player);
     w.rollbackWorld(snap);
-    expect(w.entities.getComponent(sword, Located)!.at).toBe(player);
-    expect(w.entities.getComponent(player, Position)!.roomId).toBe('town_square');
+    expect(w.getComponent(sword, Located)!.at).toBe(player);
+    expect(w.getComponent(player, Position)!.roomId).toBe('town_square');
   });
 
   it('录像重放：take/drop 操作序列确定性一致', async () => {
@@ -229,28 +229,28 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
     w.registerCommands(TakeCommand, DropCommand, InventoryCommand);
 
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'town' });
+    w.addComponent(player, Position, { roomId: 'town' });
 
     for (const room of ['town', 'tavern']) {
       const rid = w.entities.createWithId(room);
-      w.entities.addComponent(rid, Name, { text: room });
+      w.addComponent(rid, Name, { text: room });
     }
 
     // 关键布置：tavern 的先创建、town 的后创建（全局 findEntity 会错选前者）
     const coinT = w.entities.createWithId('coin-t');
-    w.entities.addComponent(coinT, Name, { text: '金币', aliases: ['coin'] });
-    w.entities.addComponent(coinT, Portable);
-    w.entities.addComponent(coinT, Located, { at: 'tavern' });
+    w.addComponent(coinT, Name, { text: '金币', aliases: ['coin'] });
+    w.addComponent(coinT, Portable);
+    w.addComponent(coinT, Located, { at: 'tavern' });
 
     const coinS = w.entities.createWithId('coin-s');
-    w.entities.addComponent(coinS, Name, { text: '金币', aliases: ['coin'] });
-    w.entities.addComponent(coinS, Portable);
-    w.entities.addComponent(coinS, Located, { at: 'town' });
+    w.addComponent(coinS, Name, { text: '金币', aliases: ['coin'] });
+    w.addComponent(coinS, Portable);
+    w.addComponent(coinS, Located, { at: 'town' });
 
     await w.execute('take 金币', player);
     // 修复前：解析到先建的 coin-t（不在当前房间）→ 永久拿不到眼前的 coin-s
-    expect(w.entities.getComponent(coinS, Located)!.at).toBe(player);
-    expect(w.entities.getComponent(coinT, Located)!.at).toBe('tavern');
+    expect(w.getComponent(coinS, Located)!.at).toBe(player);
+    expect(w.getComponent(coinT, Located)!.at).toBe('tavern');
     expect(await w.execute('inventory', player)).toBe('你的背包里有：金币');
   });
 
@@ -259,18 +259,18 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
     w.register(ItemSystem);
     w.registerCommands(TakeCommand, DropCommand, InventoryCommand);
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'town' });
+    w.addComponent(player, Position, { roomId: 'town' });
     const roomId = w.entities.createWithId('town');
-    w.entities.addComponent(roomId, Name, { text: 'town' });
+    w.addComponent(roomId, Name, { text: 'town' });
 
     // 背包里没有金币；地上有一枚 → drop 金币应报"你没有"，而非把地上的拿走
     const ground = w.entities.createWithId('ground-coin');
-    w.entities.addComponent(ground, Name, { text: '金币' });
-    w.entities.addComponent(ground, Portable);
-    w.entities.addComponent(ground, Located, { at: 'town' });
+    w.addComponent(ground, Name, { text: '金币' });
+    w.addComponent(ground, Portable);
+    w.addComponent(ground, Located, { at: 'town' });
 
     expect(await w.execute('drop 金币', player)).toBe('你没有「金币」。');
-    expect(w.entities.getComponent(ground, Located)!.at).toBe('town');
+    expect(w.getComponent(ground, Located)!.at).toBe('town');
   });
 
   it('look <目标> 输出容器内物品描述', async () => {
@@ -307,21 +307,21 @@ describe('V2 战斗与死亡（v0.5）', () => {
     w.registerCommands(TakeCommand, DropCommand, InventoryCommand, AttackCommand);
 
     const player = w.entities.createWithId('player');
-    w.entities.addComponent(player, Position, { roomId: 'town' });
-    w.entities.addComponent(player, Name, { text: '勇者' });
+    w.addComponent(player, Position, { roomId: 'town' });
+    w.addComponent(player, Name, { text: '勇者' });
 
     const town = w.entities.createWithId('town');
-    w.entities.addComponent(town, Name, { text: '城镇' });
-    w.entities.addComponent(town, Exits, { north: 'cave' });
+    w.addComponent(town, Name, { text: '城镇' });
+    w.addComponent(town, Exits, { north: 'cave' });
 
     const cave = w.entities.createWithId('cave');
-    w.entities.addComponent(cave, Name, { text: '洞穴' });
-    w.entities.addComponent(cave, Exits, {});
+    w.addComponent(cave, Name, { text: '洞穴' });
+    w.addComponent(cave, Exits, {});
 
     const mob = w.entities.createWithId('mob');
-    w.entities.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
-    w.entities.addComponent(mob, Position, { roomId: 'town' });
-    w.entities.addComponent(mob, Health, { current: 20, max: 20 });
+    w.addComponent(mob, Name, { text: '野狗', aliases: ['狗'] });
+    w.addComponent(mob, Position, { roomId: 'town' });
+    w.addComponent(mob, Health, { current: 20, max: 20 });
     return { w, player, mob };
   }
 
@@ -332,7 +332,7 @@ describe('V2 战斗与死亡（v0.5）', () => {
     w.register({ name: 'deathwatch', on: ['died'], handle: (e: { data: { entity: string } }) => deaths.push(e.data.entity) } as never);
 
     await w.execute('attack 野狗', player);
-    expect(w.entities.getComponent(mob, Health)!.current).toBe(10);
+    expect(w.getComponent(mob, Health)!.current).toBe(10);
     expect(w.entities.has(mob)).toBe(true);
     expect(deaths).toEqual([]);
 
@@ -346,19 +346,19 @@ describe('V2 战斗与死亡（v0.5）', () => {
     const { w, player } = combatWorld();
     // 洞穴里放另一只野狗
     const caveMob = w.entities.createWithId('cave-mob');
-    w.entities.addComponent(caveMob, Name, { text: '洞狼' });
-    w.entities.addComponent(caveMob, Position, { roomId: 'cave' });
-    w.entities.addComponent(caveMob, Health, { current: 10, max: 10 });
+    w.addComponent(caveMob, Name, { text: '洞狼' });
+    w.addComponent(caveMob, Position, { roomId: 'cave' });
+    w.addComponent(caveMob, Health, { current: 10, max: 10 });
 
     expect(await w.execute('attack 洞狼', player)).toBe('这里没有「洞狼」。');
-    expect(w.entities.getComponent(caveMob, Health)!.current).toBe(10);
+    expect(w.getComponent(caveMob, Health)!.current).toBe(10);
   });
 
   it('attack 无 Health 的同房目标 → 系统反馈', async () => {
     const { w, player } = combatWorld();
     const stone = w.entities.createWithId('stone');
-    w.entities.addComponent(stone, Name, { text: '石像' });
-    w.entities.addComponent(stone, Position, { roomId: 'town' });
+    w.addComponent(stone, Name, { text: '石像' });
+    w.addComponent(stone, Position, { roomId: 'town' });
 
     await w.execute('attack 石像', player);
     expect(textOf(w.output.getAll(), 'error')).toContain('ta 身上没有可伤害的生命。');
@@ -381,38 +381,38 @@ describe('V3 NPC 巡逻（v0.5）', () => {
     const w = new World({ tickInterval: 500 });
     w.register(NpcWanderSystem);
     const town = w.entities.createWithId('town');
-    w.entities.addComponent(town, Name, { text: '城镇' });
-    w.entities.addComponent(town, Exits, { north: 'cave' });
+    w.addComponent(town, Name, { text: '城镇' });
+    w.addComponent(town, Exits, { north: 'cave' });
     const cave = w.entities.createWithId('cave');
-    w.entities.addComponent(cave, Name, { text: '洞穴' });
-    w.entities.addComponent(cave, Exits, { south: 'town' });
+    w.addComponent(cave, Name, { text: '洞穴' });
+    w.addComponent(cave, Exits, { south: 'town' });
 
     const npc = w.entities.createWithId('wanderer');
-    w.entities.addComponent(npc, Name, { text: '流浪商人' });
-    w.entities.addComponent(npc, Position, { roomId: 'town' });
-    w.entities.addComponent(npc, Wander);
+    w.addComponent(npc, Name, { text: '流浪商人' });
+    w.addComponent(npc, Position, { roomId: 'town' });
+    w.addComponent(npc, Wander);
 
     // every=3000，tick=500 → 第 6 个 tick（t=3000）跨过网格点触发
     for (let i = 0; i < 6; i++) w.tick();
-    expect(w.entities.getComponent(npc, Position)!.roomId).toBe('cave');
+    expect(w.getComponent(npc, Position)!.roomId).toBe('cave');
 
     // 再走一轮回到 town（确定性往返）
     for (let i = 0; i < 6; i++) w.tick();
-    expect(w.entities.getComponent(npc, Position)!.roomId).toBe('town');
+    expect(w.getComponent(npc, Position)!.roomId).toBe('town');
   });
 
   it('无 Exits 的房间中 Wander 实体原地停留', () => {
     const w = new World({ tickInterval: 500 });
     w.register(NpcWanderSystem);
     const deadEnd = w.entities.createWithId('dead-end');
-    w.entities.addComponent(deadEnd, Name, { text: '死胡同' });
-    w.entities.addComponent(deadEnd, Exits, {});
+    w.addComponent(deadEnd, Name, { text: '死胡同' });
+    w.addComponent(deadEnd, Exits, {});
     const npc = w.entities.createWithId('trapped');
-    w.entities.addComponent(npc, Name, { text: '迷路的猫' });
-    w.entities.addComponent(npc, Position, { roomId: 'dead-end' });
-    w.entities.addComponent(npc, Wander);
+    w.addComponent(npc, Name, { text: '迷路的猫' });
+    w.addComponent(npc, Position, { roomId: 'dead-end' });
+    w.addComponent(npc, Wander);
 
     for (let i = 0; i < 18; i++) w.tick(); // 3 个周期
-    expect(w.entities.getComponent(npc, Position)!.roomId).toBe('dead-end');
+    expect(w.getComponent(npc, Position)!.roomId).toBe('dead-end');
   });
 });

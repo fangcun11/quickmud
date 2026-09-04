@@ -40,7 +40,7 @@ const ScoreCommand = defineCommand({
 
 const w = createTestWorld({ commands: [ProbeCommand, ScoreCommand] });
 const player = w.entities.createWithId('player-1');
-w.entities.addComponent(player, Name, { text: '勇者', aliases: [] });
+w.addComponent(player, Name, { text: '勇者', aliases: [] });
 
 // 按声明顺序依次吃词；entity 类型给的是原始词（要实体用 world.findEntity）
 // （新建世界首轮 execute 前缓冲为空，[0] 即本轮消息；多轮场景见下文 drainOutput）

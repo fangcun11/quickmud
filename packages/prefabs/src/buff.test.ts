@@ -45,16 +45,16 @@ function buffWorld(opts: BuffWorldOpts = {}) {
   });
 
   const victim = w.entities.createWithId('victim');
-  w.entities.addComponent(victim, Name, { text: '倒霉蛋' });
-  w.entities.addComponent(victim, Health, opts.hp ?? { current: 100, max: 100 });
-  w.entities.addComponent(victim, Position, { roomId: 'town' });
+  w.addComponent(victim, Name, { text: '倒霉蛋' });
+  w.addComponent(victim, Health, opts.hp ?? { current: 100, max: 100 });
+  w.addComponent(victim, Position, { roomId: 'town' });
   if (opts.loot) {
-    w.entities.addComponent(victim, Loot, { drops: [{ name: '遗产' }] });
+    w.addComponent(victim, Loot, { drops: [{ name: '遗产' }] });
   }
 
   const town = w.entities.createWithId('town');
-  w.entities.addComponent(town, Name, { text: '城镇' });
-  w.entities.addComponent(town, Exits, {});
+  w.addComponent(town, Name, { text: '城镇' });
+  w.addComponent(town, Exits, {});
 
   const spawnBuff = (effect: BuffEffect, lasts: number, source?: string) => {
     const id = w.world.spawn(buffBlueprint({ victim, effect, lasts, source }));
@@ -71,10 +71,10 @@ describe('V6 最小 Buff（v0.7-A）', () => {
     spawnBuff({ type: 'damage', amount: 3, every: 1000 }, 5000);
 
     clock.advance(1000); // 首个网格：激活（startedAt=1000），本次不结算
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(100);
+    expect(w.getComponent(victim, Health)!.current).toBe(100);
 
     clock.advance(1000); // t=2000：第一次结算
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(97);
+    expect(w.getComponent(victim, Health)!.current).toBe(97);
     expect(textOf(w.output.getAll(), 'narrative').join('')).toContain('持续伤害');
   });
 
@@ -84,10 +84,10 @@ describe('V6 最小 Buff（v0.7-A）', () => {
 
     clock.advance(3000); // t=1000 激活；t=2000 结算一次；t=3000 到期判定（2000>=2000）→ 销毁
     expect(w.entities.has(buffId)).toBe(false);
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(97); // 只结算过一次
+    expect(w.getComponent(victim, Health)!.current).toBe(97); // 只结算过一次
 
     clock.advance(2000); // buff 已消失，不再掉血
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(97);
+    expect(w.getComponent(victim, Health)!.current).toBe(97);
   });
 
   it('到期 emit BuffExpired；每次结算 emit BuffTicked', () => {
@@ -122,7 +122,7 @@ describe('V6 最小 Buff（v0.7-A）', () => {
     clock.advance(3000); // 激活后 2000/3000 两次结算 +8 → 103 → 截到 100
 
     clock.advance(2000); // t=2000 结算 +5 → 100（截断）
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(100);
+    expect(w.getComponent(victim, Health)!.current).toBe(100);
   });
 
   it('effect.every 粒度独立于 BuffSystem 结算粒度', () => {
@@ -130,10 +130,10 @@ describe('V6 最小 Buff（v0.7-A）', () => {
     spawnBuff({ type: 'damage', amount: 2, every: 2000 }, 10_000);
 
     clock.advance(3000); // t=1000 激活；t=3000：elapsed 2000 >= 2000 → 首次结算
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(98);
+    expect(w.getComponent(victim, Health)!.current).toBe(98);
 
     clock.advance(2000); // t=5000：elapsed 又 2000 → 第二次结算
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(96);
+    expect(w.getComponent(victim, Health)!.current).toBe(96);
   });
 
   it('毒杀：HP 归零 emit Died，死亡管线全生效（清场 + 掉落），killer = source', () => {
@@ -146,14 +146,14 @@ describe('V6 最小 Buff（v0.7-A）', () => {
         deaths.push({ entity: e.data.entity, killer: e.data.killer }),
     } as never);
     const witch = w.entities.createWithId('witch');
-    w.entities.addComponent(witch, Name, { text: '女巫' });
+    w.addComponent(witch, Name, { text: '女巫' });
 
     spawnBuff({ type: 'damage', amount: 3, every: 1000 }, 60_000, witch);
 
     clock.advance(3000); // 结算两次：5→2→0 → Died
     expect(deaths).toEqual([{ entity: 'victim', killer: 'witch' }]);
     expect(w.entities.has(victim)).toBe(false); // DeathSystem 清场
-    expect(itemsInContainer(w.entities, 'town').map((id) => w.entities.getComponent(id, Name)!.text)).toEqual(['遗产']);
+    expect(itemsInContainer(w.entities, 'town').map((id) => w.getComponent(id, Name)!.text)).toEqual(['遗产']);
   });
 
   it('受害者死亡时身上的其他 buff 被清理', () => {
@@ -165,7 +165,7 @@ describe('V6 最小 Buff（v0.7-A）', () => {
 
     expect(w.entities.has(poison)).toBe(false);
     expect(w.entities.has(blessing)).toBe(false);
-    expect(w.entities.findByComponent(Afflicted)).toEqual([]);
+    expect(w.findByComponent(Afflicted)).toEqual([]);
   });
 
   it('快照 round-trip：回滚后 HP 与 buff 状态都回到快照时点', () => {
@@ -178,13 +178,13 @@ describe('V6 最小 Buff（v0.7-A）', () => {
     clock.advance(3000); // 继续掉血（t=3000/4000/5000 三次结算 → 88）
     w.world.rollbackWorld(snap);
 
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(97);
+    expect(w.getComponent(victim, Health)!.current).toBe(97);
     expect(w.entities.has(buffId)).toBe(true);
-    expect(w.entities.getComponent(buffId, Afflicted)!.startedAt).toBe(1000);
+    expect(w.getComponent(buffId, Afflicted)!.startedAt).toBe(1000);
 
     // 回滚后 buff 继续按原节拍结算（确定性不因回滚而断）：t=3000/4000 两次
     clock.advance(2000);
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(91);
+    expect(w.getComponent(victim, Health)!.current).toBe(91);
   });
 
   it('录像重放：毒杀全链路确定性一致', async () => {
@@ -206,10 +206,10 @@ describe('V6 最小 Buff（v0.7-A）', () => {
   it('永久 buff：无 Duration 组件时永不过期', () => {
     const { w, clock, victim, spawnBuff } = buffWorld();
     const id = spawnBuff({ type: 'damage', amount: 3, every: 1000 }, 0); // lasts 0 = 不挂 Duration
-    expect(w.entities.getComponent(id, Duration)).toBeUndefined();
+    expect(w.getComponent(id, Duration)).toBeUndefined();
 
     clock.advance(5000);
     expect(w.entities.has(id)).toBe(true);
-    expect(w.entities.getComponent(victim, Health)!.current).toBe(100 - 3 * 4); // t=1000 激活，2000/3000/4000/5000 四次结算
+    expect(w.getComponent(victim, Health)!.current).toBe(100 - 3 * 4); // t=1000 激活，2000/3000/4000/5000 四次结算
   });
 });

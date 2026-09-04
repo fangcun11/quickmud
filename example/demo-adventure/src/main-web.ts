@@ -22,9 +22,9 @@ function main() {
 
   // 状态栏文本：用 trait 定义读取组件（key 为 trait 的确定性哈希 id）
   const status = (pid: EntityId): string | undefined => {
-    const health = world.entities.getComponent(pid, Health);
-    const pos = world.entities.getComponent(pid, Position);
-    const roomName = pos ? world.entities.getComponent(pos.roomId, Name) : undefined;
+    const health = world.getComponent(pid, Health);
+    const pos = world.getComponent(pid, Position);
+    const roomName = pos ? world.getComponent(pos.roomId, Name) : undefined;
 
     const parts: string[] = [];
     if (health) parts.push(`HP: ${health.current}/${health.max}`);

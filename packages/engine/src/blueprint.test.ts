@@ -23,12 +23,12 @@ describe('B0 蓝图预制件', () => {
 
     // 手写对照
     const h = w.entities.createWithId('gob-manual');
-    w.entities.addComponent(h, Health, { current: 30, max: 30 });
-    w.entities.addComponent(h, Position, { roomId: 'cave' });
-    w.entities.addComponent(h, trait('name'), { text: '哥布林', aliases: [] });
+    w.addComponent(h, Health, { current: 30, max: 30 });
+    w.addComponent(h, Position, { roomId: 'cave' });
+    w.addComponent(h, trait('name'), { text: '哥布林', aliases: [] });
 
-    expect(w.entities.getComponent(g, Health)).toEqual(w.entities.getComponent(h, Health));
-    expect(w.entities.getComponent(g, Position)).toEqual(w.entities.getComponent(h, Position));
+    expect(w.getComponent(g, Health)).toEqual(w.getComponent(h, Health));
+    expect(w.getComponent(g, Position)).toEqual(w.getComponent(h, Position));
     expect(w.findEntity('哥布林')).toBe(g); // name 自动挂载可查
   });
 
@@ -37,16 +37,16 @@ describe('B0 蓝图预制件', () => {
     const boss = w.spawn(Goblin, { id: 'king', patch: { health: { current: 200, max: 200 } } });
     const plain = w.spawn(Goblin, { id: 'minion' });
 
-    expect(w.entities.getComponent(boss, Health)).toEqual({ current: 200, max: 200 });
+    expect(w.getComponent(boss, Health)).toEqual({ current: 200, max: 200 });
     // 后续 spawn 不受 patch 影响
-    expect(w.entities.getComponent(plain, Health)).toEqual({ current: 30, max: 30 });
+    expect(w.getComponent(plain, Health)).toEqual({ current: 30, max: 30 });
   });
 
   it('data 缺省时用 trait 工厂默认值', () => {
     const w = new World();
     const Chest = blueprint({ components: [[Inventory]] });
     const c = w.spawn(Chest);
-    expect(w.entities.getComponent(c, Inventory)).toEqual({ items: [] });
+    expect(w.getComponent(c, Inventory)).toEqual({ items: [] });
   });
 
   it('同蓝图同 id 两次 spawn 的实体组件数据恒等（确定性）', () => {
@@ -79,17 +79,17 @@ describe('B0 蓝图预制件', () => {
     const b = w.spawn(Goblin, { id: 'gob-b' });
 
     // 同蓝图两次 spawn：各自持有独立的数据副本
-    expect(w.entities.getComponent(a, Health)).not.toBe(w.entities.getComponent(b, Health));
-    w.entities.getComponent(a, Health)!.current = 1;
-    expect(w.entities.getComponent(b, Health)!.current).toBe(30);
+    expect(w.getComponent(a, Health)).not.toBe(w.getComponent(b, Health));
+    w.getComponent(a, Health)!.current = 1;
+    expect(w.getComponent(b, Health)!.current).toBe(30);
   });
 
   it('同一蓝图 spawn 不反向污染蓝图本身（再次 spawn 得到全新数据）', () => {
     const w = new World();
     w.spawn(Goblin, { id: 'x' });
-    w.entities.getComponent('x', Health)!.current = 999;
+    w.getComponent('x', Health)!.current = 999;
     // 蓝图仍应是 { current: 30 }：spawn 过程不反向改写蓝图对象
     const y = w.spawn(Goblin, { id: 'y' });
-    expect(w.entities.getComponent(y, Health)!.current).toBe(30);
+    expect(w.getComponent(y, Health)!.current).toBe(30);
   });
 });

@@ -26,10 +26,11 @@
 
 | API | 说明 | 详 |
 | --- | --- | --- |
-| `entities.create()` / `entities.createWithId(id)` | 创建实体 | [03](./03-entities-components.md) |
-| `entities.addComponent(id, comp, data)` | 挂组件 | [03](./03-entities-components.md) |
-| `entities.getComponent(id, comp)` | 读组件 → `T \| undefined` | [03](./03-entities-components.md) |
-| `entities.has(id)` / `findByComponent(comp)` | 存在性 / 按组件查询 | [03](./03-entities-components.md) |
+| `entities.create()` / `entities.createWithId(id)` | 创建实体（`entities` 只管实体存取） | [03](./03-entities-components.md) |
+| `world.getComponent(id, comp)` | 读组件 → `T \| undefined`（0.13 起顶层统一入口） | [03](./03-entities-components.md) |
+| `world.addComponent(id, comp, data?)` / `world.removeComponent(id, comp)` | 挂 / 摘组件 | [03](./03-entities-components.md) |
+| `world.hasComponent(id, comp)` / `world.findByComponent(comp)` / `world.updateComponent(id, comp, updater)` | 存在性 / 按组件查询 / 函数式更新 | [03](./03-entities-components.md) |
+| `entities.has(id)` / `entities.delete(id)` | 实体存在性 / 删除 | [03](./03-entities-components.md) |
 | `trait(name, defaults?)` / `relation(name)` | 组件 / 关系（ID 碰撞 fail-fast） | [03](./03-entities-components.md) |
 | `blueprint({ components: [...] })` | 实体蓝图 | [09](./09-areas-behaviors.md) |
 

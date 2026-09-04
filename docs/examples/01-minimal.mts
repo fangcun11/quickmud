@@ -36,8 +36,8 @@ world.register(HealSystem);
 world.registerCommands(RestCommand);
 
 const player = world.entities.createWithId('player-1');
-world.entities.addComponent(player, Health, { current: 60, max: 100 });
-world.entities.addComponent(player, Name, { text: '勇者', aliases: [] });
+world.addComponent(player, Health, { current: 60, max: 100 });
+world.addComponent(player, Name, { text: '勇者', aliases: [] });
 
 const feedback = await world.execute('休息 30', player);
 if (feedback) console.log(feedback);

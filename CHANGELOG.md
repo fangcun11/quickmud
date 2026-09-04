@@ -2,6 +2,46 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.13.0] - 2026-09-04
+
+主题：**组件访问收权——World 顶层统一入口**（API 审查之外的独立改进，
+用户驱动的易用性重构）。组件读写从 `world.entities.getComponent(...)`
+提升为 `world.getComponent(...)`，与系统侧 `ctx.getComponent`、命令侧
+`ctx.world.getComponent` 同名同签名——同一个操作在三个层面只有一种写法。
+
+### 组件访问六件套提升到 World 顶层（@mud/ecs-engine 0.9.0）
+
+- 新增顶层 API：`getComponent` / `hasComponent` / `addComponent` /
+  `removeComponent` / `updateComponent`（函数式 updater）/ `findByComponent`
+  ——签名与 `EntityManager` 原方法一致，`getComponent` 返回活引用的语义不变
+- **API 分工重划**：`world.entities` 降为实体存储与内部机制
+  （`create / createWithId / has / get / delete`、快照恢复、ID 计数器），
+  不再承载组件访问——顶层 = 组件访问 + 高频操作（spawn/drainOutput 同列），
+  与"读无禁区、写有铁律"的架构叙事同构
+- `TestWorld` 同款转发（`w.getComponent / w.addComponent / ...`），
+  测试代码与宿主形态一致；`spawnBlueprint` 内部同步改走顶层
+- **旧写法 `world.entities.getComponent(...)` 仍可用**（entities 面未删），
+  但文档与示例已全部迁移；`EntityManager` 类型继续导出作 escape hatch
+
+### 迁移说明
+
+机械替换即可（全仓约 480 处已随本版迁移）：
+
+```ts
+// 旧
+world.entities.getComponent(player, Health);
+world.entities.addComponent(id, Health, { current: 30 });
+// 新
+world.getComponent(player, Health);
+world.addComponent(id, Health, { current: 30 });
+```
+
+### 文档同步
+
+- guide 03 章点明新分工（组件走顶层、entities 只管实体）、16 章速查表重排、
+  10 个验证示例与三个 example 应用全部迁移
+- 主 README / engine README / prefabs README 示例同步
+
 ## [0.12.0] - 2026-09-04
 
 主题：**引擎 API 审查修复（第二批）**——全部有行为变化（P0-2/P1-3/P1-4/

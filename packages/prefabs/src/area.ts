@@ -357,10 +357,10 @@ function isReachableAcross(adj: Map<string, string[]>, from: string, to: string)
 export function buildAreas(world: World, layout: WorldLayoutResult): void {
   for (const area of layout.areas) {
     const id = world.entities.createWithId(areaEntityId(area.id));
-    world.entities.addComponent(id, Name, { text: area.name, aliases: area.aliases ?? [] });
-    world.entities.addComponent(id, Description, { text: area.description ?? '' });
+    world.addComponent(id, Name, { text: area.name, aliases: area.aliases ?? [] });
+    world.addComponent(id, Description, { text: area.description ?? '' });
     // 推断出的出口存的是区域定义 id；实体层的 Exits 与房间同款指实体 id
-    world.entities.addComponent(
+    world.addComponent(
       id,
       Exits,
       Object.fromEntries(
@@ -368,7 +368,7 @@ export function buildAreas(world: World, layout: WorldLayoutResult): void {
       ),
     );
     if (area.coords) {
-      world.entities.addComponent(id, Coordinates, { ...area.coords });
+      world.addComponent(id, Coordinates, { ...area.coords });
     }
   }
 }

@@ -12,7 +12,7 @@ console.log('imports ok');
 const Health = trait('health', () => ({ current: 100, max: 100 }));
 const world = new World();
 const player = world.entities.createWithId('player-1');
-world.entities.addComponent(player, Health, { current: 60, max: 100 });
+world.addComponent(player, Health, { current: 60, max: 100 });
 
 const file = 'saves/slot1.json';
 
@@ -32,9 +32,9 @@ assert.strictEqual(data.entities.length, 1);
 console.log('load ok');
 
 // 回滚：改状态 → 回滚 → 状态复原
-world.entities.getComponent(player, Health)!.current = 5;
+world.getComponent(player, Health)!.current = 5;
 world.rollbackWorld(data);
-assert.strictEqual(world.entities.getComponent(player, Health)!.current, 60);
+assert.strictEqual(world.getComponent(player, Health)!.current, 60);
 console.log('rollback ok');
 
 // 版本迁移：内容架构升到 0.2.0，旧档 load 时自动沿迁移链推进

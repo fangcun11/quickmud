@@ -26,9 +26,9 @@ await save.save('./saves/slot1.json', world.createSnapshot());
 
 ```ts
 // 回滚：改状态 → 回滚 → 状态复原
-world.entities.getComponent(player, Health)!.current = 5;
+world.getComponent(player, Health)!.current = 5;
 world.rollbackWorld(world.createSnapshot());
-assert.strictEqual(world.entities.getComponent(player, Health)!.current, 60);
+assert.strictEqual(world.getComponent(player, Health)!.current, 60);
 ```
 
 ## 读取：宁抛错，不吞错

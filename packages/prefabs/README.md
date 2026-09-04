@@ -38,20 +38,20 @@ world.registerCommands(
 
 // 玩家：挂 Health / Position
 const player = world.entities.createWithId('player-1');
-world.entities.addComponent(player, Health, { current: 100, max: 100 });
-world.entities.addComponent(player, Position, { roomId: 'town' });
+world.addComponent(player, Health, { current: 100, max: 100 });
+world.addComponent(player, Position, { roomId: 'town' });
 
 // 房间：房间实体挂 Name / Description / Exits（方向 → 房间 id）
 const town = world.entities.createWithId('town');
-world.entities.addComponent(town, Name, { text: '城镇', aliases: [] });
-world.entities.addComponent(town, Description, { text: '一座安静的小镇。' });
-world.entities.addComponent(town, Exits, { north: 'tavern' });
+world.addComponent(town, Name, { text: '城镇', aliases: [] });
+world.addComponent(town, Description, { text: '一座安静的小镇。' });
+world.addComponent(town, Exits, { north: 'tavern' });
 
 // 物品是真实实体：Located 记录它所在的容器（房间 id 或玩家 id）
 const coin = world.entities.createWithId('coin');
-world.entities.addComponent(coin, Name, { text: '金币', aliases: ['coin'] });
-world.entities.addComponent(coin, Portable);               // 可携带（take 的前提）
-world.entities.addComponent(coin, Located, { at: 'town' }); // 在城镇地上
+world.addComponent(coin, Name, { text: '金币', aliases: ['coin'] });
+world.addComponent(coin, Portable);               // 可携带（take 的前提）
+world.addComponent(coin, Located, { at: 'town' }); // 在城镇地上
 
 await world.execute('go north', player);   // 移动（MovementSystem 校验出口并落位）
 await world.execute('look', player);       // → 房间描述 + 地上可拾取物列表
@@ -119,10 +119,10 @@ world.registerCommands(AttackCommand);
 
 // 一只会巡逻、可被攻击的敌人
 const mob = world.entities.createWithId('mob');
-world.entities.addComponent(mob, Name, { text: '野狗' });
-world.entities.addComponent(mob, Position, { roomId: 'town' }); // 有身体 → 在房间
-world.entities.addComponent(mob, Health, { current: 20, max: 20 });
-world.entities.addComponent(mob, Wander);        // 巡逻标记
+world.addComponent(mob, Name, { text: '野狗' });
+world.addComponent(mob, Position, { roomId: 'town' }); // 有身体 → 在房间
+world.addComponent(mob, Health, { current: 20, max: 20 });
+world.addComponent(mob, Wander);        // 巡逻标记
 
 await world.execute('attack 野狗', player);      // 造成 Weapon.damage（默认 10）
 // HP 归零：输出 → emit Died → [LootSystem 结算掉落 → DeathSystem 销毁实体]
@@ -142,7 +142,7 @@ await world.execute('attack 野狗', player);      // 造成 Weapon.damage（默
 import { Loot, QuestGiver, QuestLog, QuestCommand, TurnInCommand, Located } from '@mud/prefabs';
 
 // 掉落表：纯数据（可 JSON、进快照）；掉落物由 LootSystem 用 ctx.spawn 现造实体
-world.entities.addComponent(mob, Loot, {
+world.addComponent(mob, Loot, {
   drops: [
     { name: '狗肉', aliases: ['肉'], description: '一块血淋淋的肉。' },
     { name: '生锈的犬牙', damage: 4 },          // damage > 0 → 掉落物带 Weapon
@@ -150,8 +150,8 @@ world.entities.addComponent(mob, Loot, {
 });
 
 // 发任务者：常驻 NPC 用 Located 锚定房间（会动的才用 Position）
-world.entities.addComponent(barman, Located, { at: 'tavern' });
-world.entities.addComponent(barman, QuestGiver, {
+world.addComponent(barman, Located, { at: 'tavern' });
+world.addComponent(barman, QuestGiver, {
   quests: [{
     id: 'dog-hunt',
     title: '除掉野狗',
@@ -161,7 +161,7 @@ world.entities.addComponent(barman, QuestGiver, {
 });
 
 // 玩家必须有 QuestLog 才参与任务（系统不能替玩家补组件）
-world.entities.addComponent(player, QuestLog);
+world.addComponent(player, QuestLog);
 world.registerCommands(QuestCommand, TurnInCommand);
 ```
 
@@ -238,7 +238,7 @@ buildRooms(world, layout);          // 注入：Name/Description/Exits/Coordinat
 // 地图带迷雾：玩家挂 Visited，走到的房间才亮（没挂则 map 渲染全图）
 world.register(VisitationSystem);   // 探索记录
 world.registerCommands(MapCommand);
-world.entities.addComponent(player, Visited);
+world.addComponent(player, Visited);
 markVisited(world, player);         // seed 出生房间（初始位置没有 Moved 事件）
 ```
 
