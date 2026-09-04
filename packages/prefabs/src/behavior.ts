@@ -33,9 +33,10 @@ import type {
   World,
   SystemContext,
   ComponentDefinition,
+  RelationDefinition,
 } from '@mud/ecs-engine';
 import { Moved, Look, RoomCommandInvoked } from './events.js';
-import { Position, RoomClock, RoomEnterLog, RoomBehaviorRef } from './traits.js';
+import { Position, RoomClock, RoomBehaviorRef, Entered } from './traits.js';
 
 /**
  * 房间周期行为的调度粒度（毫秒）
@@ -65,6 +66,12 @@ export interface RoomQueryScope {
   getEntity: (id: EntityId) => Entity | undefined;
   getComponent: <T>(id: EntityId, c: ComponentDefinition<T>) => T | undefined;
   findByComponent: <T>(c: ComponentDefinition<T>) => EntityId[];
+  /** 该实体的全部关系目标（拷贝） */
+  getRelations: (id: EntityId, rel: RelationDefinition) => EntityId[];
+  /** 是否建立了指向 target 的关系 */
+  hasRelation: (id: EntityId, rel: RelationDefinition, target: EntityId) => boolean;
+  /** 反查"谁指向 target"（引擎二级索引） */
+  findRelated: (rel: RelationDefinition, target: EntityId) => EntityId[];
   findEntity: (name: string) => EntityId | undefined;
 }
 
@@ -88,6 +95,9 @@ export interface RoomGateContext<S> {
   getEntity: RoomQueryScope['getEntity'];
   getComponent: RoomQueryScope['getComponent'];
   findByComponent: RoomQueryScope['findByComponent'];
+  getRelations: RoomQueryScope['getRelations'];
+  hasRelation: RoomQueryScope['hasRelation'];
+  findRelated: RoomQueryScope['findRelated'];
 }
 
 /** 守卫返回值：返回非空字符串 = 拒绝，字符串即理由；返回 void/undefined/空串 = 放行 */
@@ -113,6 +123,9 @@ export interface RoomEventContext<S> {
   emit: SystemContext['emit'];
   getComponent: SystemContext['getComponent'];
   findByComponent: SystemContext['findByComponent'];
+  getRelations: SystemContext['getRelations'];
+  hasRelation: SystemContext['hasRelation'];
+  findRelated: SystemContext['findRelated'];
   spawn: SystemContext['spawn'];
   destroy: SystemContext['destroy'];
   output: SystemContext['output'];
@@ -168,6 +181,9 @@ export interface RoomCommandContext<S> {
   getEntity: RoomQueryScope['getEntity'];
   getComponent: RoomQueryScope['getComponent'];
   findByComponent: RoomQueryScope['findByComponent'];
+  getRelations: RoomQueryScope['getRelations'];
+  hasRelation: RoomQueryScope['hasRelation'];
+  findRelated: RoomQueryScope['findRelated'];
   findEntity: RoomQueryScope['findEntity'];
 }
 
@@ -306,7 +322,10 @@ function withState<T extends object>(
 }
 
 /** 系统侧查询面（守卫与处理器都从这里读世界） */
-type SystemScope = Pick<SystemContext, 'getComponent' | 'getEntity' | 'findByComponent'>;
+type SystemScope = Pick<
+  SystemContext,
+  'getComponent' | 'getEntity' | 'findByComponent' | 'getRelations' | 'hasRelation' | 'findRelated'
+>;
 
 /**
  * 查询守卫：`canLeave` / `canEnter`
@@ -335,6 +354,9 @@ export function queryRoomGate(
       getEntity: scope.getEntity,
       getComponent: scope.getComponent,
       findByComponent: scope.findByComponent,
+      getRelations: scope.getRelations,
+      hasRelation: scope.hasRelation,
+      findRelated: scope.findRelated,
     }),
   );
   return typeof reason === 'string' && reason !== '' ? reason : undefined;
@@ -360,6 +382,9 @@ function invokeHandler(
     emit: ctx.emit,
     getComponent: ctx.getComponent,
     findByComponent: ctx.findByComponent,
+    getRelations: ctx.getRelations,
+    hasRelation: ctx.hasRelation,
+    findRelated: ctx.findRelated,
     spawn: ctx.spawn,
     destroy: ctx.destroy,
     output: ctx.output,
@@ -411,19 +436,16 @@ export const RoomEventSystem = defineSystem({
         });
       }
 
-      // firstEnter：账由 prefabs 自己记（RoomEnterLog），不污染内容层的 state
-      const log = entering?.on.firstEnter ? ctx.getComponent(to, RoomEnterLog) : undefined;
-      if (entering?.on.firstEnter && log) {
-        if (!log.entities.includes(entity)) {
-          invokeHandler(entering, ctx, {
-            entity,
-            roomId: to,
-            handler: entering.on.firstEnter,
-            from,
-            direction,
-          });
-          log.entities.push(entity);
-        }
+      // firstEnter：账由 prefabs 自己记（Entered 关系），不污染内容层的 state
+      if (entering?.on.firstEnter && !ctx.hasRelation(entity, Entered, to)) {
+        invokeHandler(entering, ctx, {
+          entity,
+          roomId: to,
+          handler: entering.on.firstEnter,
+          from,
+          direction,
+        });
+        ctx.addRelation(entity, Entered, to);
       }
       return;
     }
@@ -447,6 +469,9 @@ export const RoomEventSystem = defineSystem({
           getEntity: ctx.getEntity,
           getComponent: ctx.getComponent,
           findByComponent: ctx.findByComponent,
+          getRelations: ctx.getRelations,
+          hasRelation: ctx.hasRelation,
+          findRelated: ctx.findRelated,
         }) as RoomCommandContext<Erased>,
       );
       // 返回字符串 = 直接反馈（与事件链输出同管；不返回则由 handler 自己 output）
@@ -503,7 +528,7 @@ export const RoomTickSystem = defineSystem({
  *
  * 做四件事（顺序有讲究）：
  * 1. 命令动词冲突检查（房间内 + 房间间），带房间 id 报错
- * 2. 为房间实体挂 `RoomBehaviorRef` / `state` / `RoomClock` / `RoomEnterLog`
+ * 2. 为房间实体挂 `RoomBehaviorRef` / `state` / `RoomClock`
  * 3. 注册房间命令（自动带"必须在本房间"校验）
  * 4. 幂等注册 `RoomEventSystem` + `RoomTickSystem`
  *
@@ -559,7 +584,7 @@ export function buildRoomBehaviors(world: World, defs: AnyRoomModuleDef[]): void
 
     if (def.state) world.addComponent(roomId, def.state);
     if (def.on?.every) world.addComponent(roomId, RoomClock);
-    if (def.on?.firstEnter) world.addComponent(roomId, RoomEnterLog);
+    // firstEnter 的账本是 Entered 关系（v0.10），按需记录，无需预挂
   }
 
   // 3. 房间命令：全局注册的**纯翻译层**——只做位置校验并 emit 派发事件，

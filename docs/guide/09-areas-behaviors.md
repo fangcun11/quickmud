@@ -37,7 +37,7 @@ const rooms = [
             blueprint({
               components: [
                 [Name, { text: '火把' }],
-                [Located, { at: ctx.roomId }],
+                [Located, { targets: [ctx.roomId] }],
                 [Portable],
               ],
             }),
@@ -63,10 +63,8 @@ const rooms = [
     on: {
       // 守卫是同步查询：拒绝 = 不落位、无 Moved、不记 Visited
       canEnter(ctx) {
-        const hasTorch = ctx.findByComponent(Name).some(
-          (id) =>
-            ctx.getComponent(id, Name)?.text === '火把' &&
-            ctx.getComponent(id, Located)?.at === ctx.entity,
+        const hasTorch = ctx.findRelated(Located, ctx.entity).some(
+          (id) => ctx.getComponent(id, Name)?.text === '火把',
         );
         return hasTorch ? undefined : '泥沼入口漆黑一片，没有火把寸步难行。';
       },
@@ -135,7 +133,7 @@ buildRoomBehaviors(w, rooms);   // 行为注册（必须在 buildRooms 之后）
 - **守卫拒绝不落位**——`canEnter` 返回理由后玩家留在原地，无 `Moved`、不记 `Visited`；
 - **房间命令的返回值经 OutputCollector 输出**，`state` 组件记账（第二次 `search`
   是"已经被你翻遍了"）；
-- **spawn 出来的东西真捡得走**——`take 火把` 后 `Located.at` 指向玩家；
+- **spawn 出来的东西真捡得走**——`take 火把` 后 `Located` 关系指向玩家；
 - **有火把守卫放行**，`enter` 在真正落位后触发；
 - **`map` 自动按当前区域过滤**（抬头带【区域名】），`worldmap` 的战争迷雾口径 =
   区域内去过任意一间房。

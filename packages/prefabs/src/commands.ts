@@ -240,12 +240,12 @@ export const MapCommand = defineCommand({
   verbs: ['map', '地图'],
   handle({ player, world }) {
     const pos = world.getComponent(player, Position);
-    const areaId = pos ? world.getComponent(pos.roomId, Area)?.id : undefined;
+    const areaId = pos ? world.getRelations(pos.roomId, Area)[0] : undefined;
 
     const rooms = world
       .findByComponent(Coordinates)
       .filter((id) => world.getComponent(id, Exits))
-      .filter((id) => areaId === undefined || world.getComponent(id, Area)?.id === areaId)
+      .filter((id) => areaId === undefined || world.getRelations(id, Area)[0] === areaId)
       .map((id) => ({
         id,
         coords: world.getComponent(id, Coordinates)!,
@@ -290,7 +290,7 @@ export const WorldMapCommand = defineCommand({
     if (areas.length === 0) return '这个世界还没有划分区域。';
 
     const pos = world.getComponent(player, Position);
-    const currentArea = pos ? world.getComponent(pos.roomId, Area)?.id : undefined;
+    const currentArea = pos ? world.getRelations(pos.roomId, Area)[0] : undefined;
     const visited = world.getComponent(player, Visited)?.rooms;
 
     const explored = visited

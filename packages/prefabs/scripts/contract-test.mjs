@@ -64,7 +64,7 @@ import {
   MovementSystem, DescriptionSystem, ItemSystem, CombatSystem, LootSystem, DeathSystem, QuestSystem,
   BuffSystem, BuffCleanupSystem,
   Health, Position, Exits, Description, Located, Portable, Loot, QuestGiver, QuestLog,
-  Afflicted, buffBlueprint, Visited, VisitationSystem, MapCommand, Coordinates,
+  Afflicted, Afflicts, buffBlueprint, Visited, VisitationSystem, MapCommand, Coordinates,
   defineRoom, layoutRooms, buildRooms, renderAsciiMap, markVisited,
   defineArea, layoutWorld, buildAreas, buildRoomBehaviors, WorldMapCommand,
   GoCommand, createDirectionCommand, InventoryCommand, ScoreCommand,
@@ -93,7 +93,7 @@ w.addComponent(tavern, Exits, { south: 'town' });
 const sword = w.entities.createWithId('sword');
 w.addComponent(sword, Name, { text: '生锈的剑', aliases: ['剑', 'sword'] });
 w.addComponent(sword, Portable);
-w.addComponent(sword, Located, { at: 'town' });
+w.addComponent(sword, Located, { targets: ['town'] });
 
 await w.execute('north', p);
 if (w.getComponent(p, Position)?.roomId !== 'tavern') throw new Error('ESM 移动契约失败');
@@ -104,11 +104,11 @@ await w.execute('south', p);
 if (w.getComponent(p, Position)?.roomId !== 'town') throw new Error('ESM 返回失败');
 w.output.clear();
 await w.execute('take 剑', p);
-if (w.getComponent(sword, Located)?.at !== p) throw new Error('ESM take 契约失败');
+if (!w.hasRelation(sword, Located, p)) throw new Error('ESM take 契约失败');
 const inv = await w.execute('inventory', p);
 if (!inv.includes('生锈的剑')) throw new Error('ESM inventory 契约失败: ' + inv);
 await w.execute('drop 剑', p);
-if (w.getComponent(sword, Located)?.at !== 'town') throw new Error('ESM drop 契约失败');
+if (!w.hasRelation(sword, Located, 'town')) throw new Error('ESM drop 契约失败');
 w.output.clear();
 await w.execute('look', p);
 const lines2 = w.output.getAll().map(m => m.segments.map(s => s.text).join(''));
@@ -116,7 +116,7 @@ if (!lines2.some(l => l.includes('生锈的剑'))) throw new Error('ESM look 物
 // v0.6 战斗 + 掉落 + 任务：酒保悬赏杀狗 → 击杀 → 掉狗肉 → 回酒馆交任务领奖
 const barman = w.entities.createWithId('barman');
 w.addComponent(barman, Name, { text: '酒保' });
-w.addComponent(barman, Located, { at: 'tavern' });
+w.addComponent(barman, Located, { targets: ['tavern'] });
 w.addComponent(barman, QuestGiver, {
   quests: [{
     id: 'dog-hunt',
@@ -134,13 +134,11 @@ await w.execute('attack 野狗', p);
 await w.execute('attack 野狗', p);
 if (w.entities.has('mob')) throw new Error('ESM attack/死亡契约失败');
 // 掉落：狗肉实体落到城镇容器，且能被拾取
-const dropped = w.findByComponent(Located).filter(
-  (id) => w.getComponent(id, Located)?.at === 'town' && id !== 'sword',
-);
+const dropped = w.findRelated(Located, 'town').filter((id) => id !== 'sword');
 if (dropped.length !== 1) throw new Error('ESM 掉落数量契约失败: ' + dropped.length);
 const meat = dropped[0];
 await w.execute('take 狗肉', p);
-if (w.getComponent(meat, Located)?.at !== p) throw new Error('ESM 掉落物拾取契约失败');
+if (!w.hasRelation(meat, Located, p)) throw new Error('ESM 掉落物拾取契约失败');
 // 任务：kill 目标达成（玩家此时在城镇，酒保在酒馆 → 进度仍应记上）
 const log = w.getComponent(p, QuestLog);
 if (log.active['dog-hunt'] !== 1 || !log.completed.includes('dog-hunt')) {
@@ -172,13 +170,9 @@ w.spawn(buffBlueprint({
 }));
 for (let i = 0; i < 12; i++) w.tick(); // t=6000：激活(1000) + 结算三次(2000/3000/4000 归零)
 if (w.entities.has('rat')) throw new Error('ESM 毒杀契约失败');
-const herbs = w.findByComponent(Located).filter(
-  (id) => w.getComponent(id, Located)?.at === 'town' && id !== 'sword',
-);
+const herbs = w.findRelated(Located, 'town').filter((id) => id !== 'sword');
 if (herbs.length !== 1) throw new Error('ESM 毒杀掉落契约失败: ' + herbs.length);
-const leftovers = w.findByComponent(Afflicted).filter(
-  (id) => w.getComponent(id, Afflicted)?.victim === 'rat',
-);
+const leftovers = w.findRelated(Afflicts, 'rat');
 if (leftovers.length !== 0) throw new Error('ESM buff 清理契约失败');
 // v0.8 房间定义与地图：defineRoom/layoutRooms/buildRooms 坐标推断 + renderAsciiMap + map 命令
 // 拓扑写错（如反向出口不自洽）必须在定义期 fail-fast
@@ -219,7 +213,7 @@ const areaRooms = [
       handle(ctx) {
         if (ctx.state.searched) return '翻遍了。';
         ctx.state.searched = true;
-        ctx.spawn(blueprint({ components: [[Name, { text: '蜡烛' }], [Located, { at: ctx.roomId }], [Portable]] }));
+        ctx.spawn(blueprint({ components: [[Name, { text: '蜡烛' }], [Located, { targets: [ctx.roomId] }], [Portable]] }));
         return '翻出一支蜡烛。';
       },
     }],
@@ -248,7 +242,7 @@ if (w2.getComponent(p2, Position)?.roomId !== 'plaza2') throw new Error('ESM 守
 // 房间命令：state 记账 + spawn 的东西真捡得走
 await w2.execute('search', p2);
 await w2.execute('take 蜡烛', p2);
-if (!w2.findByComponent(Located).some((id) => w2.getComponent(id, Located)?.at === p2)) {
+if (w2.findRelated(Located, p2).length !== 1) {
   throw new Error('ESM 房间命令 spawn 契约失败');
 }
 await w2.execute('search', p2); // 第二次搜空（state 持久），不应报错

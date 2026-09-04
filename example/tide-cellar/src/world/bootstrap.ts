@@ -266,12 +266,8 @@ export function bootstrap(): BootstrapResult {
         // leave：带着祭器走的时候才响
         leave(ctx) {
           const carrying = ctx
-            .findByComponent(Located)
-            .some(
-              (id) =>
-                ctx.getComponent(id, Located)?.at === ctx.entity &&
-                ctx.getComponent(id, Name)?.text === '青铜祭器',
-            );
+            .findRelated(Located, ctx.entity) // 谁指向我 = 我背包/脚边的东西
+            .some((id) => ctx.getComponent(id, Name)?.text === '青铜祭器');
           if (carrying) {
             ctx.output.narrative('你转身时，石台上最后一簇烛火「噗」地灭了。');
           }
@@ -293,7 +289,7 @@ export function bootstrap(): BootstrapResult {
                       text: '一只巴掌大的青铜器，绿锈下面还看得出刻着的水纹。分量比看上去重。',
                     },
                   ],
-                  [Located, { at: ctx.roomId }],
+                  [Located, { targets: [ctx.roomId] }],
                   [Portable],
                 ],
               }),

@@ -9,13 +9,13 @@ import { defineSystem, DialogueChoiceMade, blueprint } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 import { Position, Located, Portable, Description } from '@mud/prefabs';
 
-/** 麦酒蓝图：一杯现酿（由效果系统 spawn） */
+/** 麦酒蓝图：一杯现酿（由效果系统 spawn；Located 目标由 patch 指向玩家） */
 const AleBp = blueprint({
   name: '麦酒',
   components: [
     [Description, { text: '一杯冒着细腻泡沫的麦酒，还温着。' }],
     [Portable],
-    [Located, { at: null }],
+    [Located, { targets: [] }],
   ],
 });
 
@@ -34,8 +34,8 @@ export const BarkeepEffectsSystem = defineSystem({
       return;
     }
 
-    // 现酿一杯，直接进玩家背包（Located.at = 玩家）
-    ctx.spawn(AleBp, { patch: { located: { at: player } } });
+    // 现酿一杯，直接进玩家背包（Located 关系 → 玩家）
+    ctx.spawn(AleBp, { patch: { located: { targets: [player] } } });
     ctx.output.narrative('老王从吧台后打了一杯麦酒递给你：慢用，刚出桶的。');
   },
 });

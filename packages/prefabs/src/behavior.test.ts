@@ -168,7 +168,7 @@ describe('房间行为 · 生命周期', () => {
       blueprint({
         components: [
           [Name, { text: '铜币' }],
-          [Located, { at: 'a' }],
+          [Located, { targets: ['a'] }],
           [Portable],
         ],
       }),
@@ -318,7 +318,7 @@ describe('房间命令', () => {
               blueprint({
                 components: [
                   [Name, { text: '火把' }],
-                  [Located, { at: ctx.roomId }],
+                  [Located, { targets: [ctx.roomId] }],
                   [Portable],
                 ],
               }),
@@ -331,11 +331,9 @@ describe('房间命令', () => {
 
     await w.world.execute('search', player);
     await w.world.execute('take 火把', player);
-    expect(w.getComponent('火把' as never, Located)).toBeUndefined(); // 名字不是 id
-    const held = w.entities
-      .findByComponent(Located)
-      .find((id) => w.getComponent(id, Located)?.at === player);
-    expect(held).toBeDefined();
+    expect(w.hasComponent('火把' as never, Located)).toBe(false); // 名字不是 id
+    const held = w.findRelated(Located, player); // 谁指向玩家 = 玩家背包
+    expect(held).toHaveLength(1);
   });
 
   it('动词冲突 fail-fast（两个房间抢同一个动词）', () => {

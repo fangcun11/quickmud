@@ -219,7 +219,7 @@ export function bootstrap(): BootstrapResult {
                 components: [
                   [Name, { text: '旧铜币', aliases: ['铜币', 'coin'] }],
                    [Description, { text: '一枚磨得发亮的旧铜币，边缘还有牙印。' }],
-                  [Located, { at: ctx.roomId }],
+                  [Located, { targets: [ctx.roomId] }],
                   [Portable],
                 ],
               }),
@@ -254,7 +254,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(elderId, Description, {
     text: '佝偻着背的老人，手里攥着一根磨得发亮的拐杖，眼神里全是心事。',
   });
-  world.addComponent(elderId, Located, { at: 'village' });
+  world.addComponent(elderId, Located, { targets: ['village'] });
   world.addComponent(elderId, QuestGiver, {
     quests: [
       {
@@ -279,7 +279,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(herbalistId, Description, {
     text: '干瘦的老妇人，面前的粗布上摊着成捆的草药，空气里都是苦味。',
   });
-  world.addComponent(herbalistId, Located, { at: 'village' });
+  world.addComponent(herbalistId, Located, { targets: ['village'] });
   world.addComponent(herbalistId, Dialogue, HerbalistDialogue);
 
   // ---- 野狼×2：森林游荡（v0.5 Wander），死后掉狼皮（v0.6 Loot）----

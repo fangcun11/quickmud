@@ -2,6 +2,53 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [0.16.0] - 2026-09-04
+
+主题：**prefabs 工具集关系化**——把 prefabs 里"实体指向实体"的四处数据
+全部迁到引擎关系系统（0.15/0.16），配合引擎组件通道的关系索引增量维护。
+ Located/Area/Afflicted 数据形状变化（breaking）、`RoomEnterLog` 删除。
+
+### 引擎：组件通道全兼容关系索引（@mud/ecs-engine 0.12.0）
+
+- `addComponent` / `restoreComponent` / `updateComponent` / `removeComponent`
+  / `delete` 五个写入通道统一经 `syncRelationIndex` diff 维护关系二级索引
+  （旧有新无→摘条目并清空壳、旧无新有→建条目、两边都有→不动）
+- **蓝图直写 `{ targets: [...] }` 从此自然生效**（spawn/patch/夹具/世界搭建），
+  不再必须绕道 `addRelation`；组件通道不做目标存在性校验（数据直写语义，
+  fail-fast 校验仍是 `addRelation` 的职责）
+- 读路径（`getRelations` / `hasRelation`）统一走形状防御：`targets` 非数组
+  按无关系处理，脏数据不崩引擎
+- `rollbackWorld` 末尾的 `rebuildRelationIndex` 保留为防御性幂等兜底
+- 新增 11 例：蓝图直写、整存替换、空 targets、updateComponent diff、
+  restoreComponent 直写、与 addRelation 混用、removeComponent 只清本来源、
+  delete 清空、直写+回滚一致性、形状防御
+
+### prefabs：四处实体引用迁到关系（@mud/prefabs 0.10.0，breaking）
+
+| 旧 | 新 | 收益 |
+| --- | --- | --- |
+| `Located { at }` 组件 | `Located = relation('located')` 关系 | `itemsInContainer` O(n) 扫描过滤 → `findRelated` O(k) 直查 |
+| `Area { id }` 组件 | `Area = relation('area')` 关系 | `roomsOfArea` O(n) → `findRelated(Area, 区域)` O(k) |
+| `Afflicted.victim` 字段 | `Afflicts = relation('afflicts')` 关系 | `BuffCleanupSystem` 死亡清场 O(n) 比对 → `findRelated(Afflicts, 死者)` O(k) |
+| `RoomEnterLog { entities }` 组件 | `Entered = relation('entered')` 关系 | 删除组件；firstEnter 判定 `hasRelation`，无需预挂账本 |
+
+- **刻意不改**：`Position`（引擎 `/tp` 开发者命令契约）、`Exits`
+  （键控映射：方向→房间，relation targets 无键）、`Visited`
+  （身兼迷雾声明与探索记录二职——"挂载即声明"与关系"零条目=零组件"
+  语义冲突，刚出生玩家会误判全图）、`Loot`/`QuestLog`/`QuestGiver`
+  （内容数据，非实体引用）
+- `WorldQuery` 扩关系只读三件（`getRelations`/`hasRelation`/`findRelated`）；
+  房间三层上下文（守卫/事件/命令）同步获得
+- `buffBlueprint({ victim, ... })` 对外签名不变（victim 内部转 targets 直写）
+
+### 测试与文档
+
+- prefabs 8 个测试文件全部适配（Located 直写改 targets、断言改
+  getRelations/hasRelation/findRelated）；134 例全绿
+- example 三应用（demo-adventure / mini-rpg / tide-cellar）typecheck +
+  测试 + 冒烟通过；demo 产酒路径（spawn patch 关系目标）专项验证
+- guide 03/09/10/15/16/index 同步关系语义；docs 验证示例 04/06 迁移
+
 ## [0.15.0] - 2026-09-04
 
 主题：**关系系统（0.15 重设计）**——`relation()` 从审查 P3-2 的死 API

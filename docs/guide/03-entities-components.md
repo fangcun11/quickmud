@@ -71,8 +71,7 @@ const children = world.findRelated(ChildOf, parent); // 反查：谁指向 paren
   进快照零格式变化——回滚 / fork / 读档天然一致（索引自动重建）。
 - **写走系统特权**：`addRelation / removeRelation` 系统侧 `ctx` 同名可用，
   命令侧只有只读三件（`getRelations / hasRelation / findRelated`）。
-- **单目标关系不需要 relation**：指一个地方的（在哪个房间、装备在哪格）
-  用普通组件（prefabs 的 `Located { at }` 就是现役正解）。
+  蓝图 / 世界搭建也可以直写 `{ targets: [...] }`（引擎自动维护索引）。
 - **删除不级联**：目标被删后指向它的关系悬挂保留，靠 `EntityDestroyed`
   订阅清扫（见下方已知边界）。
 

@@ -90,10 +90,10 @@ function questWorld(quests: QuestDef[] = [DOG_HUNT]) {
   w.addComponent(square, Name, { text: '广场' });
   w.addComponent(square, Exits, { west: 'town' });
 
-  // 酒保常驻酒馆（用 Located 锚定房间，不用 Position）
+  // 酒保常驻酒馆（用 Located 关系锚定房间，不用 Position）
   const barman = w.entities.createWithId('barman');
   w.addComponent(barman, Name, { text: '酒保' });
-  w.addComponent(barman, Located, { at: 'town' });
+  w.addComponent(barman, Located, { targets: ['town'] });
   w.addComponent(barman, QuestGiver, { quests });
 
   const mob = w.entities.createWithId('mob');
@@ -108,7 +108,7 @@ function questWorld(quests: QuestDef[] = [DOG_HUNT]) {
   w.addComponent(meat, Name, { text: '狗肉' });
   w.addComponent(meat, Description, { text: '一块血淋淋的肉。' });
   w.addComponent(meat, Portable);
-  w.addComponent(meat, Located, { at: 'town' });
+  w.addComponent(meat, Located, { targets: ['town'] });
 
   return { w, player, barman, mob, meat };
 }
@@ -147,7 +147,8 @@ describe('V5 任务进度（v0.6-A2）', () => {
   it('进度全局追踪：玩家与发任务者不在同一房间也记功', async () => {
     const { w, player } = questWorld([MEAT_ERRAND]);
     // 把酒保挪到广场，玩家留在城镇捡狗肉 —— 在酒馆接任务、别处办事是常态
-    w.getComponent('barman', Located)!.at = 'square';
+    w.removeRelation('barman', Located, 'town');
+    w.addRelation('barman', Located, 'square');
 
     await w.execute('take 狗肉', player);
 

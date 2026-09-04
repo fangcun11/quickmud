@@ -271,10 +271,13 @@ describe('buildAreas · 区域是实体', () => {
 
   it('roomsOfArea / areaOf：归属永远是查出来的，不维护反表', () => {
     const { w, player } = world();
-    // WorldQuery 形状兼容系统/命令上下文；测试里用 entities 适配出同款只读查询
+    // WorldQuery 形状兼容系统/命令上下文；测试里用 World 适配出同款只读查询
     const q: WorldQuery = {
       findByComponent: (c) => w.findByComponent(c),
       getComponent: (id, c) => w.getComponent(id, c),
+      getRelations: (id, rel) => w.getRelations(id, rel),
+      hasRelation: (id, rel, target) => w.hasRelation(id, rel, target),
+      findRelated: (rel, target) => w.findRelated(rel, target),
     };
     expect(roomsOfArea(q, 'area:village').sort()).toEqual(['v1', 'v2']);
     expect(roomsOfArea(q, 'area:wilds').sort()).toEqual(['w1', 'w2']);

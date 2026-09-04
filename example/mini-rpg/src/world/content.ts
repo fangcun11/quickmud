@@ -100,8 +100,7 @@ export const HerbalistEffectsSystem = defineSystem({
     const { player, npc, remember } = event.data;
     if (!remember?.includes('tea')) return;
 
-    const at = ctx.getComponent(npc, Located);
-    if (at?.at !== ('village' as EntityId)) {
+    if (!ctx.hasRelation(npc, Located, 'village' as EntityId)) {
       ctx.output.narrative('人都不在药摊跟前，茶是讨不到的。');
       return;
     }

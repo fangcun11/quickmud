@@ -8,7 +8,7 @@
  * Name 组件属引擎契约（findEntityByName 的查找载体），不在此重复导出——
  * 需要时请直接从 `@mud/ecs-engine` 导入。
  */
-import { trait } from '@mud/ecs-engine';
+import { trait, relation } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 
 /** 文本描述组件（房间/物品/NPC 的展示文本） */
@@ -28,26 +28,20 @@ export const Position = trait('position', () => ({
 }));
 
 /**
- * 物品位置组件（0.3-C）：物品实体的**单源位置**
+ * 物品位置**关系**（0.3-C 引入组件、v0.10 关系化）：物品 → 所在容器的单源位置
  *
- * `at` = 所在容器实体 id。房间/玩家/箱子都只是普通实体，均可作容器：
- * - 物品在地上：`at` = 房间实体 id
- * - 物品在背包：`at` = 玩家实体 id
+ * 关系语义（引擎 0.15+）：一条 Located = 物品指向一个容器实体。
+ * 房间/玩家/箱子都只是普通实体，均可作容器：
+ * - 物品在地上：`Located → 房间实体`
+ * - 物品在背包：`Located → 玩家实体`
  *
- * "某容器里有什么" = 查询所有带 Located 且 at==容器的实体（配合
- * SystemContext / CommandContext 的 findByComponent）。
+ * "某容器里有什么" = `findRelated(Located, 容器)`（引擎二级索引 O(k)，
+ * 不再扫全表过滤）。
  *
  * 注意：0.1 时代曾用 `Inventory { items: string[] }` 表示背包（物品只是名字
- * 字符串）；本组件取代了它——物品是真实实体，位置是单源真相。
+ * 字符串）；本关系取代了它——物品是真实实体，位置是单源真相。
  */
-export const Located = trait('located', () => ({
-  at: null,
-}) as LocatedData);
-
-/** Located 组件数据类型 */
-export type LocatedData = {
-  at: EntityId | null;
-};
+export const Located = relation('located');
 
 /** 房间出口组件（房间专用）：{ [方向]: 目标房间 id } */
 export const Exits = trait('exits', () => ({} as Record<string, string>));
@@ -155,11 +149,12 @@ export type BuffEffect =
   | { type: 'heal'; amount: number; every: number };
 
 /**
- * Buff 本体（挂在 **buff 实体**上，指向受害者）
+ * Buff 本体（挂在 **buff 实体**上，经 `Afflicts` 关系指向受害者）
  *
  * Buff 是实体而非列表组件：与 Located 同哲学——一切皆实体、单源真相。
- * "谁身上有什么 buff" = findByComponent(Afflicted) 一次查询；
- * 快照/录像天然一致；未来的叠加/互斥（v0.8）不用改数据结构。
+ * "谁身上有什么 buff" = `findRelated(Afflicts, 玩家)` 一次反查（引擎二级
+ * 索引 O(k)，不再扫全表比对 victim 字段）；快照/录像天然一致；
+ * 未来的叠加/互斥（v0.8）不用改数据结构。
  *
  * `startedAt <= 0` 表示**待激活**：由 BuffSystem 在首个结算网格点写入世界时间，
  * 内容层全程不需要感知时间（spawn 即忘）。`lastTickedAt` 是上次结算时间
@@ -167,7 +162,6 @@ export type BuffEffect =
  * 粒度不对齐时重复结算）；两者都是组件数据，随快照回滚，确定性无损。
  */
 export const Afflicted = trait('afflicted', () => ({
-  victim: null as EntityId | null,
   effect: { type: 'damage', amount: 0, every: 1000 } as BuffEffect,
   startedAt: 0,
   lastTickedAt: 0,
@@ -177,12 +171,20 @@ export const Afflicted = trait('afflicted', () => ({
 
 /** Afflicted 组件数据类型 */
 export type AfflictedData = {
-  victim: EntityId | null;
   effect: BuffEffect;
   startedAt: number;
   lastTickedAt: number;
   source?: EntityId;
 };
+
+/**
+ * Buff 归属**关系**（v0.10 自 Afflicted.victim 迁出）：buff 实体 → 受害者
+ *
+ * 数据与查询分离：effect 参数留在 Afflicted 组件，"作用在谁身上"是关系。
+ * 受害者死亡清 buff = `findRelated(Afflicts, 死者)` 反查后逐个销毁
+ * （BuffCleanupSystem），不再 O(n) 扫全部 buff 比对字段。
+ */
+export const Afflicts = relation('afflicts');
 
 /** 持续时间组件：buff 实体不带它 = 永久（直到被显式移除/受害者死亡） */
 export const Duration = trait('duration', () => ({ lasts: 5000 }));
@@ -208,15 +210,16 @@ export const Coordinates = trait('coordinates', () => ({ x: 0, y: 0 }));
 export const Visited = trait('visited', () => ({ rooms: [] as string[] }));
 
 /**
- * 区域归属（v0.9-B）：挂**房间**，指向它所属的区域实体 id
+ * 区域归属**关系**（v0.9-B 引入组件、v0.10 关系化）：房间 → 所属区域实体
  *
  * 单一真相铁律（与 Coordinates 同款）：房间声明 `area`，区域**不**维护
- * `rooms` 数组——"这个区域有哪些房间"永远是查询出来的，不是抄出来的。
+ * `rooms` 数组——"这个区域有哪些房间"永远是查询出来的
+ * （`findRelated(Area, 区域实体)`，O(k)），不是抄出来的。
  * 区域的出口拓扑同样由跨区域的房间出口反推（`layoutWorld`），不手写。
  *
- * 房间没有本组件 = 它不属于任何区域（无区域的世界，或内容作者没标）。
+ * 房间没有本关系 = 它不属于任何区域（无区域的世界，或内容作者没标）。
  */
-export const Area = trait('area', () => ({ id: '' as EntityId }));
+export const Area = relation('area');
 
 /**
  * 区域实体 id：`area:<区域 id>`
@@ -239,17 +242,21 @@ export function areaEntityId(areaId: string): EntityId {
 export const RoomClock = trait('room_clock', () => ({ lastTickedAt: 0 }));
 
 /**
- * 首次进入账本（v0.9-A）：挂**房间**，记录进过这个房间的实体
+ * 首次进入**关系**（v0.10 自 RoomEnterLog 迁出）：访客 → 进过的房间
  *
  * 由 prefabs 内部维护（`RoomEventSystem` 在调 `firstEnter` 后记账），
  * **不污染内容层的 `state`**——"谁来过"是引擎的账，不是房间的内容状态。
  * 也不复用 `Visited`：那是地图迷雾的声明，语义不同（没挂 Visited 的 NPC
  * 也该有 firstEnter）。
  *
+ * 关系版的好处：零预挂（不再需要 buildRoomBehaviors 给房间预埋账本组件）、
+ * "谁进过这间房" = `findRelated(Entered, 房间)` 反查、访客实体删除时账目
+ * 随来源自动消失。
+ *
  * 出生就在这间房的实体没有 `Moved` 事件可订阅 → 不会触发 `firstEnter`
  * （与 `markVisited` 需要 seed 同一个道理）。
  */
-export const RoomEnterLog = trait('room_enter_log', () => ({ entities: [] as string[] }));
+export const Entered = relation('entered');
 
 /**
  * 房间行为槽位（v0.9-A）：挂**房间**，是房间实体 → 行为定义的**间接层**

@@ -53,7 +53,7 @@ const rooms = [
             blueprint({
               components: [
                 [Name, { text: '火把' }],
-                [Located, { at: ctx.roomId }],
+                [Located, { targets: [ctx.roomId] }],
                 [Portable],
               ],
             }),
@@ -79,10 +79,8 @@ const rooms = [
     on: {
       // 守卫是同步查询：拒绝 = 不落位、无 Moved、不记 Visited
       canEnter(ctx) {
-        const hasTorch = ctx.findByComponent(Name).some(
-          (id) =>
-            ctx.getComponent(id, Name)?.text === '火把' &&
-            ctx.getComponent(id, Located)?.at === ctx.entity,
+        const hasTorch = ctx.findRelated(Located, ctx.entity).some(
+          (id) => ctx.getComponent(id, Name)?.text === '火把',
         );
         return hasTorch ? undefined : '泥沼入口漆黑一片，没有火把寸步难行。';
       },
@@ -190,9 +188,7 @@ assert.ok(
 
 // 房间命令有系统特权：spawn 出来的东西真捡得走
 await w.execute('take 火把', player);
-const held = w.entities
-  .findByComponent(Located)
-  .some((id) => w.getComponent(id, Located)?.at === player);
+const held = w.findRelated(Located, player).length > 0;
 assert.ok(held, 'spawn 出的火把应在玩家背包里');
 
 // 有火把了：守卫放行，enter 生命周期在真正落位后触发

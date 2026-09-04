@@ -311,7 +311,8 @@ export function buildRooms(world: World, layout: { rooms: LayoutRoom[] }): void 
       world.addComponent(id, Coordinates, { ...room.coords });
     }
     if (room.area) {
-      world.addComponent(id, Area, { id: areaEntityId(room.area) });
+      // Area 是关系（v0.10）：直写 targets，引擎自动维护反查索引
+      world.addComponent(id, Area, { targets: [areaEntityId(room.area)] });
     }
   }
 }

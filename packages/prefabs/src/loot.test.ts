@@ -64,9 +64,9 @@ describe('V4 掉落（v0.6-A1）', () => {
     expect(w.getComponent(onGround[0]!, Description)?.text).toBe('一块血淋淋的肉。');
     expect(w.getComponent(onGround[0]!, Portable)).toBeDefined();
 
-    // 真实体：能拿走
+    // 真实体：能拿走（Located 关系改指玩家）
     await w.execute('take 狗肉', player);
-    expect(w.getComponent(onGround[0]!, Located)?.at).toBe('player');
+    expect(w.getRelations(onGround[0]!, Located)).toEqual(['player']);
   });
 
   it('掉落输出与 LootDropped 事件（含掉落物 id 列表）', async () => {

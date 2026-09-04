@@ -350,7 +350,7 @@ function isReachableAcross(adj: Map<string, string[]>, from: string, to: string)
 /**
  * 把区域注入世界：每个区域成为一个实体（Name/Description/Exits/Coordinates）
  *
- * 区域实体用 `createWithId(area.id)`，与房间同款——`Area { id }` 直接指过去。
+ * 区域实体用 `createWithId(area.id)`，与房间同款——房间的 `Area` 关系直接指过去。
  * 区域是**实体**而非字符串标签，所以能挂自己的状态组件（天气、危险度、封禁），
  * 并随快照 / fork / 回滚一起走。
  */
@@ -393,14 +393,14 @@ export function renderAsciiWorldMap(areas: Mappable[], opts: MapRenderOptions = 
  * 查询口径：某个区域里有哪些房间
  *
  * 刻意**不维护反表**——"区域里有什么"永远是查出来的。反表是第二份真相，
- * 迟早和房间的 `area` 对不上。
+ * 迟早和房间的 `area` 对不上。v0.10 起走引擎关系反查索引（O(k) 候选）。
  */
 export function roomsOfArea(q: WorldQuery, areaId: EntityId): EntityId[] {
-  return q.findByComponent(Area).filter((id) => q.getComponent(id, Area)?.id === areaId);
+  return q.findRelated(Area, areaId);
 }
 
-/** 实体当前所在区域（先查房间的 Area，没有就是无区域世界） */
+/** 实体当前所在区域（先查房间的 Area 关系，没有就是无区域世界） */
 export function areaOf(q: WorldQuery, entity: EntityId): EntityId | undefined {
   const room = containerOf(q, entity);
-  return room ? q.getComponent(room, Area)?.id : undefined;
+  return room ? q.getRelations(room, Area)[0] : undefined;
 }

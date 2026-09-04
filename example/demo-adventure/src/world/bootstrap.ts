@@ -144,7 +144,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Visited);
   markVisited(world, playerId); // seed 入口（初始位置没有 Moved 事件可订阅）
 
-  // 创建物品实体（0.3-C 容器模型：Located 单源位置，物品真实存在于世界）
+  // 创建物品实体（0.3-C 容器模型：Located 关系单源位置，物品真实存在于世界）
   const sword = world.entities.createWithId('sword');
   world.addComponent(sword, Name, {
     text: '生锈的剑',
@@ -155,13 +155,13 @@ export function bootstrap(): BootstrapResult {
   });
   world.addComponent(sword, Portable);
   world.addComponent(sword, Weapon, { damage: 6 });
-  world.addComponent(sword, Located, { at: 'town_square' });
+  world.addComponent(sword, Located, { targets: ['town_square'] });
 
   const gold = world.entities.createWithId('gold');
   world.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
   world.addComponent(gold, Description, { text: '一枚闪闪发光的金币。' });
   world.addComponent(gold, Portable);
-  world.addComponent(gold, Located, { at: 'town_square' });
+  world.addComponent(gold, Located, { targets: ['town_square'] });
 
   // 广场游荡的野狗：带 Wander + Position + Health，由 NpcWanderSystem 驱动巡逻，
   // 玩家可以攻击它（CombatSystem）。demo REPL 每 500ms tick → 每 3 秒跳一次房。
@@ -180,7 +180,7 @@ export function bootstrap(): BootstrapResult {
   });
 
   // 创建 NPC（0.3-B 对话）：酒馆的酒保
-  // v0.6：常驻 NPC 用 Located 锚定房间（会动的才用 Position），这样 QuestGiver
+  // v0.6：常驻 NPC 用 Located 关系锚定房间（会动的才用 Position），这样 QuestGiver
   // 的"同房间才算数"规则才能落到酒保身上；顺带挂上悬赏任务。
   const barmanId = world.entities.createWithId('barman');
   world.addComponent(barmanId, Name, {
@@ -190,7 +190,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(barmanId, Description, {
     text: '一个系着围裙的中年男人，正用抹布擦着杯子。',
   });
-  world.addComponent(barmanId, Located, { at: 'tavern' });
+  world.addComponent(barmanId, Located, { targets: ['tavern'] });
   world.addComponent(barmanId, QuestGiver, {
     quests: [
       {

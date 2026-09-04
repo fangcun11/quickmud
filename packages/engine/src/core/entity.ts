@@ -4,6 +4,24 @@ import { isRelationId } from './trait';
 import { deepClone } from '../internal/clone';
 
 /**
+ * 从组件数据中提取关系 targets（形状防御）
+ *
+ * 数据真相 = `data.targets` 数组；形状不合法（非对象 / targets 非数组）
+ * 按 undefined 处理——与 rebuildRelationIndex 的 Array.isArray 防御同款，
+ * 保证"脏数据不崩引擎、按无关系处理"的统一语义。
+ */
+function extractTargets(data: unknown): readonly EntityId[] | undefined {
+  if (
+    data !== null &&
+    typeof data === 'object' &&
+    Array.isArray((data as { targets?: unknown }).targets)
+  ) {
+    return (data as { targets: EntityId[] }).targets;
+  }
+  return undefined;
+}
+
+/**
  * 实体管理器 - 管理游戏世界中的所有实体
  *
  * 内部机制（0.13 起实体存储职责，组件访问的公开入口在 World 顶层）：
@@ -18,8 +36,10 @@ import { deepClone } from '../internal/clone';
  * - relationIndex：关系二级索引（0.15，flecs pair 反查的关系版）——
  *   关系ID -> (目标实体 -> 指向它的实体集合)，支撑 findRelated 的
  *   "谁指向 X" O(k) 查询。数据真相仍是关系组件的 `{ targets }` 数组
- *   （进快照零格式变化），索引只是加速。恢复路径**不**增量维护——
- *   rollbackWorld 末尾调 rebuildRelationIndex 全量重建（冷路径）。
+ *   （进快照零格式变化），索引只是加速。0.16 起组件写入通道
+ *   （addComponent/restoreComponent/updateComponent/removeComponent/delete）
+ *   通过 syncRelationIndex 增量维护索引——蓝图直写 `{ targets: [...] }`
+ *   自然生效；rollbackWorld 末尾仍全量重建（防御性幂等，冷路径）。
  */
 export class EntityManager {
   private entities = new Map<EntityId, Entity>();
@@ -47,6 +67,56 @@ export class EntityManager {
   /** 维护反查索引：实体失去某组件时摘出候选集 */
   private indexRemove(componentId: ComponentId, entityId: EntityId): void {
     this.componentIndex.get(componentId)?.delete(entityId);
+  }
+
+  /**
+   * 关系组件整存替换的索引 diff（0.16）
+   *
+   * 组件写入通道（addComponent/restoreComponent/updateComponent/
+   * removeComponent/delete）写入的关系数据可能任意改变 targets 内容。
+   * 这里按内容对齐 oldData.targets -> newData.targets：
+   * - 旧有新无：摘来源条目（目标集合空了顺手清壳，与 rebuild 后
+   *   的索引形状一致）
+   * - 旧无新有：建来源条目
+   * - 两边都有：不动
+   *
+   * 非关系组件零成本返回（一个 Set.has 查询）。数据形状不合法
+   * （targets 非数组）按 undefined 处理——脏数据不崩引擎、按无关系
+   * 处理，与 rebuildRelationIndex 的防御同款。
+   */
+  private syncRelationIndex(
+    relId: ComponentId,
+    entityId: EntityId,
+    oldData: unknown,
+    newData: unknown
+  ): void {
+    if (!isRelationId(relId)) return;
+    const oldTargets = extractTargets(oldData);
+    const newTargets = extractTargets(newData);
+
+    for (const target of oldTargets ?? []) {
+      if (newTargets?.includes(target)) continue;
+      const byTarget = this.relationIndex.get(relId);
+      const sources = byTarget?.get(target);
+      if (sources) {
+        sources.delete(entityId);
+        if (sources.size === 0) byTarget!.delete(target); // 清空壳
+      }
+    }
+    for (const target of newTargets ?? []) {
+      if (oldTargets?.includes(target)) continue;
+      let byTarget = this.relationIndex.get(relId);
+      if (!byTarget) {
+        byTarget = new Map();
+        this.relationIndex.set(relId, byTarget);
+      }
+      let sources = byTarget.get(target);
+      if (!sources) {
+        sources = new Set();
+        byTarget.set(target, sources);
+      }
+      sources.add(entityId);
+    }
   }
 
   /** 索引候选集按创建序输出（保序的核心） */
@@ -145,17 +215,11 @@ export class EntityManager {
   delete(id: EntityId): boolean {
     const entity = this.entities.get(id);
     if (!entity) return false;
-    // 从该实体拥有的所有组件的反查索引中摘除（关系组件额外清 source 条目）
-    for (const componentId of entity.components.keys()) {
+    // 从该实体拥有的所有组件的反查索引中摘除；关系组件由 syncRelationIndex
+    // 统一清掉来源条目（组件通道与删除通道共用同一份索引维护逻辑）
+    for (const [componentId, data] of entity.components) {
       this.indexRemove(componentId, id);
-      if (isRelationId(componentId)) {
-        const data = entity.components.get(componentId) as RelationData | undefined;
-        if (data) {
-          for (const target of data.targets) {
-            this.relationIndex.get(componentId)?.get(target)?.delete(id);
-          }
-        }
-      }
+      this.syncRelationIndex(componentId, id, data, undefined);
     }
     this.entities.delete(id);
     this.creationOrder.delete(id);
@@ -173,6 +237,12 @@ export class EntityManager {
 
   /**
    * 为实体添加组件
+   *
+   * 0.16 起识别关系组件：直写 `{ targets: [...] }`（蓝图/夹具/世界搭建
+   * 的主路径）会 diff 维护关系二级索引。目标存在性**不做**校验——
+   * 组件通道是数据直写（恢复路径的悬挂目标本就合法），fail-fast 校验
+   * 是 addRelation 的语义。
+   *
    * @param entityId - 实体ID
    * @param component - 组件定义
    * @param data - 组件数据
@@ -189,8 +259,12 @@ export class EntityManager {
 
     const componentData = data ?? component.create();
     const had = entity.components.has(component.id);
+    const oldData = had ? entity.components.get(component.id) : undefined;
     entity.components.set(component.id, componentData);
     if (!had) this.indexAdd(component.id, entityId);
+    // 关系组件：无论新旧挂载都 diff（新挂载时 oldData 为 undefined，
+    // 非空 targets 会建出全部来源条目）
+    this.syncRelationIndex(component.id, entityId, oldData, componentData);
   }
 
   /**
@@ -231,6 +305,11 @@ export class EntityManager {
 
   /**
    * 更新实体的组件数据
+   *
+   * 0.16 起识别关系组件：updater 前后 diff targets 维护关系索引
+   * （函数式整存替换——updater 返回新对象或原地改后返回同一引用，
+   * sync 按内容对比，不依赖引用相等）。
+   *
    * @param entityId - 实体ID
    * @param component - 组件定义
    * @param updater - 更新函数
@@ -252,6 +331,7 @@ export class EntityManager {
 
     const updated = updater(current);
     entity.components.set(component.id, updated);
+    this.syncRelationIndex(component.id, entityId, current, updated);
   }
 
   /**
@@ -269,17 +349,13 @@ export class EntityManager {
       return false;
     }
 
+    const removedData = entity.components.get(component.id);
     const removed = entity.components.delete(component.id);
     if (removed) {
       this.indexRemove(component.id, entityId);
-      // 摘的是关系组件：清掉该实体作为关系来源的全部索引条目
-      // （数据已删，直接扫该关系的所有目标集合——O(t)，t 为不同目标数）
-      if (isRelationId(component.id)) {
-        const byTarget = this.relationIndex.get(component.id);
-        if (byTarget) {
-          for (const sources of byTarget.values()) sources.delete(entityId);
-        }
-      }
+      // 摘的是关系组件：sync 按 removedData.targets 清掉该实体作为
+      // 来源的全部索引条目（与 rebuild 后的索引形状一致，顺手清空壳）
+      this.syncRelationIndex(component.id, entityId, removedData, undefined);
     }
     return removed;
   }
@@ -300,8 +376,13 @@ export class EntityManager {
       throw new Error(`Entity ${entityId} not found`);
     }
     const had = entity.components.has(componentId);
+    const oldData = had ? entity.components.get(componentId) : undefined;
     entity.components.set(componentId, deepClone(data));
     if (!had) this.indexAdd(componentId, entityId);
+    // 关系组件：直写恢复的数据同样 diff 维护索引（0.16 起增量路径
+    // 覆盖恢复；rollbackWorld 末尾的 rebuildRelationIndex 保留为
+    // 防御性幂等兜底）
+    this.syncRelationIndex(componentId, entityId, oldData, entity.components.get(componentId));
   }
 
   /**
@@ -431,16 +512,15 @@ export class EntityManager {
   getRelations(entityId: EntityId, rel: RelationDefinition): EntityId[] {
     const entity = this.entities.get(entityId);
     if (!entity) return [];
-    const data = entity.components.get(rel.id) as RelationData | undefined;
-    return data ? [...data.targets] : [];
+    const targets = extractTargets(entity.components.get(rel.id));
+    return targets ? [...targets] : [];
   }
 
   /** 是否建立了指向 target 的关系 */
   hasRelation(entityId: EntityId, rel: RelationDefinition, target: EntityId): boolean {
     const entity = this.entities.get(entityId);
     if (!entity) return false;
-    const data = entity.components.get(rel.id) as RelationData | undefined;
-    return data?.targets.includes(target) ?? false;
+    return extractTargets(entity.components.get(rel.id))?.includes(target) ?? false;
   }
 
   /** 反查"谁指向 target"（走二级索引，O(k) 候选，创建序输出） */
@@ -451,11 +531,13 @@ export class EntityManager {
   }
 
   /**
-   * 全量重建关系索引（快照/回滚/fork 恢复后调用）
+   * 全量重建关系索引（rollbackWorld 末尾调用）
    *
-   * 恢复路径不增量维护 restoreComponent 的关系数据——恢复是冷路径，
-   * 全量重建 O(实体×组件) 换实现简单。前提：relation() 注册已就绪
-   * （读档前必须先 import 内容包——与 trait 的"先定义后恢复"契约一致）。
+   * 0.16 起恢复路径（restoreComponent）已增量维护索引，本方法降级为
+   * **防御性幂等兜底**：回滚是"clear + 重建"的批量冷路径，一次全量
+   * 扫描 O(实体×组件) 换取对任何索引漂移的自愈。前提：relation() 注册
+   * 已就绪（读档前必须先 import 内容包——与 trait 的"先定义后恢复"
+   * 契约一致）。
    */
   rebuildRelationIndex(): void {
     this.relationIndex.clear();

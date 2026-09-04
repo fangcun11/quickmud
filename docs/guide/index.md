@@ -22,7 +22,7 @@ quickmud 真正的杀手锏都在这一篇。
 | | [07 输出与渲染](./07-output.md) | 四类输出、三种渲染纯函数 |
 | **领域** | [08 房间与地图](./08-rooms-maps.md) | defineRoom、坐标自动推断、ASCII 地图 |
 | | [09 区域与房间行为](./09-areas-behaviors.md) | 区域层、守卫、生命周期、房间命令 |
-| | [10 物品、战斗与任务](./10-items-combat-quests.md) | Located 容器模型、死亡管线、任务、Buff |
+| | [10 物品、战斗与任务](./10-items-combat-quests.md) | Located 关系容器模型、死亡管线、任务、Buff |
 | | [11 对话与 NPC](./11-dialogue-npc.md) | 对话树、记忆门控、副作用事件 |
 | **深入** | [12 存档与回滚](./12-save-rollback.md) | 快照、SavePort、版本迁移链 |
 | | [13 确定性与录像重放](./13-determinism.md) | record / verifyReplay / fork |

@@ -82,29 +82,29 @@ function buildWorld() {
     w.addComponent(rid, Exits, room.exits);
   }
 
-  // 物品实体：单源位置 Located.at == 所在容器（房间/玩家）
+  // 物品实体：单源位置 Located 关系 → 所在容器（房间/玩家）
   const sword = w.entities.createWithId('sword');
   w.addComponent(sword, Name, { text: '生锈的剑', aliases: ['剑', 'sword'] });
   w.addComponent(sword, Description, { text: '一把生锈的旧剑。' });
   w.addComponent(sword, Portable);
   w.addComponent(sword, Weapon, { damage: 6 });
-  w.addComponent(sword, Located, { at: 'town_square' });
+  w.addComponent(sword, Located, { targets: ['town_square'] });
 
   const gold = w.entities.createWithId('gold');
   w.addComponent(gold, Name, { text: '金币', aliases: ['coin'] });
   w.addComponent(gold, Portable);
-  w.addComponent(gold, Located, { at: 'town_square' });
+  w.addComponent(gold, Located, { targets: ['town_square'] });
 
   // 固定物（无 Portable）：演示"拿不动"
   const statue = w.entities.createWithId('statue');
   w.addComponent(statue, Name, { text: '石像' });
-  w.addComponent(statue, Located, { at: 'town_square' });
+  w.addComponent(statue, Located, { targets: ['town_square'] });
 
   // 酒馆里的东西：不在广场，演示 take 校验"必须在当前房间"
   const mug = w.entities.createWithId('mug');
   w.addComponent(mug, Name, { text: '麦酒', aliases: ['ale'] });
   w.addComponent(mug, Portable);
-  w.addComponent(mug, Located, { at: 'tavern' });
+  w.addComponent(mug, Located, { targets: ['tavern'] });
 
   return { w, player, sword, gold, statue, mug };
 }
@@ -145,7 +145,7 @@ describe('prefabs 查看与物品', () => {
     const { w, player, sword } = buildWorld();
     await w.execute('take 剑', player); // 别名解析
 
-    expect(w.getComponent(sword, Located)!.at).toBe(player);
+    expect(w.getRelations(sword, Located)[0]).toBe(player);
     expect(textOf(w.output.getAll(), 'narrative')).toContain('你拿起了「生锈的剑」。');
     expect(await w.execute('inventory', player)).toBe('你的背包里有：生锈的剑');
   });
@@ -154,14 +154,14 @@ describe('prefabs 查看与物品', () => {
     const { w, player, mug } = buildWorld();
     // 麦酒在 tavern，玩家在 town_square → 命令在房间作用域内解析不到
     expect(await w.execute('take 麦酒', player)).toBe('这里没有「麦酒」。');
-    expect(w.getComponent(mug, Located)!.at).toBe('tavern');
+    expect(w.getRelations(mug, Located)[0]).toBe('tavern');
   });
 
   it('take 不可携带物（无 Portable）→ 拿不动', async () => {
     const { w, player, statue } = buildWorld();
     await w.execute('take 石像', player);
     expect(textOf(w.output.getAll(), 'error')).toContain('你拿不动「石像」。');
-    expect(w.getComponent(statue, Located)!.at).toBe('town_square');
+    expect(w.getRelations(statue, Located)[0]).toBe('town_square');
   });
 
   it('drop 把背包物品放到当前房间；未持有则报错', async () => {
@@ -172,7 +172,7 @@ describe('prefabs 查看与物品', () => {
     await w.execute('take 剑', player);
     await w.execute('north', player); // 去酒馆再丢
     await w.execute('drop 剑', player);
-    expect(w.getComponent(sword, Located)!.at).toBe('tavern');
+    expect(w.getRelations(sword, Located)[0]).toBe('tavern');
     expect(await w.execute('inventory', player)).toBe('你的背包是空的。');
   });
 
@@ -190,14 +190,14 @@ describe('prefabs 物品确定性', () => {
   it('快照 round-trip：take 之后回滚，物品回到地面', async () => {
     const { w, player, sword } = buildWorld();
     await w.execute('take 剑', player);
-    expect(w.getComponent(sword, Located)!.at).toBe(player);
+    expect(w.getRelations(sword, Located)[0]).toBe(player);
 
     const snap = w.createSnapshot();
     // 再转移到酒馆，然后回滚到 take 后的状态
     await w.execute('north', player);
     await w.execute('drop 剑', player);
     w.rollbackWorld(snap);
-    expect(w.getComponent(sword, Located)!.at).toBe(player);
+    expect(w.getRelations(sword, Located)[0]).toBe(player);
     expect(w.getComponent(player, Position)!.roomId).toBe('town_square');
   });
 
@@ -215,8 +215,8 @@ describe('prefabs 物品确定性', () => {
 });
 
 describe('prefabs traits 形状', () => {
-  it('Located 默认 at=null；Health/Position 默认值符合约定', () => {
-    expect(Located.create()).toEqual({ at: null });
+  it('Located 默认零目标；Health/Position 默认值符合约定', () => {
+    expect(Located.create()).toEqual({ targets: [] });
     expect(Health.create()).toEqual({ current: 100, max: 100 });
     expect(Position.create()).toEqual({ roomId: 'town_square' });
   });
@@ -240,17 +240,17 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
     const coinT = w.entities.createWithId('coin-t');
     w.addComponent(coinT, Name, { text: '金币', aliases: ['coin'] });
     w.addComponent(coinT, Portable);
-    w.addComponent(coinT, Located, { at: 'tavern' });
+    w.addComponent(coinT, Located, { targets: ['tavern'] });
 
     const coinS = w.entities.createWithId('coin-s');
     w.addComponent(coinS, Name, { text: '金币', aliases: ['coin'] });
     w.addComponent(coinS, Portable);
-    w.addComponent(coinS, Located, { at: 'town' });
+    w.addComponent(coinS, Located, { targets: ['town'] });
 
     await w.execute('take 金币', player);
     // 修复前：解析到先建的 coin-t（不在当前房间）→ 永久拿不到眼前的 coin-s
-    expect(w.getComponent(coinS, Located)!.at).toBe(player);
-    expect(w.getComponent(coinT, Located)!.at).toBe('tavern');
+    expect(w.getRelations(coinS, Located)[0]).toBe(player);
+    expect(w.getRelations(coinT, Located)[0]).toBe('tavern');
     expect(await w.execute('inventory', player)).toBe('你的背包里有：金币');
   });
 
@@ -267,10 +267,10 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
     const ground = w.entities.createWithId('ground-coin');
     w.addComponent(ground, Name, { text: '金币' });
     w.addComponent(ground, Portable);
-    w.addComponent(ground, Located, { at: 'town' });
+    w.addComponent(ground, Located, { targets: ['town'] });
 
     expect(await w.execute('drop 金币', player)).toBe('你没有「金币」。');
-    expect(w.getComponent(ground, Located)!.at).toBe('town');
+    expect(w.getRelations(ground, Located)[0]).toBe('town');
   });
 
   it('look <目标> 输出容器内物品描述', async () => {

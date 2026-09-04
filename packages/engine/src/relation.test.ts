@@ -6,7 +6,7 @@
  * 悬挂保留（删除不级联）、快照/回滚/fork 的索引重建、三层同名。
  */
 import { describe, it, expect } from 'vitest';
-import { World, trait, relation, defineSystem, defineCommand, Name } from './index';
+import { World, trait, relation, defineSystem, defineCommand, Name, blueprint } from './index';
 
 const Located = trait('located', () => ({ roomId: 'hall' })); // 干扰项：普通组件
 const ChildOf = relation('child_of');
@@ -198,8 +198,7 @@ describe('快照 / 回滚 / fork', () => {
 });
 
 describe('三层同名', () => {
-  it('系统侧 ctx 五件可用（写特权）', () => {
-    expect.assertions(5);
+  it('系统侧 ctx 五件可用（写特权）', () => {    expect.assertions(5);
     const Greet = defineSystem({
       name: 'greet',
       on: ['meet'],
@@ -242,5 +241,134 @@ describe('三层同名', () => {
     await w.execute('who 老王', child);
     const status = w.output.ofKind('status');
     expect(status[status.length - 1]!.meta).toEqual({ children: 1 });
+  });
+});
+
+describe('组件通道与关系索引（0.16）', () => {
+  it('蓝图直写 targets：spawn 后 findRelated 直接可用', () => {
+    const w = new World();
+    w.entities.createWithId('room1');
+    const Chest = blueprint({ components: [[ChildOf, { targets: ['room1'] }]] });
+    const chest = w.spawn(Chest);
+
+    expect(w.getRelations(chest, ChildOf)).toEqual(['room1']);
+    expect(w.hasRelation(chest, ChildOf, 'room1')).toBe(true);
+    expect(w.findRelated(ChildOf, 'room1')).toEqual([chest]);
+    expect(w.findByComponent(ChildOf)).toEqual([chest]); // 关系组件照常进组件索引
+  });
+
+  it('addComponent 新挂：非空 targets 建出全部来源条目', () => {
+    const w = new World();
+    const a = w.entities.create();
+    w.entities.createWithId('b1');
+    w.entities.createWithId('b2');
+    w.addComponent(a, Knows, { targets: ['b1', 'b2'] });
+    expect(w.findRelated(Knows, 'b1')).toEqual([a]);
+    expect(w.findRelated(Knows, 'b2')).toEqual([a]);
+  });
+
+  it('addComponent 整存替换：旧目标摘、新目标建', () => {
+    const w = new World();
+    const a = w.entities.create();
+    w.entities.createWithId('b1');
+    w.entities.createWithId('b2');
+    w.addComponent(a, Knows, { targets: ['b1'] });
+    w.addComponent(a, Knows, { targets: ['b2'] });
+    expect(w.findRelated(Knows, 'b1')).toEqual([]);
+    expect(w.findRelated(Knows, 'b2')).toEqual([a]);
+    expect(w.getRelations(a, Knows)).toEqual(['b2']);
+  });
+
+  it('addComponent 替换为空 targets：零条目（组件仍在，数据真相优先）', () => {
+    const w = new World();
+    const a = w.entities.create();
+    w.entities.createWithId('b1');
+    w.addComponent(a, Knows, { targets: ['b1'] });
+    w.addComponent(a, Knows, { targets: [] });
+    expect(w.findRelated(Knows, 'b1')).toEqual([]);
+    expect(w.hasRelation(a, Knows, 'b1')).toBe(false);
+    expect(w.getRelations(a, Knows)).toEqual([]);
+    expect(w.hasComponent(a, Knows)).toBe(true);
+  });
+
+  it('updateComponent：updater 前后 diff 增删目标', () => {
+    const w = new World();
+    const a = w.entities.create();
+    w.entities.createWithId('b1');
+    w.entities.createWithId('b2');
+    w.entities.createWithId('b3');
+    w.addComponent(a, Knows, { targets: ['b1', 'b2'] });
+    w.updateComponent(a, Knows, (cur) => ({ targets: [...cur.targets.filter((t) => t !== 'b1'), 'b3'] }));
+    expect(w.findRelated(Knows, 'b1')).toEqual([]);
+    expect(w.findRelated(Knows, 'b2')).toEqual([a]);
+    expect(w.findRelated(Knows, 'b3')).toEqual([a]);
+  });
+
+  it('restoreComponent 直写恢复：findRelated 可用（增量，无需全量重建）', () => {
+    const w = new World();
+    const a = w.entities.createWithId('a');
+    w.entities.createWithId('b1');
+    w.entities.restoreComponent('a', Knows.id, { targets: ['b1'] });
+    expect(w.findRelated(Knows, 'b1')).toEqual([a]);
+    expect(w.getRelations(a, Knows)).toEqual(['b1']);
+  });
+
+  it('直写与 addRelation 混用：增量追加不重复、removeRelation 正常回收', () => {
+    const w = new World();
+    const a = w.entities.create();
+    w.entities.createWithId('b1');
+    w.entities.createWithId('b2');
+    w.addComponent(a, Knows, { targets: ['b1'] });
+    w.addRelation(a, Knows, 'b2');
+    expect(w.getRelations(a, Knows)).toEqual(['b1', 'b2']);
+    expect(w.findRelated(Knows, 'b2')).toEqual([a]);
+    w.removeRelation(a, Knows, 'b1');
+    expect(w.findRelated(Knows, 'b1')).toEqual([]);
+    expect(w.findRelated(Knows, 'b2')).toEqual([a]);
+    expect(w.hasComponent(a, Knows)).toBe(true); // 还剩 b2，组件保留
+  });
+
+  it('removeComponent：只清该来源的条目，其他来源不受影响', () => {
+    const w = new World();
+    const a1 = w.entities.createWithId('a1');
+    const a2 = w.entities.createWithId('a2');
+    w.entities.createWithId('b1');
+    w.addComponent(a1, Knows, { targets: ['b1'] });
+    w.addComponent(a2, Knows, { targets: ['b1'] });
+    w.removeComponent(a1, Knows);
+    expect(w.findRelated(Knows, 'b1')).toEqual([a2]);
+    expect(w.hasComponent(a1, Knows)).toBe(false);
+  });
+
+  it('delete：直写建立的关系随实体删除同步清空', () => {
+    const w = new World();
+    const a = w.entities.createWithId('a');
+    w.entities.createWithId('b1');
+    w.addComponent(a, Knows, { targets: ['b1'] });
+    w.entities.delete(a);
+    expect(w.findRelated(Knows, 'b1')).toEqual([]);
+  });
+
+  it('直写 + 回滚：rebuild 兜底与增量路径结果一致', () => {
+    const w = new World();
+    const a = w.entities.createWithId('a');
+    w.entities.createWithId('b1');
+    w.addComponent(a, Knows, { targets: ['b1'] });
+    const snap = w.createSnapshot();
+
+    w.addComponent(a, Knows, { targets: [] }); // 直写清空（增量路径生效）
+    expect(w.findRelated(Knows, 'b1')).toEqual([]);
+
+    w.rollbackWorld(snap);
+    expect(w.findRelated(Knows, 'b1')).toEqual([a]); // rebuild 自愈回快照状态
+  });
+
+  it('形状防御：直写脏形状（targets 非数组）按无关系处理，读路径不崩', () => {
+    const w = new World();
+    const a = w.entities.createWithId('a');
+    w.entities.restoreComponent('a', Knows.id, { targets: 'oops' });
+    expect(w.getRelations(a, Knows)).toEqual([]);
+    expect(w.findRelated(Knows, 'a')).toEqual([]);
+    expect(w.hasRelation(a, Knows, 'a')).toBe(false);
   });
 });

@@ -22,7 +22,7 @@
 | 改了组件结构，旧存档读出来是乱的 | 没写迁移 | 见 `registerMigrations`（[12 章](./12-save-rollback.md)） |
 | 快照回滚后实体不见了 | 快照是在创建该实体**之前**拍的 | 快照时机问题，不是引擎 bug |
 | verifyReplay 报 `versionMismatch` | 录像来自别的引擎版本，跨版本分叉比对无诊断价值 | 用与录制时同版本的引擎重放（v0.11 护栏，[13 章](./13-determinism.md)） |
-| 删了房间/箱子，里面的物品"消失" | 引擎不级联清理 `Located.at` 悬挂引用 | 删容器前先转移或删除其中物品（[10 章](./10-items-combat-quests.md)） |
+| 删了房间/箱子，里面的物品"消失" | 引擎不级联清理 `Located` 关系的悬挂引用 | 删容器前先转移或删除其中物品（[10 章](./10-items-combat-quests.md)） |
 | `rewriteRelativeImportExtensions` 没生效 | 它只重写显式 `.ts` 后缀的导入 | 扩展名导入由 build 脚本后处理 `.d.ts`（本仓库已内置，无需操心） |
 
 ## 排查通用心法

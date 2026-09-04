@@ -75,7 +75,7 @@ w.addComponent(tavern, Exits, { south: 'town' });
 // 常驻 NPC 用 Located 锚定房间
 const barman = w.entities.createWithId('barman');
 w.addComponent(barman, Name, { text: '酒保' });
-w.addComponent(barman, Located, { at: 'tavern' });
+w.addComponent(barman, Located, { targets: ['tavern'] });
 w.addComponent(barman, QuestGiver, {
   quests: [
     {

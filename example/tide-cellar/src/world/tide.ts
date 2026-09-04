@@ -60,12 +60,8 @@ export const EndingSystem = defineSystem({
     if (ctx.findByComponent(Ending).length > 0) return;
 
     const hasRelic = ctx
-      .findByComponent(Located)
-      .some(
-        (id) =>
-          ctx.getComponent(id, Located)?.at === entity &&
-          ctx.getComponent(id, Name)?.text === '青铜祭器',
-      );
+      .findRelated(Located, entity) // 谁指向我 = 我背包/脚边的东西（索引直查）
+      .some((id) => ctx.getComponent(id, Name)?.text === '青铜祭器');
     if (!hasRelic) return;
 
     ctx.spawn(blueprint({ components: [[Ending, { done: true }]] }));

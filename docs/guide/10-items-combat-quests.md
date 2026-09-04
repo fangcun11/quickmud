@@ -1,26 +1,27 @@
 # 10 · 物品、战斗与任务
 
-> **本章你会学到**：`Located` 单源容器模型、战斗/掉落/死亡管线、任务闭环、
+> **本章你会学到**：`Located` 关系容器模型、战斗/掉落/死亡管线、任务闭环、
 > Buff 定时效果。一条"击杀 → 掉落 → 拾取 → 交任务 → 领奖"的完整闭环。
 > 本章代码对应验证示例 [04-loot-quest.mts](../examples/04-loot-quest.mts)。
 
 ---
 
-## 物品模型：`Located` 单源位置（0.3-C）
+## 物品模型：`Located` 关系单源位置（0.3-C，v0.10 关系化）
 
-物品是**真实体**，位置 = `Located.at` 单源真相。"某容器里有什么" = 查询拥有
-`Located` 且 `at == 容器` 的实体。玩家背包 = `at == 玩家`；房间地面 = `at == 房间`。
+物品是**真实体**，位置 = `Located` 关系指向的容器（单源真相）。"某容器里
+有什么" = `findRelated(Located, 容器)`——引擎关系反查索引 O(k) 直查。
+玩家背包 = `Located → 玩家`；房间地面 = `Located → 房间`。
 **不需要独立的 Inventory 组件**：
 
-| 组件 | 含义 | 谁消费 |
+| 组件/关系 | 含义 | 谁消费 |
 | --- | --- | --- |
 | `Position.roomId` | 所在房间（房间实体 id） | `MovementSystem`、`/tp` |
-| `Located.at` | **物品所在容器**（房间/玩家/箱子实体 id，单源位置） | `ItemSystem`、`InventoryCommand`、`DescriptionSystem` |
+| `Located`（关系） | **物品所在容器**（房间/玩家/箱子实体，单源位置） | `ItemSystem`、`InventoryCommand`、`DescriptionSystem` |
 | `Portable` | 可携带标记（take 的前提） | `ItemSystem` |
 | `Description` | 展示文本（房间/物品/NPC） | `DescriptionSystem`、`LookCommand` |
 
 > **已知边界**：删除容器实体（房间/箱子）前请先转移或删除其中的物品——
-> 引擎不级联清理 `Located.at` 悬挂引用（容器被删后其物品对任何活容器不可见）。
+> 引擎不级联清理 `Located` 悬挂引用（容器被删后其物品对任何活容器不可见）。
 
 ## 战斗与死亡管线（v0.5）
 
@@ -91,10 +92,10 @@ const tavern = w.entities.createWithId('tavern');
 w.addComponent(tavern, Name, { text: '酒馆' });
 w.addComponent(tavern, Exits, { south: 'town' });
 
-// 常驻 NPC 用 Located 锚定房间
+// 常驻 NPC 用 Located 关系锚定房间
 const barman = w.entities.createWithId('barman');
 w.addComponent(barman, Name, { text: '酒保' });
-w.addComponent(barman, Located, { at: 'tavern' });
+w.addComponent(barman, Located, { targets: ['tavern'] });
 w.addComponent(barman, QuestGiver, {
   quests: [
     {
@@ -152,7 +153,8 @@ assert.strictEqual(
 ## Buff：定时效果也是实体（v0.7）
 
 **Buff 是实体，不是列表组件**（与 `Located` 同哲学）：每个 buff 是一个挂
-`Afflicted` 的实体，指向受害者。查询"谁身上有什么"= `findByComponent(Afflicted)`，
+`Afflicted` 组件（效果参数）+ `Afflicts` 关系（指向受害者）的实体。
+查询"谁身上有什么" = `findRelated(Afflicts, 玩家)` 反查（O(k)），
 快照天然安全，死亡清场只需订阅 `Died` 销毁 buff 实体。
 
 ```ts

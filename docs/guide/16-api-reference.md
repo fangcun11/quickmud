@@ -115,14 +115,15 @@
 | `LookCommand` / `TakeCommand` / `DropCommand` / `InventoryCommand` / `ScoreCommand` | 查看 / 拿放 / 背包 / 状态 | [10](./10-items-combat-quests.md) |
 | `AttackCommand` / `QuestCommand` / `TurnInCommand` / `MapCommand` / `WorldMapCommand` | 战斗 / 任务 / 双地图 | [10](./10-items-combat-quests.md) |
 
-### 常用组件
+### 常用组件与关系
 
 | API | 说明 | 详 |
 | --- | --- | --- |
-| `Position` / `Exits` / `Located` / `Portable` | 位置 / 出口 / 容器单源 / 可携带 | [10](./10-items-combat-quests.md) |
+| `Position` / `Exits` / `Portable` | 位置 / 出口 / 可携带 | [10](./10-items-combat-quests.md) |
+| `Located`（关系）/ `Area`（关系） | 容器单源位置 / 房间→区域归属（`findRelated` 反查） | [10](./10-items-combat-quests.md) |
 | `Health` / `Description` / `Weapon` / `Wander` | 生命 / 描述 / 武器 / 巡逻标记 | [10](./10-items-combat-quests.md) |
 | `Loot` / `QuestGiver` / `QuestLog` / `Visited` | 掉落 / 发任务 / 接任务 / 探索 | [10](./10-items-combat-quests.md) |
-| `Afflicted` / `Duration` / `Coordinates` | Buff / 时限 / 地图坐标 | [10](./10-items-combat-quests.md) |
+| `Afflicted` + `Afflicts`（关系）/ `Duration` / `Coordinates` | Buff 参数+受害者 / 时限 / 地图坐标 | [10](./10-items-combat-quests.md) |
 
 ### 房间与地图
 

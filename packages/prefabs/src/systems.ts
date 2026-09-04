@@ -6,8 +6,8 @@
  *   命令 emit `MoveRequested`（意图）→ MovementSystem 校验出口与守卫，
  *   合法才落位、输出房间名与描述，最后 emit `Moved`（结果）
  * - 查看：DescriptionSystem 输出所在房间的 Name/Description，并列出地上可拾取物
- * - 物品：物品实体带 `Located { at }`（单源位置）。take/drop 只改 at——
- *   房间/玩家/箱子都是普通实体，均可作容器
+ * - 物品：物品实体带 `Located` 关系（→ 所在容器实体，单源位置）。
+ *   take/drop 只改关系指向——房间/玩家/箱子都是普通实体，均可作容器
  * - 战斗：攻击者与目标须同房间且目标带 Health；伤害取攻击者 Weapon.damage（缺省 10）；
  *   HP 归零 emit Died（效果系统钩子）后销毁目标实体
  * - 巡逻：实体带 `Wander` 标记 + Position，由 NpcWanderSystem 按 every 时钟、
@@ -49,6 +49,7 @@ import {
   QuestGiver,
   QuestLog,
   Afflicted,
+  Afflicts,
   Duration,
   Visited,
 } from './traits.js';
@@ -218,8 +219,8 @@ export const DescriptionSystem = defineSystem({
 /**
  * 物品系统：唯一负责物品转移的手
  *
- * - take（ItemTaken）：物品须在当前房间且可携带（Portable）→ at 改玩家
- * - drop（ItemDropped）：物品须在背包（at == 玩家）→ at 改当前房间
+ * - take（ItemTaken）：物品的 Located 须指向当前房间且可携带（Portable）→ 改指玩家
+ * - drop（ItemDropped）：Located 须指向玩家 → 改指当前房间
  * 校验失败输出 error，不炸链路。
  */
 export const ItemSystem = defineSystem({
@@ -243,12 +244,12 @@ function handleTake(ctx: SystemContext, { player, item }: TakeDrop): void {
     return;
   }
 
-  const loc = ctx.getComponent(item, Located);
-  if (!loc || loc.at === null) {
+  const at = ctx.getRelations(item, Located);
+  if (at.length === 0) {
     ctx.output.error('那东西不在这里。');
     return;
   }
-  if (loc.at !== pos.roomId) {
+  if (!at.includes(pos.roomId)) {
     ctx.output.error(`这里没有「${displayName(ctx, item)}」。`);
     return;
   }
@@ -257,7 +258,8 @@ function handleTake(ctx: SystemContext, { player, item }: TakeDrop): void {
     return;
   }
 
-  loc.at = player;
+  ctx.removeRelation(item, Located, pos.roomId);
+  ctx.addRelation(item, Located, player);
   ctx.output.narrative(`你拿起了「${displayName(ctx, item)}」。`);
 }
 
@@ -268,13 +270,13 @@ function handleDrop(ctx: SystemContext, { player, item }: TakeDrop): void {
     return;
   }
 
-  const loc = ctx.getComponent(item, Located);
-  if (!loc || loc.at !== player) {
+  if (!ctx.hasRelation(item, Located, player)) {
     ctx.output.error(`你没有「${displayName(ctx, item)}」。`);
     return;
   }
 
-  loc.at = pos.roomId;
+  ctx.removeRelation(item, Located, player);
+  ctx.addRelation(item, Located, pos.roomId);
   ctx.output.narrative(`你放下了「${displayName(ctx, item)}」。`);
 }
 
@@ -376,7 +378,8 @@ function lootBlueprint(entry: LootEntry, roomId: EntityId) {
   const components: BlueprintComponentInput[] = [
     [Name, { text: entry.name, aliases: entry.aliases ?? [] }],
     [Description, { text: entry.description ?? '' }],
-    [Located, { at: roomId }],
+    // 关系组件直写 targets（引擎 0.12 起蓝图通道自动维护关系索引）
+    [Located, { targets: [roomId] }],
   ];
   // 掉落物默认可拾取（要的就是玩家捡走）；显式 portable:false 可做成场景装饰
   if (entry.portable !== false) components.push([Portable]);
@@ -408,7 +411,7 @@ export const QuestSystem = defineSystem({
       const { player, item } = event.data;
       const itemName = displayName(ctx, item);
       // 转移已由 ItemSystem 完成（priority 更低）；没到手就不记账
-      if (ctx.getComponent(item, Located)?.at !== player) return;
+      if (!ctx.hasRelation(item, Located, player)) return;
       forEachMatchingQuest(ctx, player, 'collect', itemName, (def, giver, log) =>
         advance(ctx, player, giver, def, log),
       );
@@ -544,7 +547,7 @@ export const BuffSystem = defineSystem({
     for (const buffId of ctx.findByComponent(Afflicted)) {
       const buff = ctx.getComponent(buffId, Afflicted);
       if (!buff) continue; // 毒杀时 Died 会在本循环中途同步排水清掉后续 buff——防御已删实体
-      const victim = buff.victim;
+      const victim = ctx.getRelations(buffId, Afflicts)[0] ?? null;
       if (!victim) continue;
 
       // 待激活：写入世界时间作为计时起点，本网格不结算
@@ -602,7 +605,8 @@ export const BuffSystem = defineSystem({
  * Buff 清场（v0.7-A）：受害者死亡时销毁 ta 身上的所有 buff
  *
  * priority 50 = 死亡管线中段（掉落/任务之后、DeathSystem 清场之前）——
- * 避免留下 victim 悬挂的孤儿 buff（与 Located 悬挂引用同款预防）。
+ * 避免留下指向死者的孤儿 buff（与 Located 悬挂引用同款预防）。
+ * v0.10 起走 Afflicts 反查索引：O(k) 命中，不再扫全部 buff 比对字段。
  */
 export const BuffCleanupSystem = defineSystem({
   name: 'prefab.buff-cleanup',
@@ -610,10 +614,8 @@ export const BuffCleanupSystem = defineSystem({
   priority: 50,
   handle(event, ctx) {
     const { entity } = event.data;
-    for (const buffId of ctx.findByComponent(Afflicted)) {
-      if (ctx.getComponent(buffId, Afflicted)?.victim === entity) {
-        ctx.destroy(buffId);
-      }
+    for (const buffId of ctx.findRelated(Afflicts, entity)) {
+      ctx.destroy(buffId);
     }
   },
 });
@@ -622,7 +624,7 @@ export const BuffCleanupSystem = defineSystem({
  * 构造一个 buff 实体蓝图（每次调用新建；供 ctx.spawn / world.spawn 使用）
  *
  * `lasts` <= 0 表示永久（不挂 Duration）。startedAt 留 0：由 BuffSystem 激活，
- * 内容层不需要知道当前世界时间。
+ * 内容层不需要知道当前世界时间。受害者走 Afflicts 关系直写 targets。
  */
 export function buffBlueprint(opts: {
   victim: EntityId;
@@ -631,15 +633,8 @@ export function buffBlueprint(opts: {
   source?: EntityId;
 }) {
   const components: BlueprintComponentInput[] = [
-    [
-      Afflicted,
-      {
-        victim: opts.victim,
-        effect: opts.effect,
-        startedAt: 0,
-        source: opts.source,
-      },
-    ],
+    [Afflicted, { effect: opts.effect, startedAt: 0, source: opts.source }],
+    [Afflicts, { targets: [opts.victim] }],
   ];
   if (opts.lasts > 0) components.push([Duration, { lasts: opts.lasts }]);
   return blueprint({ components });
