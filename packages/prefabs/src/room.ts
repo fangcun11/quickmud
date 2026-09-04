@@ -326,7 +326,7 @@ export interface MapNode {
 }
 
 export interface MapRenderOptions {
-  /** 当前所在房间/区域（名字前标 ★） */
+  /** 当前所在房间/区域（名字后缀标 (你)） */
   current?: string;
   /** 已探明节点；不传 = 渲染全图 */
   visited?: string[];
@@ -351,26 +351,29 @@ const V_LINE = '│';
  * 地名地图渲染（纯函数：同输入 ⇒ 同字符串，可直接断言每一行）
  *
  * v0.12 起从符号网格（`@—·` + 图例）改为**地名直书**：每个地点画自己的
- * 名字，四方向连线标注方位，当前所在名字前标 `★`。连线只在两端都探明时
- * 画实线；指向未探明/图外（含跨区域）的出口画一小段**断线**——告诉玩家
- * "这边还有路"，但看不清通向哪里。
+ * 名字，四方向连线标注方位，当前所在名字后缀标 `(你)`。连线只在两端都
+ * 探明时画实线；指向未探明/图外（含跨区域）的出口画一小段**断线**——
+ * 告诉玩家"这边还有路"，但看不清通向哪里。
  *
  * 布局：同一 x 坐标的节点共享一列（列宽 = 列上最宽名字，中文名按显示宽
- * 2 列计），同一 y 坐标共享一行；行块之间夹一行放垂直连线。坐标是全图
- * 定 bounds 的（相对位置固定，地图不随探索跳动）。
+ * 2 列计），同一 y 坐标共享一行；行块之间夹一行放垂直连线。垂直线锚定
+ * **名字主体的中心**（不含 `(你)` 标注——标注不参与对齐，否则带标注的
+ * 格子会把指示符带偏）。坐标是全图定 bounds 的（相对位置固定，地图不随
+ * 探索跳动）。
  */
 export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): string {
   const placed = nodes.filter((node) => node.coords);
   if (placed.length === 0) return '';
 
   const visible = opts.visited ? new Set(opts.visited) : new Set(placed.map((n) => n.id));
-  const label = (n: MapNode): string => (n.id === opts.current ? `★${n.name ?? n.id}` : n.name ?? n.id);
+  const label = (n: MapNode): string => (n.id === opts.current ? `${n.name ?? n.id}(你)` : n.name ?? n.id);
+  const bareW = (n: MapNode): number => displayWidth(n.name ?? n.id); // 裸名宽（不含标注）
 
   // 可见格查询（迷雾外的房间对连线/断线判定隐形）
   const at = (x: number, y: number): MapNode | undefined =>
     placed.find((n) => visible.has(n.id) && n.coords!.x === x && n.coords!.y === y);
 
-  // ---- 列宽与列起点：同一 x 的格子等宽对齐，垂直连线取列中心 ----
+  // ---- 列宽与列起点：同一 x 的格子等宽对齐；垂直线锚名字主体中心 ----
   const xs = [...new Set(placed.map((n) => n.coords!.x))].sort((a, b) => a - b);
   const ys = [...new Set(placed.map((n) => n.coords!.y))].sort((a, b) => a - b);
   const colW = new Map<number, number>();
@@ -388,7 +391,15 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
     colX.set(x, acc);
     acc += colW.get(x)! + H_GAP;
   }
-  const columnCenter = (x: number) => colX.get(x)! + Math.floor(colW.get(x)! / 2);
+  // 垂直线锚点：名字主体（裸名）的中心——`(你)` 标注不参与对齐
+  const vertAnchor = (x: number) => {
+    let w = 0;
+    for (const y of ys) {
+      const n = at(x, y);
+      if (n) w = Math.max(w, bareW(n));
+    }
+    return colX.get(x)! + Math.floor(w / 2);
+  };
 
   // ---- 行画布：视觉列 → 字符（宽字符占 2 格，第二格写空串占位）----
   const newRow = (): Map<number, string> => new Map();
@@ -454,7 +465,7 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
       const a = at(x, ys[yi]!);
       const b = at(x, ys[yi + 1]!);
       if (!a || !b || !linked(a, b)) continue;
-      putCell(midRow(yi), columnCenter(x), V_LINE);
+      putCell(midRow(yi), vertAnchor(x), V_LINE);
     }
   }
 
@@ -468,9 +479,9 @@ export function renderAsciiMap(nodes: MapNode[], opts: MapRenderOptions = {}): s
       if (!d) continue; // up/down 跨层无平面坐标，不画
       if (at(x + d.x, y + d.y)) continue; // 邻格可见：归实线逻辑
       if (dir === 'north') {
-        putCell(yi === 0 ? topRow : midRow(yi - 1), columnCenter(x), V_LINE);
+        putCell(yi === 0 ? topRow : midRow(yi - 1), vertAnchor(x), V_LINE);
       } else if (dir === 'south') {
-        putCell(yi === ys.length - 1 ? bottomRow : midRow(yi), columnCenter(x), V_LINE);
+        putCell(yi === ys.length - 1 ? bottomRow : midRow(yi), vertAnchor(x), V_LINE);
       } else if (dir === 'west') {
         const row = blockRow(y);
         putCell(row, colX.get(x)! - 2, H_DASH);

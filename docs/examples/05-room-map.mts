@@ -80,8 +80,8 @@ assert.throws(
 // ---- 3. 全图渲染（纯函数，可逐行断言）----
 assert.equal(
   renderAsciiMap(layout.rooms, { current: 'cave' }),
-  ['村庄 ─── 森林小径', '             │', '         沼泽     ─── ★蛛巢洞穴'].join('\n'),
-  '全图应地名直书、连线表方位、★ 标当前位置',
+  ['村庄 ─── 森林小径', '             │', '         沼泽     ─── 蛛巢洞穴(你)'].join('\n'),
+  '全图应地名直书、连线表方位、(你) 标当前位置',
 );
 
 // ---- 4. 迷雾：只画去过的房间，且连线两端都探明才画 ----
@@ -109,12 +109,12 @@ markVisited(w, player); // seed 入口（初始位置没有 Moved 事件可订�
 // 出生点：地图只有自己
 assert.equal(
   await w.execute('map', player),
-  '★村庄──',
+  '村庄(你)──',
   '初始地图只有出生房间（朝东的断线提示东边有路）',
 );
 
 await w.execute('east', player); // 森林
 await w.execute('south', player); // 沼泽
 const explored = (await w.execute('map', player))!;
-assert.ok(explored.includes('★沼泽'), '探索过森林与沼泽后地图应展开，★ 标当前房间沼泽');
+assert.ok(explored.includes('沼泽(你)'), '探索过森林与沼泽后地图应展开，(你) 标当前房间沼泽');
 console.log('05-room-map ✓ 房间定义 + 坐标推断 + ASCII 地图 + 迷雾 全通过');

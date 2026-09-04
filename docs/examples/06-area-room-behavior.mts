@@ -145,14 +145,14 @@ markVisited(w, player); // seed 出生房间（初始位置没有 Moved 事件�
 // map 只画当前区域，抬头是【区域名】（跨区域坐标不该撞进同一张图）
 assert.equal(
   await w.execute('map', player),
-  '【村庄】\n\n★村口广场──',
+  '【村庄】\n\n村口广场(你)──',
   '区域地图应按当前区域过滤（朝东断线 = 跨区域出口）',
 );
 
 // worldmap 画区域之间的连接（战争迷雾：区域内去过任意一间房才算探明）
 assert.equal(
   await w.execute('worldmap', player),
-  '★村庄──',
+  '村庄(你)──',
   '出生时世界地图应只点亮出生区域（断线朝东示意荒野）',
 );
 
@@ -202,7 +202,7 @@ assert.equal(w.getComponent(player, Position)!.roomId, 'mire', '守卫放行后�
 // 走进荒野后，世界地图点亮它
 assert.equal(
   await w.execute('世界地图', player),
-  '村庄 ─── ★荒野',
+  '村庄 ─── 荒野(你)',
   '探索应驱动世界地图展开',
 );
 

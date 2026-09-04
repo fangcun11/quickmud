@@ -40,9 +40,9 @@ describe('renderAsciiMap · 全图', () => {
     expect(renderAsciiMap(ell().rooms)).toBe('a ─── b\n│\nc');
   });
 
-  it('当前位置标 ★（★ 占两列，计入列宽，连线随之让位）', () => {
-    expect(renderAsciiMap(line().rooms, { current: 'b' })).toBe('a ─── ★b ─── c');
-    expect(renderAsciiMap(line().rooms, { current: 'a' })).toBe('★a ─── b ─── c');
+  it('当前位置标 (你) 后缀（计入列宽防碰撞；垂直线锚名字主体中心）', () => {
+    expect(renderAsciiMap(line().rooms, { current: 'b' })).toBe('a ─── b(你) ─── c');
+    expect(renderAsciiMap(line().rooms, { current: 'a' })).toBe('a(你) ─── b ─── c');
   });
 
   it('无坐标的房间（跨层可达）不出现在地图上', () => {
@@ -71,7 +71,7 @@ describe('renderAsciiMap · 全图', () => {
     );
     // 只探明 b、c ⇒ a 那行纯空（a—b 的连线也不画，两端必须都探明），
     // 若不裁首部，地图头顶挂两行空白
-    expect(renderAsciiMap(layout.rooms, { visited: ['b', 'c'], current: 'c' })).toBe(' │\nb\n │\n★c');
+    expect(renderAsciiMap(layout.rooms, { visited: ['b', 'c'], current: 'c' })).toBe('│\nb\n│\nc(你)');
     // 全部探明 ⇒ 首行有字形，什么都不裁
     expect(renderAsciiMap(layout.rooms)).toBe('a\n│\nb\n│\nc');
   });
@@ -155,7 +155,7 @@ describe('探索记录（Visited / VisitationSystem）', () => {
 });
 
 describe('MapCommand', () => {
-  it('挂了 Visited → 只画已探明区域（★ 当前位，断线示未探明方向）', async () => {
+  it('挂了 Visited → 只画已探明区域（(你) 当前位，断线示未探明方向）', async () => {
     const w = new World();
     w.register(MovementSystem, VisitationSystem);
     w.registerCommands(
@@ -171,11 +171,11 @@ describe('MapCommand', () => {
     markVisited(w, player);
 
     const out = await w.execute('map', player);
-    expect(out).toBe('★a──\n │');
+    expect(out).toBe('a(你)──\n│');
 
     await w.execute('east', player);
     const out2 = await w.execute('map', player);
-    expect(out2).toBe('a ─── ★b\n│');
+    expect(out2).toBe('a ─── b(你)\n│');
   });
 
   it('没挂 Visited → 渲染全图（内容没声明要迷雾就不迷雾）', async () => {
@@ -192,6 +192,6 @@ describe('MapCommand', () => {
     w.addComponent(player, Position, { roomId: 'a' });
 
     const out = await w.execute('map', player);
-    expect(out).toBe('★a ─── b\n │\nc');
+    expect(out).toBe('a(你) ─── b\n│\nc');
   });
 });

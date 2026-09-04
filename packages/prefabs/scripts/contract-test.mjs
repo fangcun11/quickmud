@@ -248,7 +248,7 @@ if (w2.findRelated(Located, p2).length !== 1) {
 await w2.execute('search', p2); // 第二次搜空（state 持久），不应报错
 // worldmap：区域图渲染（地名直书 + ★ 当前区域）
 const wm = await w2.execute('worldmap', p2);
-if (!wm.includes('★村2')) throw new Error('ESM worldmap 契约失败: ' + wm);
+if (!wm.includes('村2(你)')) throw new Error('ESM worldmap 契约失败: ' + wm);
 console.log('ESM 契约 ✓');
 `,
   );

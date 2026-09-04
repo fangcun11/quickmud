@@ -294,7 +294,7 @@ export const MapCommand = defineCommand({
     });
 
     const title = areaId ? world.getComponent(areaId, Name)?.text : undefined;
-    // 地名直书（v0.12）：名字与 ★ 就在图上，不再需要图例和地名清单
+    // 地名直书（v0.12）：名字与 (你) 标注就在图上，不再需要图例和地名清单
     return title ? `【${title}】\n\n${map}` : map;
   },
 });
@@ -336,7 +336,7 @@ export const WorldMapCommand = defineCommand({
       explored.push(currentArea);
     }
 
-    // 地名直书（v0.12）：区域名与 ★ 就在图上，不再需要图例和区域清单
+    // 地名直书（v0.12）：区域名与 (你) 标注就在图上，不再需要图例和区域清单
     return renderAsciiWorldMap(areas, { current: currentArea, visited: explored });
   },
 });
