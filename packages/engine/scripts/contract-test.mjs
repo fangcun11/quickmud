@@ -70,6 +70,7 @@ const HealSystem = defineSystem({
 // args 泛型推导：此处 minutes 应为 string，无断言
 const Rest = defineCommand({
   verbs: ['rest'],
+  describe: '原地休息片刻（契约冒烟用）',
   args: { minutes: { type: 'word' } },
   handle({ args, player, world }) {
     const amount = Number(args.minutes) || 10;
@@ -133,6 +134,7 @@ const Look = defineEvent('look')<{ entity: string; target?: string }>();
 // 字面量不拓宽：args 推导出精确类型
 const LookCommand = defineCommand({
   verbs: ['look'],
+  describe: '环顾四周（契约冒烟用）',
   args: { target: { type: 'optional_entity' }, dir: { type: 'direction' } },
   handle({ args, world, player }) {
     // args.target: string | null；args.dir: string —— 无需断言

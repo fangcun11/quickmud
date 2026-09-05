@@ -144,10 +144,14 @@ const log = w.getComponent(p, QuestLog);
 if (log.active['dog-hunt'] !== 1 || !log.completed.includes('dog-hunt')) {
   throw new Error('ESM 任务进度契约失败: ' + JSON.stringify(log));
 }
-// 交付：必须回到酒保身边
-if (!(await w.execute('turnin', p)).includes('没有可交付')) {
+// 交付：必须回到酒保身边（错误走 output 通道，execute 返回 null）
+w.output.clear();
+await w.execute('turnin', p);
+const refused = w.output.getAll().map((m) => m.segments.map((s) => s.text).join(''));
+if (!refused.some((l) => l.includes('没有可交付'))) {
   throw new Error('ESM 跨房间交付不应成功');
 }
+w.output.clear();
 await w.execute('north', p);
 await w.execute('turnin', p);
 if (!w.getComponent(p, QuestLog).turnedIn.includes('dog-hunt')) {
