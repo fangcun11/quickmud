@@ -103,13 +103,24 @@ assert.ok(log.completed.includes('dog-hunt'), 'kill 目标已达成（进度全�
 
 // 掉落物是真实体：此刻在城镇容器里
 await w.world.execute('take 狗肉', player);
-assert.ok((await w.world.execute('inventory', player))!.includes('狗肉'), '掉落物可拾取');
+w.world.output.clear();
+await w.world.execute('inventory', player);
+// 0.18 起 inventory 走 output 通道（每件物品带 entityRef 供网页点击）
+assert.ok(
+  w.world.output.getAll().map((m) => m.segments.map((s) => s.text).join('')).some((l) => l.includes('狗肉')),
+  '掉落物可拾取',
+);
 
 // 交付必须回到酒保身边
 assert.strictEqual(await w.world.execute('north', player), null, '移动成功');
 assert.strictEqual(await w.world.execute('turnin', player), null, '交付成功');
 assert.ok(log.turnedIn.includes('dog-hunt'), '任务已交付');
-assert.ok((await w.world.execute('inventory', player))!.includes('陈酿麦酒'), '奖励已入包');
+w.world.output.clear();
+await w.world.execute('inventory', player);
+assert.ok(
+  w.world.output.getAll().map((m) => m.segments.map((s) => s.text).join('')).some((l) => l.includes('陈酿麦酒')),
+  '奖励已入包',
+);
 assert.strictEqual(
   w.getComponent(player, Health)!.current,
   70,
