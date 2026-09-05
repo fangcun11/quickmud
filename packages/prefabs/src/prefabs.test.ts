@@ -15,7 +15,7 @@ import {
   VisitationSystem,
   MiniMapSystem,
 } from './systems.js';
-import { markVisited } from './room.js';
+import { layoutNeighborMiniMap, markVisited } from './room.js';
 import {
   GoCommand,
   createDirectionCommand,
@@ -684,5 +684,29 @@ describe('进房邻接小图（0.14 方案二）', () => {
     await w.execute('south', player);
     const joined = w.output.getAll().map((m) => m.segments.map((s) => s.text).join('')).join('\n');
     expect(joined).not.toContain('──');
+  });
+});
+
+describe('layoutNeighborMiniMap（邻接小图布局）', () => {
+  it('西邻带名字与连线；东邻对称', () => {
+    const l = layoutNeighborMiniMap('甲房', { west: '乙房', east: '丙房' });
+    expect(l.midWest).toBe('乙房──');
+    expect(l.midEast).toBe('──丙房');
+    // 无北/南邻：不占行
+    expect(l.top).toBe('');
+    expect(l.bottom).toBe('');
+  });
+
+  it('北/南邻按当前房中心对齐（CJK 双宽）', () => {
+    const l = layoutNeighborMiniMap('青石街', { north: '杂货铺', south: '武馆' });
+    // 当前房 6 列，中心在第 3 列（0 起）
+    const dw = (t: string) => [...t].reduce((w, ch) => w + (ch.codePointAt(0)! >= 0x2e80 ? 2 : 1), 0);
+    const northStart = l.top.indexOf('杂');
+    const southStart = l.bottom.indexOf('武');
+    const center = Math.floor(dw('青石街') / 2); // 6 列 → 中心 3
+    expect(northStart).toBe(Math.max(0, center - Math.floor(dw('杂货铺') / 2)));
+    expect(southStart).toBe(Math.max(0, center - Math.floor(dw('武馆') / 2)));
+    expect(l.vTop).toBe(' '.repeat(center) + '│');
+    expect(l.vBottom).toBe(' '.repeat(center) + '│');
   });
 });

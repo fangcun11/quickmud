@@ -371,11 +371,10 @@ export function layoutNeighborMiniMap(
   current: string,
   neighbors: { north?: string; east?: string; south?: string; west?: string },
 ): NeighborMiniMapLayout {
-  const wW = neighbors.west !== undefined ? displayWidth(neighbors.west) + 2 : 0;
-  const curStart = wW;
+  const midWest = neighbors.west !== undefined ? neighbors.west + '──' : '';
+  const curStart = displayWidth(midWest);
   const curCenter = curStart + Math.floor(displayWidth(current) / 2);
 
-  const midWest = ' '.repeat(curStart);
   const midEast = neighbors.east !== undefined ? '──' + neighbors.east : '';
 
   const line = (name: string): string => {
