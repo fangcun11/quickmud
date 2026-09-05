@@ -75,6 +75,11 @@ export class WebRenderer {
   private clickPolicy?: (seg: Segment) => ClickAction | null;
   private statusEl: HTMLElement;
   private persistence?: RendererPersistence;
+  private actionsProvider?: () => Array<string | { text: string; hint?: string }>;
+  private actionsEl: HTMLElement;
+  private inputAreaEl: HTMLElement;
+  /** 输入行默认收起（0.18 ③）：无常驻输入框，⌨ 或 / 唤出 */
+  private inputOpen = false;
 
   // 输入历史（↑/↓ 召回；MUD 最高频的操作就是重复上一条）
   private history: string[] = [];
@@ -115,6 +120,12 @@ export class WebRenderer {
     /** 存档接线（不传 = 无存档，刷新即重开） */
     persistence?: RendererPersistence;
     /**
+     * 语境动作条（0.18 ③，可选，游戏侧注入）：每次提示符刷新时求值，
+     * 返回当前语境下的常用操作（如 状态/背包/打坐/停战）。点击芯片
+     * 直接执行该命令（与打字同管线）——输入框收起后的主力入口。
+     */
+    actions?: () => Array<string | { text: string; hint?: string }>;
+    /**
      * 点击策略（可选，游戏侧注入）：tag→命令 的分发表。入参是输出段，
      * 返回 `{ command, mode?, hint? }` 或 null（不可点）。
      * 游戏侧有世界知识（ForSale/Portable/Located），按语境选动词：
@@ -129,6 +140,7 @@ export class WebRenderer {
     this.suggestProvider = config.suggest;
     this.promptProvider = config.prompt;
     this.clickPolicy = config.click;
+    this.actionsProvider = config.actions;
     this.persistence = config.persistence;
 
     if (config.title) {
@@ -145,9 +157,13 @@ export class WebRenderer {
     this.outputEl.id = 'output';
     this.container.appendChild(this.outputEl);
 
-    // 底部簇：状态条 + 命令建议条（有候选时才出现）+ 输入行
+    // 底部簇：动作条 + 状态条 + 命令建议条（有候选时才出现）+ 输入行（默认收起）
     const bottomWrap = document.createElement('div');
     bottomWrap.className = 'mud-bottom';
+
+    this.actionsEl = document.createElement('div');
+    this.actionsEl.className = 'mud-actions';
+    bottomWrap.appendChild(this.actionsEl);
 
     this.statusEl = document.createElement('div');
     this.statusEl.className = 'mud-status-strip';
@@ -179,8 +195,22 @@ export class WebRenderer {
     this.inputEl.autocomplete = 'off';
     inputWrap.appendChild(this.inputEl);
     inputArea.appendChild(inputWrap);
+    this.inputAreaEl = inputArea;
     bottomWrap.appendChild(inputArea);
     this.container.appendChild(bottomWrap);
+    // 输入行默认收起：无常驻输入框（点 ⌨ 或按 / 唤出）
+    inputArea.style.display = 'none';
+
+    // ⌨ 唤出/收起输入行（动作条首位，专属样式）
+    const kbdBtn = document.createElement('span');
+    kbdBtn.className = 'mud-action-chip mud-kbd-toggle';
+    kbdBtn.textContent = '⌨ 输入';
+    kbdBtn.title = '唤出/收起命令输入（快捷键 /）';
+    kbdBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setInputOpen(!this.inputOpen);
+    });
+    this.actionsEl.appendChild(kbdBtn);
 
     // 绑定事件
     this.inputEl.addEventListener('keydown', (e) => {
@@ -207,9 +237,15 @@ export class WebRenderer {
         e.preventDefault();
         if (this.suggestVisible()) this.moveSuggestSelection(1);
         else this.recallHistory(1);
-      } else if (e.key === 'Escape' && this.suggestVisible()) {
-        e.preventDefault();
-        this.dismissSuggestions();
+      } else if (e.key === 'Escape') {
+        if (this.suggestVisible()) {
+          e.preventDefault();
+          this.dismissSuggestions();
+        } else if (this.inputOpen) {
+          // 建议没开着时 Esc = 收起输入行（回到纯点击界面）
+          e.preventDefault();
+          this.setInputOpen(false);
+        }
       }
     });
     this.inputEl.addEventListener('input', () => this.refreshSuggestions());
@@ -218,13 +254,20 @@ export class WebRenderer {
       this.ghostEl.textContent = '';
     });
 
-    // 点击容器聚焦输入
+    // / 快捷键：输入行收起时任意位置按 / 唤出输入（焦点不在输入框才接管）
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && !this.inputOpen && document.activeElement !== this.inputEl) {
+        e.preventDefault();
+        this.setInputOpen(true);
+      }
+    });
+
+    // 点击容器聚焦输入（输入收起时不打扰——正文即链接，点空不该弹键盘）
     this.container.addEventListener('click', () => {
-      this.inputEl.focus();
+      if (this.inputOpen) this.inputEl.focus();
     });
 
     // 初始聚焦 + 状态条求值
-    this.inputEl.focus();
     this.updatePrompt();
 
     // 存档：启动时尝试读档（构造即恢复，世界随后就是"上次的样子"）
@@ -387,10 +430,52 @@ export class WebRenderer {
     const text = this.promptProvider?.(this.playerId);
     if (text === undefined) {
       this.statusEl.style.display = 'none';
-      return;
+    } else {
+      this.statusEl.textContent = text;
+      this.statusEl.style.display = 'block';
     }
-    this.statusEl.textContent = text;
-    this.statusEl.style.display = 'block';
+    this.updateActions();
+  }
+
+  /**
+   * 语境动作条刷新（0.18 ③）：actions 提供器求值并重画芯片。
+   * 点击 = 直接执行该命令（与打字同管线）；hint 进 hover 提示。
+   * ⌨ 切换按钮是常驻首位，这里只重画其后的语境芯片。
+   */
+  private updateActions(): void {
+    while (this.actionsEl.lastChild) {
+      const last = this.actionsEl.lastChild as HTMLElement;
+      if (last.classList?.contains('mud-kbd-toggle')) break;
+      this.actionsEl.removeChild(last);
+    }
+    const items = this.actionsProvider?.() ?? [];
+    for (const item of items) {
+      const { text, hint } = typeof item === 'string' ? { text: item, hint: undefined } : item;
+      const chip = document.createElement('span');
+      chip.className = 'mud-action-chip';
+      chip.textContent = text;
+      if (hint) chip.title = hint;
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void this.runCommand(text);
+      });
+      this.actionsEl.appendChild(chip);
+    }
+    if (items.length === 0) this.actionsEl.classList.add('mud-actions-empty');
+    else this.actionsEl.classList.remove('mud-actions-empty');
+  }
+
+  /** 唤出/收起命令输入行（⌨ 或 /）；收起时一并清掉建议与残影 */
+  private setInputOpen(open: boolean): void {
+    this.inputOpen = open;
+    this.inputAreaEl.style.display = open ? 'flex' : 'none';
+    if (open) {
+      this.inputEl.focus();
+    } else {
+      this.hideSuggestions();
+      this.ghostEl.textContent = '';
+      this.inputEl.blur();
+    }
   }
 
   private updateGhost(): void {
@@ -595,7 +680,8 @@ export class WebRenderer {
       span.addEventListener('click', (e) => {
         e.stopPropagation();
         if (action.mode === 'prefill') {
-          // 危险动词：只预填，等玩家按回车确认
+          // 危险动词：只预填，等玩家按回车确认（输入行收起时自动唤出）
+          if (!this.inputOpen) this.setInputOpen(true);
           this.inputEl.value = action.command;
           this.inputEl.focus();
           return;

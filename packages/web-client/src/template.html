@@ -147,6 +147,20 @@
       color: var(--bg); background: var(--c-prompt);
       text-shadow: none; font-weight: bold;
     }
+    /* ---- 语境动作条（0.18 ③）：无常驻输入框时的主力入口 ---- */
+    .mud-actions {
+      display: flex; flex-wrap: wrap; gap: 4px 12px;
+      padding: 6px 16px 0; width: 100%; max-width: 68em; margin: 0 auto;
+    }
+    .mud-actions-empty { display: none; }
+    .mud-action-chip {
+      cursor: pointer; user-select: none; color: var(--c-prompt);
+      display: inline-flex; align-items: baseline; max-width: 100%;
+    }
+    .mud-action-chip::before { content: '['; color: var(--dim); }
+    .mud-action-chip::after { content: ']'; color: var(--dim); }
+    .mud-action-chip:hover { text-shadow: 0 0 6px var(--c-prompt); }
+    .mud-kbd-toggle { color: var(--dim); }
     .mud-input-row {
       display: flex; padding: 8px 16px 10px;
       padding-bottom: calc(10px + env(safe-area-inset-bottom));

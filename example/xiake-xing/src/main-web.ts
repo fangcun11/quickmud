@@ -17,7 +17,7 @@ import { WebRenderer } from '@mud/web-client';
 import type { SnapshotData } from '@mud/ecs-engine';
 import { Health } from '@mud/prefabs';
 import { createSuggester } from '@mud/prefabs';
-import { createClickPolicy } from './click';
+import { createClickPolicy, createActionProvider } from './click';
 import { Energy, Purse } from './traits';
 
 function main() {
@@ -43,6 +43,8 @@ function main() {
     suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
     // 点击策略（交互标注②）：出口=走、商品=买、地上物=拿、敌怪=预填攻击
     click: createClickPolicy(world, playerId),
+    // 语境动作条（交互标注③）：输入框收起后的常用操作入口
+    actions: () => createActionProvider(world, playerId),
     // 提示符状态（xkx prompt 惯例）：输入行上方常驻气血/内力
     prompt: (pid) => {
       const hp = world.getComponent(pid, Health);
@@ -69,7 +71,7 @@ function main() {
     lines: [
       '终南山下，青石镇。你是个初出茅庐的少年，兜里几枚碎银，一腔江湖梦。',
       '听说武馆在收学徒，山里的野狼近来伤了好几个人——习武之路，就从这里开始。',
-      '（输入 help 查看命令；移动直接敲 北/南/东/西 或 n/s/e/w；看状态敲 状态）',
+      '（大部分操作点带下划线的文字就能做：出口、物品、活体都可点；底部动作条是常用命令；要打字按 / 或点 ⌨）',
     ],
   });
 

@@ -25,7 +25,7 @@ import {
   Health,
   QuestGiver,
 } from '@mud/prefabs';
-import { ForSale } from './traits';
+import { Combat, Cultivating, ForSale } from './traits';
 
 export function createClickPolicy(
   world: World,
@@ -71,4 +71,31 @@ export function createClickPolicy(
     }
     return { command: `look ${text}`, hint: `看看「${text}」` };
   };
+}
+
+/**
+ * 语境动作条（交互标注③）：输入框收起后的常用操作入口。
+ * 每次提示符刷新时按世界现状求值——战斗中给 停战/逃跑，打坐中给 停，
+ * 平时给 打坐；查探类（状态/背包/任务/地图）恒驻。全部单击直发。
+ */
+export function createActionProvider(
+  world: World,
+  playerId: EntityId,
+): Array<{ text: string; hint?: string }> {
+  const actions: Array<{ text: string; hint?: string }> = [
+    { text: '状态', hint: '气血/内力/三围一览' },
+    { text: '背包', hint: '随身物品（背包里的东西可点击）' },
+    { text: '任务', hint: '当前任务与进度' },
+    { text: '地图', hint: '所在区域的略图' },
+  ];
+  const combat = world.getComponent(playerId, Combat);
+  if (combat?.foe) {
+    actions.push({ text: '停战', hint: '脱离战斗（对方可能追击）' });
+    actions.push({ text: '逃跑', hint: '从来路逃走' });
+  } else if (world.getComponent(playerId, Cultivating)?.on) {
+    actions.push({ text: '停', hint: '收功起身' });
+  } else {
+    actions.push({ text: '打坐', hint: '运气回内力' });
+  }
+  return actions;
 }
