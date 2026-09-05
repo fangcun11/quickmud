@@ -90,6 +90,7 @@ import {
   ArtsCommand,
   MartialSystem,
 } from '../martial';
+import { AtmosphereSystem } from '../atmosphere';
 
 export interface BootstrapResult {
   world: World;
@@ -119,6 +120,7 @@ export function bootstrap(): BootstrapResult {
     BacktrackSystem,
     MartialSystem,
     MeditationSystem,
+    AtmosphereSystem,
     CultivationToggleSystem,
     InterruptSystem,
     WuxiaCombatSystem,

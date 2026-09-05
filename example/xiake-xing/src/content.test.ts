@@ -145,6 +145,7 @@ describe('侠客行 M0 · 三区域骨架', () => {
 import { Name } from '@mud/ecs-engine';
 import { Health, itemsInContainer } from '@mud/prefabs';
 import { Energy, Stats, Cultivating, Retaliate, Arsenal, Channeling } from './traits';
+import { Area, shichenOf, weatherLabel, weatherOf } from '@mud/prefabs';
 
 function fresh(): void {
   const b = bootstrap();
@@ -418,5 +419,13 @@ describe('侠客行 M2 · 武学与秘籍', () => {
     const result = await verifyReplay(rec.stop(), () => bootstrap().world);
     expect(result.ok).toBe(true);
     expect(result.diff).toBeUndefined();
+  });
+
+  it('氛围：进房/look 后有时辰与天气行（派生只读，确定性）', async () => {
+    fresh();
+    const out = await run('look');
+    const areaId = world.getRelations('inn', Area)[0] ?? 'inn';
+    const expected = `时值${shichenOf(0, { dayLengthMs: 240_000 })}，${weatherLabel(weatherOf(areaId, 0, { segmentMs: 60_000 }))}。`;
+    expect(out).toContain(expected); // time=0 → 子时；天气按区域+时段哈希
   });
 });
