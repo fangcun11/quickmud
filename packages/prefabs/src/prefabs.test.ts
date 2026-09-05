@@ -13,6 +13,7 @@ import {
   NpcWanderSystem,
   VerboseSystem,
   VisitationSystem,
+  MiniMapSystem,
 } from './systems.js';
 import { markVisited } from './room.js';
 import {
@@ -25,6 +26,7 @@ import {
   DropCommand,
   AttackCommand,
   VerboseCommand,
+  MiniMapCommand,
 } from './commands.js';
 import {
   Health,
@@ -39,6 +41,7 @@ import {
   Wander,
   Visited,
   Verbose,
+  MiniMap,
 } from './traits.js';
 
 /** 按 kind 提取消息纯文本 */
@@ -608,5 +611,78 @@ describe('进房信息呈现（xkx 长短双描述,0.14）', () => {
     expect(lines).toContain('　　甲房的长描述。');
     expect(lines).toContain('你可以看到：金币、石像（拿不动）。');
     expect(lines).toContain('「野狼」(狼)压低前身，喉咙里滚出低低的呜声。');
+  });
+});
+
+describe('进房邻接小图（0.14 方案二）', () => {
+  /** 甲房 ⇄ 乙房(东通死路丙房);玩家预挂 MiniMap(on 由参数定) */
+  function buildMiniWorld(on: boolean) {
+    const w = new World({ tickInterval: 500 });
+    w.register(MovementSystem, DescriptionSystem, VisitationSystem, MiniMapSystem);
+    w.registerCommands(
+      GoCommand,
+      createDirectionCommand('south', ['south']),
+      createDirectionCommand('east', ['east']),
+      LookCommand,
+      MiniMapCommand,
+    );
+    const player = w.entities.createWithId('player-1');
+    w.addComponent(player, Position, { roomId: 'room_a' });
+    w.addComponent(player, Visited, { rooms: ['room_a'] });
+    w.addComponent(player, MiniMap, { on });
+    w.addComponent(player, Name, { text: '冒险者', aliases: [] });
+    const rooms = [
+      { id: 'room_a', name: '甲房', desc: '甲房的长描述。', exits: { south: 'room_b' } },
+      { id: 'room_b', name: '乙房', desc: '乙房的长描述。', exits: { north: 'room_a', east: 'room_c' } },
+      { id: 'room_c', name: '丙房', desc: '丙房的长描述。', exits: {} },
+    ];
+    for (const room of rooms) {
+      w.entities.createWithId(room.id);
+      w.addComponent(room.id, Name, { text: room.name });
+      w.addComponent(room.id, Description, { text: room.desc });
+      w.addComponent(room.id, Exits, { ...room.exits });
+    }
+    return { w, player };
+  }
+
+  it('略图命令翻转开关；没预挂的世界明说没有', async () => {
+    const { w, player } = buildMiniWorld(false);
+    expect(await w.execute('略图', player)).toContain('已开启');
+    expect(w.getComponent(player, MiniMap)!.on).toBe(true);
+    expect(await w.execute('小图', player)).toContain('已关闭');
+    expect(w.getComponent(player, MiniMap)!.on).toBe(false);
+
+    const bare = w.entities.createWithId('bare');
+    w.addComponent(bare, Name, { text: '裸奔者', aliases: [] });
+    expect(await w.execute('略图', bare)).toContain('没有进房略图开关');
+  });
+
+  it('进房渲染小图：当前房是独立红色段；已探明邻房显名、未探明显示 ?', async () => {
+    const { w, player } = buildMiniWorld(true);
+    await w.execute('south', player); // 乙房：北邻甲房（已探明）、东邻丙房（未探明）
+    const mini = w.output
+      .getAll()
+      .find((m) => m.segments.some((s) => s.style?.color === 'red' && s.text === '乙房'));
+    expect(mini).toBeDefined();
+    const text = mini!.segments.map((s) => s.text).join('');
+    expect(text).toBe('甲房\n  │\n乙房──?'); // 北邻已探明显名；东邻未探明 → ?
+  });
+
+  it('死路的小图只有当前房自己', async () => {
+    const { w, player } = buildMiniWorld(true);
+    await w.execute('south', player);
+    w.output.clear();
+    await w.execute('east', player); // 丙房：无任何出口
+    const mini = w.output
+      .getAll()
+      .find((m) => m.segments.some((s) => s.style?.color === 'red' && s.text === '丙房'));
+    expect(mini!.segments.map((s) => s.text).join('')).toBe('丙房');
+  });
+
+  it('关闭开关：进房不渲染小图', async () => {
+    const { w, player } = buildMiniWorld(false);
+    await w.execute('south', player);
+    const joined = w.output.getAll().map((m) => m.segments.map((s) => s.text).join('')).join('\n');
+    expect(joined).not.toContain('──');
   });
 });

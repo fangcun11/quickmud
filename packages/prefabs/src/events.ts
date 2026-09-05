@@ -160,3 +160,13 @@ export const BuffExpired = defineEvent('buff_expired')<{
 export const VerboseToggled = defineEvent('verbose_toggled')<{
   entity: EntityId;
 }>();
+
+/**
+ * 进房略图切换**意图**（0.14 方案二）：{ entity }
+ *
+ * 由 `略图/minimap` 命令 emit，`MiniMapSystem` 是唯一订阅者——
+ * 命令不改状态（铁律），翻转 `MiniMap.on` 由系统完成。
+ */
+export const MiniMapToggled = defineEvent('mini_map_toggled')<{
+  entity: EntityId;
+}>();

@@ -346,6 +346,54 @@ function displayWidth(text: string): number {
   return w;
 }
 
+export interface NeighborMiniMapLayout {
+  /** 北邻行（空串 = 无北邻，不占行） */
+  top: string;
+  /** 北邻与当前房之间的竖线行 */
+  vTop: string;
+  /** 中行：当前房名**之前**的左段（西邻 + 连线，或空白） */
+  midWest: string;
+  /** 中行：当前房名**之后**的右段（连线 + 东邻，或空串） */
+  midEast: string;
+  /** 南邻与当前房之间的竖线行 */
+  vBottom: string;
+  /** 南邻行（空串 = 无南邻） */
+  bottom: string;
+}
+
+/**
+ * 邻接小图布局（0.14 方案二，纯函数）：当前房 + 四向直接邻房（up/down 不入图，
+ * 与全图同规）。当前房名由调用方作为独立红色段插入 midWest 与 midEast 之间。
+ *
+ * 迷雾由调用方决定：邻房已探明传地名，未探明传 `?`（有路，不剧通向哪）。
+ */
+export function layoutNeighborMiniMap(
+  current: string,
+  neighbors: { north?: string; east?: string; south?: string; west?: string },
+): NeighborMiniMapLayout {
+  const wW = neighbors.west !== undefined ? displayWidth(neighbors.west) + 2 : 0;
+  const curStart = wW;
+  const curCenter = curStart + Math.floor(displayWidth(current) / 2);
+
+  const midWest = ' '.repeat(curStart);
+  const midEast = neighbors.east !== undefined ? '──' + neighbors.east : '';
+
+  const line = (name: string): string => {
+    const pad = Math.max(0, curCenter - Math.floor(displayWidth(name) / 2));
+    return ' '.repeat(pad) + name;
+  };
+  const vLine = ' '.repeat(curCenter) + '│';
+
+  return {
+    top: neighbors.north !== undefined ? line(neighbors.north) : '',
+    vTop: neighbors.north !== undefined ? vLine : '',
+    midWest,
+    midEast,
+    vBottom: neighbors.south !== undefined ? vLine : '',
+    bottom: neighbors.south !== undefined ? line(neighbors.south) : '',
+  };
+}
+
 /** 列间隙：` ─── `（空格 + 三横 + 空格） */
 const H_GAP = 5;
 const H_DASH = '─';

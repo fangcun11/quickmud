@@ -13,6 +13,7 @@ import {
   Attack,
   QuestTurnedIn,
   VerboseToggled,
+  MiniMapToggled,
 } from './events.js';
 import {
   Position,
@@ -22,6 +23,7 @@ import {
   Coordinates,
   Visited,
   Verbose,
+  MiniMap,
   Exits,
   Area,
 } from './traits.js';
@@ -114,6 +116,26 @@ export const VerboseCommand = defineCommand({
     return verbose.on
       ? '已切换为详细模式：每次进入房间都显示完整描述。'
       : '已切回自动简略：重复经过的房间只报地名，想重看细节用 look。';
+  },
+});
+
+/**
+ * 进房略图开关：minimap/略图/小图（0.14 方案二）
+ *
+ * 开启后每次进房（与 look）在出口行下渲染 3×3 邻接小图（当前位置红字）。
+ * 命令只 emit 切换意图，`MiniMapSystem` 翻转 `MiniMap.on`；玩家没预挂
+ * `MiniMap` 的世界没有这个开关（与 VerboseCommand 同款判定）。
+ */
+export const MiniMapCommand = defineCommand({
+  verbs: ['minimap', '略图', '小图'],
+  handle({ player, world }) {
+    const mini = world.getComponent(player, MiniMap);
+    if (!mini) return '这个世界的玩家没有进房略图开关。';
+    world.emit(MiniMapToggled, { entity: player });
+    // emit 同步派发，mini.on 此刻已是翻转后的值
+    return mini.on
+      ? '已开启进房略图：每次进房显示邻接小图（当前位置红字）。'
+      : '已关闭进房略图：想看全景用 map。';
   },
 });
 

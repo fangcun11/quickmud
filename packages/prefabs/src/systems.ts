@@ -37,6 +37,7 @@ import {
   BuffTicked,
   BuffExpired,
   VerboseToggled,
+  MiniMapToggled,
 } from './events.js';
 import {
   Position,
@@ -57,6 +58,7 @@ import {
   Duration,
   Visited,
   Verbose,
+  MiniMap,
 } from './traits.js';
 import type { LootEntry, QuestDef, QuestLogData, BuffEffect } from './traits.js';
 import {
@@ -68,7 +70,7 @@ import {
 } from './queries.js';
 import { injuryWarning } from './vitals.js';
 import { queryRoomGate } from './behavior.js';
-import { directionLabel } from './room.js';
+import { directionLabel, layoutNeighborMiniMap } from './room.js';
 
 /**
  * 移动系统（v0.9-A 重写）：`MoveRequested` 的**唯一**订阅者
@@ -196,6 +198,7 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): 
   ctx.output.narrative(desc && desc.text !== '' ? INDENT + desc.text : '这里没有任何描述。');
 
   emitExitsLine(ctx, roomId);
+  emitMiniMapIfOn(ctx, viewer, roomId);
 
   // 房间绑定实体二分（xkx：人和物分开列）：有对话/任务/生命的视为活体
   // （钉在房间里的 NPC——酒保、村长——用 Located 关系），其余是物品
@@ -229,7 +232,7 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): 
  * 短描述档（xkx 长短双描述，0.14）：重复进房（自动简略）时——
  * 【名】+ 一行短氛围 + 出口。房间没写 `short` 时由 MovementSystem 回退旧行为。
  */
-function emitRoomBrief(ctx: SystemContext, roomId: EntityId): void {
+function emitRoomBrief(ctx: SystemContext, roomId: EntityId, viewer: EntityId): void {
   const name = ctx.getComponent(roomId, Name);
   if (name) {
     ctx.output.title(`【${name.text}】`);
@@ -239,6 +242,39 @@ function emitRoomBrief(ctx: SystemContext, roomId: EntityId): void {
     ctx.output.narrative(INDENT + short.text);
   }
   emitExitsLine(ctx, roomId);
+  emitMiniMapIfOn(ctx, viewer, roomId);
+}
+
+/**
+ * 进房邻接小图（0.14 方案二）：玩家开了 `MiniMap` 才画；出口行之下、
+ * 实体列示之上。当前房名独立**红色段**；邻房迷雾——已探明显示地名，
+ * 未探明显示 `?`（暗示有路，不剧通向哪）。up/down 不入图（全图同规）。
+ */
+function emitMiniMapIfOn(ctx: SystemContext, viewer: EntityId, roomId: EntityId): void {
+  if (ctx.getComponent(viewer, MiniMap)?.on !== true) return;
+  const current = ctx.getComponent(roomId, Name)?.text ?? String(roomId);
+  const exits = ctx.getComponent(roomId, Exits);
+  const visited = ctx.getComponent(viewer, Visited)?.rooms ?? [];
+  const neighbor = (dir: string): string | undefined => {
+    const target = exits?.[dir];
+    if (!target) return undefined;
+    return visited.includes(target) ? ctx.getComponent(target, Name)?.text ?? '?' : '?';
+  };
+  const layout = layoutNeighborMiniMap(current, {
+    north: neighbor('north'),
+    east: neighbor('east'),
+    south: neighbor('south'),
+    west: neighbor('west'),
+  });
+  const segments: Segment[] = [];
+  if (layout.top) segments.push({ text: layout.top + '\n' });
+  if (layout.vTop) segments.push({ text: layout.vTop + '\n' });
+  segments.push({ text: layout.midWest });
+  segments.push({ text: current, style: { color: 'red' } });
+  segments.push({ text: layout.midEast });
+  if (layout.vBottom) segments.push({ text: '\n' + layout.vBottom });
+  if (layout.bottom) segments.push({ text: '\n' + layout.bottom });
+  ctx.output.narrative(segments);
 }
 
 export const MovementSystem = defineSystem({
@@ -297,13 +333,14 @@ export const MovementSystem = defineSystem({
     if (fullDesc) {
       emitRoomBlock(ctx, targetRoomId, entity);
     } else if (ctx.getComponent(targetRoomId, Short)?.text) {
-      emitRoomBrief(ctx, targetRoomId);
+      emitRoomBrief(ctx, targetRoomId, entity);
     } else {
       const roomName = ctx.getComponent(targetRoomId, Name);
       ctx.output.narrative([
         { text: `你来到了${roomName?.text ?? targetRoomId}。`, style: { bold: true } },
       ]);
       emitExitsLine(ctx, targetRoomId);
+      emitMiniMapIfOn(ctx, entity, targetRoomId);
     }
 
     // 6. 广播"人真的到了"——探索记账、房间 enter/leave/firstEnter 都挂在这上面
@@ -348,6 +385,22 @@ export const VerboseSystem = defineSystem({
     const { entity } = event.data;
     const verbose = ctx.getComponent(entity, Verbose);
     if (verbose) verbose.on = !verbose.on;
+  },
+});
+
+/**
+ * 进房略图开关（0.14 方案二）：`MiniMapToggled` 的唯一订阅者——
+ * 翻转 `MiniMap.on`（预挂组件，VerboseSystem 同款）。玩家没预挂
+ * `MiniMap` 的世界没有这个开关（静默忽略）。
+ */
+export const MiniMapSystem = defineSystem({
+  name: 'prefab.minimap',
+  on: [MiniMapToggled],
+  priority: 0,
+  handle(event, ctx) {
+    const { entity } = event.data;
+    const mini = ctx.getComponent(entity, MiniMap);
+    if (mini) mini.on = !mini.on;
   },
 });
 

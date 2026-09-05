@@ -39,9 +39,9 @@ function main() {
     title: '侠客行',
     suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
     persistence: {
-      // :m1b 后缀作废旧档——0.14 给房间加了 Short、狼挂了 Pose，旧快照恢复
-      // 出来的世界缺这些新内容（内容升级直接重开，不做迁移）
-      key: 'save:xiake-xing:m1b',
+      // :m1c 后缀作废旧档——0.14 先后给房间加 Short、狼挂 Pose、玩家预挂
+      // MiniMap，旧快照恢复出来的世界缺这些新内容（内容升级直接重开，不做迁移）
+      key: 'save:xiake-xing:m1c',
       capture: () => world.createSnapshot(),
       restore: (snapshot) => world.rollbackWorld(snapshot as SnapshotData),
     },

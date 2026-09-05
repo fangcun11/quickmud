@@ -32,6 +32,16 @@ export const Pose = trait('pose', () => ({
   text: '',
 }));
 
+/**
+ * 进房邻接小图开关（0.14 方案二）：`on = true` 时每次进房（与 look）在
+ * 出口行下渲染 3×3 邻接小图（当前房名红色）。**内容层预挂**（与 `Verbose`
+ * 同款声明模式，进快照）；不预挂的世界没有开关（略图命令会明说）。
+ * 命令不改状态（铁律），翻转由 `MiniMapSystem` 完成。
+ */
+export const MiniMap = trait('mini-map', () => ({
+  on: false,
+}));
+
 /** 生命值组件（/heal 的约定目标） */
 export const Health = trait('health', () => ({
   current: 100,

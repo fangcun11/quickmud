@@ -28,6 +28,7 @@ import {
   DescriptionSystem,
   VisitationSystem,
   VerboseSystem,
+  MiniMapSystem,
   ItemSystem,
   LootSystem,
   DeathSystem,
@@ -49,6 +50,7 @@ import {
   Description,
   Loot,
   Pose,
+  MiniMap,
   // 房间与区域
   defineRoom,
   defineArea,
@@ -100,6 +102,7 @@ export function bootstrap(): BootstrapResult {
     ItemSystem,
     LootSystem,
     DeathSystem,
+    MiniMapSystem,
     MeditationSystem,
     CultivationToggleSystem,
     InterruptSystem,
@@ -291,6 +294,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Stats, { atk: 5, def: 2, dodge: 2 });
   world.addComponent(playerId, Cultivating, { on: false, lastTickedAt: 0 }); // 打坐开关（预挂，Verbose 同款）
   world.addComponent(playerId, Trail, { roomId: layout.entry }); // 逃跑的"来路"
+  world.addComponent(playerId, MiniMap, { on: true }); // 进房略图默认开（略图 命令可关）
   markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
 
   // ---- 野狼×3（野怪区，M1 的沙包）----
