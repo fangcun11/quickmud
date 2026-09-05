@@ -236,6 +236,14 @@ export const Coordinates = trait('coordinates', () => ({ x: 0, y: 0 }));
 export const Visited = trait('visited', () => ({ rooms: [] as string[] }));
 
 /**
+ * 来路栈（0.14，F4）：每次成功移动把离开的房间压栈——`回/back` 命令
+ * **原路折返**（弹栈消费：退掉当前房记录，回到上一间；连按可逐站走回出生点）。
+ * **内容层预挂**（与 `Visited` 同款），进快照；栈有界（32）防快照无限膨胀。
+ * 移动记录由 `BacktrackSystem` 完成。
+ */
+export const Backtrack = trait('backtrack', () => ({ rooms: [] as string[] }));
+
+/**
  * 详细模式（v0.11）：`on = true` 时移动**每次**都显示房间完整描述
  *
  * 默认行为是"自动简略"：首次进入全量描述，重复进入只显示

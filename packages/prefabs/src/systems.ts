@@ -59,6 +59,7 @@ import {
   Visited,
   Verbose,
   MiniMap,
+  Backtrack,
 } from './traits.js';
 import type { LootEntry, QuestDef, QuestLogData, BuffEffect } from './traits.js';
 import {
@@ -305,29 +306,53 @@ export const MovementSystem = defineSystem({
 
     const from = pos.roomId;
 
-    // 1. 出口存在性（拓扑真相来自 Exits）；撞墙时顺手告诉玩家还能往哪走
-    const exits = ctx.getComponent(from, Exits);
-    const targetRoomId = exits?.[to];
-    if (!targetRoomId) {
-      // 方向 id 是机器真相，文案要说人话
-      const here = exitDirectionList(ctx, from);
-      ctx.output.narrative(
-        here
-          ? `你不能往${directionLabel(to)}走。这里的出口：${here}。`
-          : `你不能往${directionLabel(to)}走。`,
-      );
-      return;
+    // 0. 来路（0.14，F4）：to === 'back' → 不查出口表，由来路栈定目标——
+    //    退的是"你来时那间"（栈顶≠当前房），守卫照走（有拦的房间后退照被拦）。
+    //    没有来路 → 明说。
+    let direction = to;
+    let targetRoomId: string | undefined;
+    if (to === 'back') {
+      // 原路折返（弹栈消费）：把栈顶的当前房记录弹掉，再退到它前面那间——
+      // A→B→C 连退两下回到 A（真正"原路返回"，而不是在最后两间打转）
+      const trail = ctx.getComponent(entity, Backtrack);
+      let target: string | undefined;
+      if (trail) {
+        while (trail.rooms.length > 0 && trail.rooms[trail.rooms.length - 1] === from) {
+          trail.rooms.pop();
+        }
+        target = trail.rooms.pop();
+      }
+      if (!target) {
+        ctx.output.error('没有来路可退。');
+        return;
+      }
+      targetRoomId = target;
+      direction = 'back';
+    } else {
+      // 1. 出口存在性（拓扑真相来自 Exits）；撞墙时顺手告诉玩家还能往哪走
+      const exits = ctx.getComponent(from, Exits);
+      targetRoomId = exits?.[to];
+      if (!targetRoomId) {
+        // 方向 id 是机器真相，文案要说人话
+        const here = exitDirectionList(ctx, from);
+        ctx.output.narrative(
+          here
+            ? `你不能往${directionLabel(to)}走。这里的出口：${here}。`
+            : `你不能往${directionLabel(to)}走。`,
+        );
+        return;
+      }
     }
 
     // 2. 出发房间的离开守卫
-    const leave = queryRoomGate(ctx, from, 'canLeave', entity, to);
+    const leave = queryRoomGate(ctx, from, 'canLeave', entity, direction);
     if (leave !== undefined) {
       ctx.output.narrative(leave);
       return;
     }
 
     // 3. 目标房间的进入守卫（守卫跑在落位之前，所以拒绝时不留任何副作用）
-    const enter = queryRoomGate(ctx, targetRoomId, 'canEnter', entity, to);
+    const enter = queryRoomGate(ctx, targetRoomId, 'canEnter', entity, direction);
     if (enter !== undefined) {
       ctx.output.narrative(enter);
       return;
@@ -359,7 +384,7 @@ export const MovementSystem = defineSystem({
     }
 
     // 6. 广播"人真的到了"——探索记账、房间 enter/leave/firstEnter 都挂在这上面
-    ctx.emit(Moved, { entity, from, to: targetRoomId, direction: to });
+    ctx.emit(Moved, { entity, from, to: targetRoomId, direction });
   },
 });
 
@@ -381,6 +406,28 @@ export const VisitationSystem = defineSystem({
     if (!visited) return;
 
     if (!visited.rooms.includes(to)) visited.rooms.push(to);
+  },
+});
+
+/**
+ * 来路栈（0.14，F4）：`Moved` 的记账员——把离开的房间压进 `Backtrack`。
+ *
+ * 与 `Visited`（集合语义）互补：栈记**顺序**，回退命令按弹栈消费原路折返
+ * （退掉当前房记录，回到上一间——连按可逐站走回出生点）。
+ * 栈上限 32，超出丢最旧。没预挂 `Backtrack` 的实体不记账。
+ */
+export const BacktrackSystem = defineSystem({
+  name: 'prefab.backtrack',
+  on: [Moved],
+  priority: 0,
+  handle(event, ctx) {
+    // 回退移动（direction='back'）不压栈——回退是**消费**历史，不是新来路；
+    // 否则刚弹掉的又被记回，back 会永远在最后两间之间打转
+    if (event.data.direction === 'back') return;
+    const trail = ctx.getComponent(event.data.entity, Backtrack);
+    if (!trail) return;
+    trail.rooms.push(event.data.from);
+    if (trail.rooms.length > 32) trail.rooms.shift();
   },
 });
 

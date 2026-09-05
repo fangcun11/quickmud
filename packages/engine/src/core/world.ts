@@ -25,14 +25,14 @@ function editDistance(a: string, b: string, max: number): number {
   for (let j = 0; j <= b.length; j++) prev[j] = j;
   for (let i = 1; i <= a.length; i++) {
     curr[0] = i;
-    let rowMin = curr[0];
+    let rowMin = curr[0]!;
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
-      rowMin = Math.min(rowMin, curr[j]);
+      curr[j] = Math.min(prev[j]! + 1, curr[j - 1]! + 1, prev[j - 1]! + cost);
+      rowMin = Math.min(rowMin, curr[j]!);
     }
     if (rowMin > max) return max + 1; // 整行都超界，提前剪枝
-    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j]!;
   }
   return prev[b.length]!;
 }
@@ -547,7 +547,7 @@ export class World {
     for (const cmd of this.commands.values()) {
       if (seen.has(cmd)) continue;
       seen.add(cmd);
-      const args: CommandMeta['args'] = {};
+      const args: Record<string, { type: CommandMeta['args'][string]['type'] }> = {};
       for (const [key, def] of Object.entries(cmd.args ?? {})) {
         args[key] = { type: (def as ArgumentDefinition).type };
       }

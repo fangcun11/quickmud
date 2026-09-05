@@ -24,6 +24,7 @@ import {
   Visited,
   Verbose,
   MiniMap,
+  Backtrack,
   Exits,
   Area,
 } from './traits.js';
@@ -136,6 +137,29 @@ export const MiniMapCommand = defineCommand({
     return mini.on
       ? '已开启进房略图：每次进房显示邻接小图（当前位置红字）。'
       : '已关闭进房略图：想看全景用 map。';
+  },
+});
+
+/**
+ * 回退命令：back/回/退/返回（0.14，F4）
+ *
+ * 沿来路栈（`Backtrack`）退回上一间——等同 `MoveRequested` 的另一来源
+ * （to='back'），守卫照走；有拦的房间后退照被拦。玩家没预挂 `Backtrack`
+ * 的世界没有来路记录（命令明说）。
+ */
+export const BackCommand = defineCommand({
+  verbs: ['back', '回', '退', '返回'],
+  handle({ output, player, world }) {
+    if (!world.getComponent(player, Position)) {
+      output.error('你不在任何地方。');
+      return null;
+    }
+    if (!world.getComponent(player, Backtrack)) {
+      output.error('这个世界没有来路记录。');
+      return null;
+    }
+    world.emit(MoveRequested, { entity: player, to: 'back' });
+    return null;
   },
 });
 

@@ -14,6 +14,7 @@ import {
   VerboseSystem,
   VisitationSystem,
   MiniMapSystem,
+  BacktrackSystem,
 } from './systems.js';
 import { layoutNeighborMiniMap, markVisited } from './room.js';
 import {
@@ -27,6 +28,7 @@ import {
   AttackCommand,
   VerboseCommand,
   MiniMapCommand,
+  BackCommand,
 } from './commands.js';
 import {
   Health,
@@ -42,6 +44,7 @@ import {
   Visited,
   Verbose,
   MiniMap,
+  Backtrack,
 } from './traits.js';
 
 /** 按 kind 提取消息纯文本 */
@@ -725,5 +728,80 @@ describe('layoutNeighborMiniMap（邻接小图布局）', () => {
     expect(southStart).toBe(Math.max(0, center - Math.floor(dw('武馆') / 2)));
     expect(l.vTop).toBe(' '.repeat(center) + '│');
     expect(l.vBottom).toBe(' '.repeat(center) + '│');
+  });
+});
+
+describe('来路栈与回退（0.14,F4）', () => {
+  /** A ⇄ B ⇄ C;玩家预挂 Backtrack,种子出生房 */
+  function buildBackWorld() {
+    const w = new World({ tickInterval: 500 });
+    w.register(MovementSystem, DescriptionSystem, VisitationSystem, BacktrackSystem);
+    w.registerCommands(
+      GoCommand,
+      createDirectionCommand('south', ['south']),
+      createDirectionCommand('north', ['north']),
+      LookCommand,
+      BackCommand,
+    );
+    const player = w.entities.createWithId('player-1');
+    w.addComponent(player, Position, { roomId: 'A' });
+    w.addComponent(player, Visited, { rooms: ['A'] });
+    w.addComponent(player, Backtrack, { rooms: [] });
+    w.addComponent(player, Name, { text: '冒险者', aliases: [] });
+    const rooms = [
+      { id: 'A', name: '甲房', desc: '甲房。', exits: { south: 'B' } },
+      { id: 'B', name: '乙房', desc: '乙房。', exits: { north: 'A', south: 'C' } },
+      { id: 'C', name: '丙房', desc: '丙房。', exits: {} },
+    ];
+    for (const room of rooms) {
+      w.entities.createWithId(room.id);
+      w.addComponent(room.id, Name, { text: room.name });
+      w.addComponent(room.id, Description, { text: room.desc });
+      w.addComponent(room.id, Exits, { ...room.exits });
+    }
+    return { w, player };
+  }
+
+  it('back 沿来路逐站返回；来回 ping-pong', async () => {
+    const { w, player } = buildBackWorld();
+    await w.execute('south', player);
+    await w.execute('south', player); // A→B→C（C 死路）
+    expect(w.getComponent(player, Position)!.roomId).toBe('C');
+    await w.execute('回', player); // C→B（弹栈消费）
+    expect(w.getComponent(player, Position)!.roomId).toBe('B');
+    await w.execute('back', player); // B→A
+    expect(w.getComponent(player, Position)!.roomId).toBe('A');
+    // 弹栈消费：A 的来路已用尽 → 明说（原路返回走完了）
+    await w.execute('back', player);
+    expect(w.getComponent(player, Position)!.roomId).toBe('A');
+    const errors = w.output
+      .getAll()
+      .filter((m) => m.kind === 'error')
+      .map((m) => m.segments.map((seg) => seg.text).join(''));
+    expect(errors).toContain('没有来路可退。');
+  });
+
+  it('没有来路 → 明说（error 通道，不落位）', async () => {
+    const { w, player } = buildBackWorld();
+    await w.execute('回', player); // 出生房从未移动过 → 无来路
+    expect(w.getComponent(player, Position)!.roomId).toBe('A');
+    const errors = w.output
+      .getAll()
+      .filter((m) => m.kind === 'error')
+      .map((m) => m.segments.map((s) => s.text).join(''));
+    expect(errors).toContain('没有来路可退。');
+  });
+
+  it('没预挂 Backtrack 的世界：命令明说', async () => {
+    const { w } = buildBackWorld();
+    const bare = w.entities.createWithId('bare');
+    w.addComponent(bare, Position, { roomId: 'A' });
+    w.addComponent(bare, Name, { text: '裸奔者', aliases: [] });
+    expect(await w.execute('back', bare)).toBeNull();
+    const errs = w.output
+      .getAll()
+      .filter((m) => m.kind === 'error')
+      .map((m) => m.segments.map((seg) => seg.text).join(''));
+    expect(errs).toContain('这个世界没有来路记录。');
   });
 });
