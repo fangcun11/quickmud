@@ -29,9 +29,15 @@ export interface SuggesterOptions {
   directions: string[];
 }
 
-export function createSuggester(opts: SuggesterOptions): (input: string) => string[] {
-  // 命令分类只算一次：动词总表 + go 类动词（direction 参数）+ 实体类动词
-  const verbs: string[] = [];
+/** 候选项：text = 补全词；hint = 说明行（动词候选带 describe，供候选条渲染） */
+export interface SuggestItem {
+  text: string;
+  hint?: string;
+}
+
+export function createSuggester(opts: SuggesterOptions): (input: string) => SuggestItem[] {
+  // 命令分类只算一次：动词总表（带 describe 说明）+ go 类动词 + 实体类动词
+  const verbs: SuggestItem[] = [];
   const seenVerb = new Set<string>();
   const goWords = new Set<string>();
   const entityWords = new Set<string>();
@@ -44,22 +50,22 @@ export function createSuggester(opts: SuggesterOptions): (input: string) => stri
     for (const verb of cmd.verbs) {
       if (seenVerb.has(verb)) continue;
       seenVerb.add(verb);
-      verbs.push(verb);
+      verbs.push({ text: verb, hint: cmd.describe });
       if (isGo) goWords.add(verb);
       else if (wantsEntity) entityWords.add(verb);
     }
   }
-  const directionWords = Array.from(new Set(opts.directions));
+  const directionWords = Array.from(new Set(opts.directions)).map((d) => ({ text: d }));
 
   /** 房间内实体名（主名 + 别名，去重；活体在前、地上物在后，玩家除外） */
-  const roomEntityNames = (): string[] => {
+  const roomEntityNames = (): SuggestItem[] => {
     const pos = opts.query.getComponent(opts.playerId, Position);
     if (!pos) return [];
     const ids = [
       ...occupantsIn(opts.query, pos.roomId),
       ...itemsInContainer(opts.query, pos.roomId),
     ];
-    const names: string[] = [];
+    const names: SuggestItem[] = [];
     const seen = new Set<string>();
     for (const id of ids) {
       if (id === opts.playerId) continue;
@@ -68,14 +74,14 @@ export function createSuggester(opts: SuggesterOptions): (input: string) => stri
       for (const n of [nc.text, ...(nc.aliases ?? [])]) {
         if (n && !seen.has(n)) {
           seen.add(n);
-          names.push(n);
+          names.push({ text: n });
         }
       }
     }
     return names;
   };
 
-  return (input: string): string[] => {
+  return (input: string): SuggestItem[] => {
     const trailingSpace = /\s$/.test(input);
     const parts = input.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0 || parts.length > 2) return [];

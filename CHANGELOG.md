@@ -47,6 +47,17 @@
 - **验收通关序列录像重放一致**（record/verifyReplay）；存档 key 升 m2、
   版本 0.3.0；help 补 6 行（覆盖测试锁死）；+5 例
 
+### web-client：快速选择升级（@mud/web-client 0.5.0）
+
+- **影子补全（ghost text）**：输入 `at` → 光标后浮现暗色余段 `tack`，
+  `Tab` 或 `→`（行尾时）一键补全——不离开输入流；余段按选中（或首个）
+  候选计算，↑/↓ 移动即实时换影子
+- **候选条带说明**：建议器升级为 `{ text, hint? }`（动词候选直接带
+  describe），候选条渲染为 `[attack] 攻击同房间的目标…`（提示压暗、
+  超宽省略）；提供器仍兼容纯字符串候选（breaking: createSuggester
+  返回对象形状）
+- 键盘契约不变：Enter 永远执行当前输入；Tab/点击/→ 只补全不执行
+
 ### prefabs/侠客行：时辰与天气（0.14 氛围支线）
 
 - **派生只读**：`shichenOf(timeMs)`（十二时辰）与 `weatherOf(areaId, timeMs)`

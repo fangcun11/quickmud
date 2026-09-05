@@ -68,38 +68,42 @@ describe('createSuggester · 第一词', () => {
     expect(suggest('   ')).toEqual([]);
   });
 
-  it('敲第一个词时给全部动词（去重、含方向别名）', () => {
+  it('敲第一个词时给全部动词（去重、含方向别名、动词带 describe 提示）', () => {
     const { suggest } = suggestWorld();
     const verbs = suggest('at');
-    expect(verbs).toContain('attack');
-    expect(verbs).toContain('打坐');
-    expect(verbs).toContain('北');
+    expect(verbs.map((v) => v.text)).toContain('attack');
+    expect(verbs.map((v) => v.text)).toContain('打坐');
+    expect(verbs.map((v) => v.text)).toContain('北');
+    // 动词候选带 describe 提示（候选条渲染用）
+    expect(verbs.find((v) => v.text === 'attack')?.hint).toBeTruthy();
     // 去重：'north' 在 Go 命令与方向命令里各出现一次，只留一份
-    expect(verbs.filter((v) => v === 'north')).toHaveLength(1);
+    expect(verbs.filter((v) => v.text === 'north')).toHaveLength(1);
   });
 });
 
 describe('createSuggester · 第二词', () => {
   it('go <方向> → 方向词（canonical 在前、去重）', () => {
     const { suggest } = suggestWorld();
-    expect(suggest('go ')).toEqual(['north', '北']);
-    expect(suggest('走 x')).toEqual(['north', '北']);
+    expect(suggest('go ')).toEqual([{ text: 'north' }, { text: '北' }]);
+    expect(suggest('走 x')).toEqual([{ text: 'north' }, { text: '北' }]);
   });
 
   it('entity 参数命令 → 房间实体名（活体+地上物，主名+别名，去重）', () => {
     const { suggest } = suggestWorld();
-    expect(suggest('attack ')).toEqual(['野狼', '狼', 'wolf', '狼皮', '皮']);
+    expect(suggest('attack ')).toEqual([
+      { text: '野狼' }, { text: '狼' }, { text: 'wolf' }, { text: '狼皮' }, { text: '皮' },
+    ]);
   });
 
   it('optional_entity 参数命令同样补房间实体', () => {
     const { suggest } = suggestWorld();
-    expect(suggest('look ')).toContain('野狼');
-    expect(suggest('看 ')).toContain('狼皮');
+    expect(suggest('look ').map((v) => v.text)).toContain('野狼');
+    expect(suggest('看 ').map((v) => v.text)).toContain('狼皮');
   });
 
   it('排除玩家自己与别房实体', () => {
     const { suggest } = suggestWorld();
-    const names = suggest('attack ');
+    const names = suggest('attack ').map((v) => v.text);
     expect(names).not.toContain('少年侠客');
     expect(names.filter((n) => n === '野狼')).toHaveLength(1);
   });

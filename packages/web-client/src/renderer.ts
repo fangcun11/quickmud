@@ -64,8 +64,9 @@ export class WebRenderer {
   private history: string[] = [];
   private historyIndex = -1;
   // 命令建议（suggest 提供器给全集，这里做前缀过滤、上限与键盘契约）
-  private suggestItems: string[] = [];
+  private suggestItems: { text: string; hint?: string }[] = [];
   private suggestIndex = -1;
+  private ghostEl: HTMLElement;
   /** Esc/接受后暂不弹（直到下一次输入变化）；避免补全刚收起又被顶回来 */
   private suggestDismissed = false;
   /** 重开两段式确认：第一次输入只提示，第二次才真清档 */
@@ -127,11 +128,20 @@ export class WebRenderer {
     prompt.className = 'mud-prompt';
     inputArea.appendChild(prompt);
 
+    const inputWrap = document.createElement('span');
+    inputWrap.className = 'mud-input-wrap';
+
+    this.ghostEl = document.createElement('div');
+    this.ghostEl.className = 'mud-ghost';
+    this.ghostEl.setAttribute('aria-hidden', 'true');
+    inputWrap.appendChild(this.ghostEl);
+
     this.inputEl = document.createElement('input');
     this.inputEl.id = 'cmd-input';
     this.inputEl.type = 'text';
     this.inputEl.autocomplete = 'off';
-    inputArea.appendChild(this.inputEl);
+    inputWrap.appendChild(this.inputEl);
+    inputArea.appendChild(inputWrap);
     bottomWrap.appendChild(inputArea);
     this.container.appendChild(bottomWrap);
 
@@ -145,6 +155,12 @@ export class WebRenderer {
         // Tab 接受候选（不执行）；无候选时保留浏览器默认行为
         e.preventDefault();
         this.acceptSuggestion();
+      } else if (e.key === 'ArrowRight' && this.suggestVisible() && this.ghostRemainder()) {
+        // 光标在行尾时 → 等同 Tab：接受影子补全
+        if (this.inputEl.selectionStart === this.inputEl.value.length) {
+          e.preventDefault();
+          this.acceptSuggestion();
+        }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         // 候选条开着时 ↑↓ 在候选间移动，关着时才是历史召回
@@ -160,6 +176,10 @@ export class WebRenderer {
       }
     });
     this.inputEl.addEventListener('input', () => this.refreshSuggestions());
+    this.inputEl.addEventListener('focus', () => this.updateGhost());
+    this.inputEl.addEventListener('blur', () => {
+      this.ghostEl.textContent = '';
+    });
 
     // 点击容器聚焦输入
     this.container.addEventListener('click', () => {
@@ -311,6 +331,34 @@ export class WebRenderer {
     return this.suggestRowEl.style.display !== 'none' && this.suggestItems.length > 0;
   }
 
+  /** 影子补全余段：选中（或首个）候选按光标前最后词取差；无差/未聚焦 → 隐藏 */
+  private ghostRemainder(): string {
+    if (!this.suggestVisible() || document.activeElement !== this.inputEl) return '';
+    const best = this.suggestItems[this.suggestIndex >= 0 ? this.suggestIndex : 0];
+    if (!best) return '';
+    const input = this.inputEl.value;
+    const lastWord = input.endsWith(' ') ? '' : this.lastWordOf(input);
+    if (!lastWord) return ''; // 空词不预填（避免整词压屏）
+    return best.text.toLowerCase().startsWith(lastWord.toLowerCase())
+      ? best.text.slice(lastWord.length)
+      : '';
+  }
+
+  private updateGhost(): void {
+    const rest = this.ghostRemainder();
+    if (!rest) {
+      this.ghostEl.textContent = '';
+      return;
+    }
+    this.ghostEl.textContent = '';
+    const typed = document.createElement('span');
+    typed.style.visibility = 'hidden';
+    typed.textContent = this.inputEl.value;
+    const restSpan = document.createElement('span');
+    restSpan.textContent = rest;
+    this.ghostEl.append(typed, restSpan);
+  }
+
   /** 输入变化 → 取候选全集 → 按光标前最后一个词前缀过滤 → 渲染（上限 8） */
   private refreshSuggestions(): void {
     this.suggestDismissed = false;
@@ -319,17 +367,19 @@ export class WebRenderer {
       this.hideSuggestions();
       return;
     }
-    let candidates: string[];
+    let raw: Array<string | { text: string; hint?: string }>;
     try {
-      candidates = this.suggestProvider(input);
+      raw = this.suggestProvider(input);
     } catch {
-      candidates = []; // 游戏侧建议出错不能挡住打字
+      raw = []; // 游戏侧建议出错不能挡住打字
     }
+    const candidates = raw.map((c) => (typeof c === 'string' ? { text: c } : c));
     const lastWord = input.endsWith(' ') ? '' : this.lastWordOf(input);
     const filtered = candidates.filter(
-      (c) => c !== lastWord && c.toLowerCase().startsWith(lastWord.toLowerCase()),
+      (c) => c.text !== lastWord && c.text.toLowerCase().startsWith(lastWord.toLowerCase()),
     );
     this.renderSuggestions(filtered.slice(0, 8));
+    this.updateGhost();
   }
 
   private lastWordOf(input: string): string {
@@ -337,7 +387,7 @@ export class WebRenderer {
     return cut === -1 ? input : input.slice(cut + 1);
   }
 
-  private renderSuggestions(tokens: string[]): void {
+  private renderSuggestions(tokens: { text: string; hint?: string }[]): void {
     this.suggestItems = tokens;
     this.suggestIndex = -1;
     this.suggestRowEl.innerHTML = '';
@@ -345,13 +395,19 @@ export class WebRenderer {
       this.hideSuggestions();
       return;
     }
-    tokens.forEach((token) => {
+    tokens.forEach((item) => {
       const chip = document.createElement('span');
-      chip.textContent = token;
       chip.className = 'suggest-chip';
+      chip.append(item.text);
+      if (item.hint) {
+        const hint = document.createElement('span');
+        hint.className = 'chip-hint';
+        hint.textContent = item.hint;
+        chip.append(hint);
+      }
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.acceptSuggestion(token);
+        this.acceptSuggestion(item.text);
       });
       this.suggestRowEl.appendChild(chip);
     });
@@ -369,6 +425,7 @@ export class WebRenderer {
       if (this.suggestIndex >= len) this.suggestIndex = -1; // 越过最末回到未选中
     }
     this.updateChipStyles();
+    this.updateGhost();
   }
 
   private updateChipStyles(): void {
@@ -380,7 +437,8 @@ export class WebRenderer {
 
   /** 把候选补进输入框（替换最后一个词）；不执行，Enter 仍由玩家敲 */
   private acceptSuggestion(token?: string): void {
-    const pick = token ?? this.suggestItems[this.suggestIndex >= 0 ? this.suggestIndex : 0];
+    const item = token ?? this.suggestItems[this.suggestIndex >= 0 ? this.suggestIndex : 0];
+    const pick = typeof item === 'string' ? item : item?.text;
     if (!pick) return;
     const input = this.inputEl.value;
     const cut = input.lastIndexOf(' ');
@@ -402,6 +460,7 @@ export class WebRenderer {
     this.suggestIndex = -1;
     this.suggestRowEl.style.display = 'none';
     this.suggestRowEl.innerHTML = '';
+    this.ghostEl.textContent = '';
   }
 
   /**

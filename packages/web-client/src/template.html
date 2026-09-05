@@ -126,9 +126,16 @@
       display: none; flex-wrap: wrap; gap: 4px 14px;
       padding: 6px 16px 0; width: 100%; max-width: 68em; margin: 0 auto;
     }
-    .suggest-chip { cursor: pointer; user-select: none; color: var(--fg); }
+    .suggest-chip {
+      cursor: pointer; user-select: none; color: var(--fg);
+      display: inline-flex; align-items: baseline; max-width: 100%;
+    }
     .suggest-chip::before { content: '['; color: var(--dim); }
     .suggest-chip::after { content: ']'; color: var(--dim); }
+    .chip-hint {
+      color: var(--dim); font-size: 12px; margin-left: 6px;
+      max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .suggest-chip.selected {
       color: var(--bg); background: var(--c-prompt);
       text-shadow: none; font-weight: bold;
@@ -137,6 +144,14 @@
       display: flex; padding: 8px 16px 10px;
       padding-bottom: calc(10px + env(safe-area-inset-bottom));
       width: 100%; max-width: 68em; margin: 0 auto;
+    }
+    .mud-input-wrap { position: relative; flex: 1; display: flex; }
+    /* 影子补全：hidden 值段占位（与输入同字体同度量），余段以暗色浮现在光标后 */
+    .mud-ghost {
+      position: absolute; inset: 0; pointer-events: none;
+      display: flex; align-items: center;
+      white-space: pre; overflow: hidden;
+      color: var(--dim); opacity: 0.6;
     }
     .mud-prompt { color: var(--c-prompt); font-weight: bold; align-self: center; }
     #cmd-input {

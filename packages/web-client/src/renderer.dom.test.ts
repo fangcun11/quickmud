@@ -193,3 +193,30 @@ describe('中文 IME 与既有行为', () => {
     expect(execute).toHaveBeenLastCalledWith('look 野狼', 'player-1');
   });
 });
+
+describe('影子补全与候选说明（0.5 快速选择）', () => {
+  it('影子补全：输入 at → ghost 余段 tack；选中变化随之更新', () => {
+    const { input, row } = mountRenderer({ suggest: () => ['attack', 'attach'] });
+    type(input, 'at');
+    const ghostText = () => input.parentElement!.querySelector('.mud-ghost')!.textContent;
+    expect(ghostText()).toBe('at' + 'tack'); // 首个候选 attack → 余段 tack（hidden 值段占位）
+    press(input, 'ArrowUp'); // 选中 attach（↑ 未选中时跳最末）
+    expect(ghostText()).toBe('attach'); // value 'at'（隐藏占位）+ 余段 'tach'
+  });
+
+  it('→ 在行尾时等同 Tab：接受影子补全', () => {
+    const { input, execute } = mountRenderer({ suggest: () => ['attack'] });
+    type(input, 'at');
+    input.setSelectionRange(input.value.length, input.value.length);
+    press(input, 'ArrowRight');
+    expect(input.value).toBe('attack');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('动词候选带 describe 提示（chip-hint）', () => {
+    const { input, row } = mountRenderer({ suggest: () => [{ text: 'attack', hint: '攻击同房间的目标' }] });
+    type(input, 'at');
+    const hint = row.querySelector('.chip-hint');
+    expect(hint?.textContent).toBe('攻击同房间的目标');
+  });
+});
