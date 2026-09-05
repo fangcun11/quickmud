@@ -51,7 +51,12 @@ export function createClickPolicy(
     if (!id) return { command: `look ${text}`, hint: `看看「${text}」` };
 
     const pos = world.getComponent(playerId, Position);
-    const inRoom = !!pos && world.hasRelation(id, Located, pos.roomId);
+    // 在脚下房间的两种活法：物品走 Located 关系，活物挂 Position（0.18 修复——
+    // 之前只查 Located，点狼永远进不了攻击分支）
+    const inRoom =
+      !!pos &&
+      (world.hasRelation(id, Located, pos.roomId) ||
+        world.getComponent(id, Position)?.roomId === pos.roomId);
     const heldByPlayer = world.hasRelation(id, Located, playerId);
 
     if (heldByPlayer) {

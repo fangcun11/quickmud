@@ -876,3 +876,42 @@ describe('侠客行沉浸支线 · 刷怪与游走钉住', () => {
     expect(world.getRelations(foe2, WanderHold).length).toBeGreaterThan(0); // 重新钉住
   });
 });
+
+
+// ============================================================
+// 0.18 战斗可读性：状态行 / 结算行 / attack 续打
+// ============================================================
+
+describe('侠客行沉浸支线 · 战斗可读性', () => {
+  it('每息交手后跟双方气血状态行（数字档去重）', async () => {
+    fresh();
+    await gotoWolves();
+    drain();
+    await run('attack 野狼');
+    drain();
+    world.tick(); // 一息交手：双方互扣 3（格挡）
+    const text = drain();
+    expect(text).toContain('（你 94/100 ┋ 野狼 19/25）'); // 手动一息 + 自动一息各扣 3
+  });
+
+  it('战斗中 attack 不带目标 = 续打当前对手', async () => {
+    fresh();
+    await gotoWolves();
+    drain();
+    await run('attack 野狼');
+    drain();
+    const cont = await run('attack');
+    expect(cont).toContain('直拳');
+  });
+
+  it('击杀有明确结算行（你击败了「野狼」！）', async () => {
+    fresh();
+    await gotoWolves();
+    const stats = world.getComponent(player, Stats)!;
+    stats.atk = 25;
+    stats.dodge = 4;
+    drain();
+    const out = (await run('attack 野狼')) + (await run('attack 野狼'));
+    expect(out).toContain('你击败了「野狼」！');
+  });
+});

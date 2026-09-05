@@ -18,7 +18,7 @@ import type { SnapshotData } from '@mud/ecs-engine';
 import { Health } from '@mud/prefabs';
 import { createSuggester } from '@mud/prefabs';
 import { createClickPolicy, createActionProvider } from './click';
-import { Energy, Purse } from './traits';
+import { Combat, Energy, Purse } from './traits';
 
 function main() {
   const { world, playerId, commands, directionWords } = bootstrap();
@@ -45,7 +45,7 @@ function main() {
     click: createClickPolicy(world, playerId),
     // 语境动作条（交互标注③）：输入框收起后的常用操作入口
     actions: () => createActionProvider(world, playerId),
-    // 提示符状态（xkx prompt 惯例）：输入行上方常驻气血/内力
+    // 提示符状态（xkx prompt 惯例）：输入行上方常驻气血/内力；战斗中加对手血量
     prompt: (pid) => {
       const hp = world.getComponent(pid, Health);
       const en = world.getComponent(pid, Energy);
@@ -55,6 +55,12 @@ function main() {
       if (hp) parts.push(`气血 ${hp.current}/${hp.max}`);
       if (en) parts.push(`内力 ${en.current}/${en.max}`);
       if (purse) parts.push(`碎银 ${purse.silver}`);
+      // 交战对手一眼可见（0.18 战斗可读性）
+      const combat = world.getComponent(pid, Combat);
+      if (combat?.foe) {
+        const foe = world.getComponent(combat.foe, Health);
+        if (foe) parts.push(`⚔${foe.current}/${foe.max}`);
+      }
       return parts.join(' · ');
     },
     persistence: {

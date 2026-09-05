@@ -178,6 +178,12 @@ export const WuxiaCombatSystem = defineSystem({
       ctx.output.narrative([
         { text: `「${targetName}」惨嚎一声，轰然倒地。`, style: { color: 'red', bold: true } },
       ]);
+      // 结算行（0.18 战斗可读性）：胜利是里程碑，黄色加粗给出明确终点
+      if (atkIsPlayer) {
+        ctx.output.narrative([
+          { text: `你击败了「${targetName}」！`, style: { color: 'yellow', bold: true } },
+        ]);
+      }
       // 击杀 → 玩家脱战（对方倒了）
       if (defIsPlayer === false) exitCombat(ctx, attacker);
       ctx.emit(Died, { entity: target, killer: attacker, roomId: tgtPos.roomId });

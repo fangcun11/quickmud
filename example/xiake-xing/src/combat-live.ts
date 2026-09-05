@@ -12,7 +12,7 @@
  */
 import { defineCommand, defineSystem } from '@mud/ecs-engine';
 import type { SystemContext, EntityId } from '@mud/ecs-engine';
-import { Attack, Health, Position, displayName, WanderHold } from '@mud/prefabs';
+import { Attack, Health, Position, displayName, WanderHold, resolveOccupantIn } from '@mud/prefabs';
 import { PlayerTag, Combat, Aggressive } from './traits';
 import { Disengaged } from './events';
 
@@ -37,6 +37,7 @@ export function exitCombat(ctx: SystemContext, entity: EntityId): void {
   const foe = combat.foe as EntityId;
   if (foe && ctx.getEntity(foe)) ctx.removeRelation(foe, WanderHold, entity);
   combat.foe = '';
+  combat.lastStatus = '';
 }
 
 /**
@@ -73,12 +74,28 @@ export const CombatRoundSystem = defineSystem({
         if (ctx.getEntity(combat.foe as EntityId)) {
           ctx.removeRelation(combat.foe as EntityId, WanderHold, id);
         }
+        if (foeHp && foeHp.current > 0) {
+          // 对手还活着只是不在眼前（玩家被拉开等）：明说，别让战斗无声消失
+          ctx.output.narrative(`「${displayName(ctx, combat.foe as EntityId)}」脱离了你的攻击范围，你收回了攻势。`);
+        }
         combat.foe = '';
+        combat.lastStatus = '';
         continue;
       }
 
       // 自动出招（走正常管线——招式选择/伤势/击杀/升层全由 WuxiaCombatSystem 处理）
       ctx.emit(Attack, { attacker: id, target: combat.foe as EntityId });
+
+      // 状态行（0.18 战斗可读性）：每息交手后报双方气血，数字没变不重刷
+      const meHp = ctx.getComponent(id, Health);
+      const foeNow = ctx.getComponent(combat.foe as EntityId, Health);
+      if (meHp && foeNow) {
+        const line = `（你 ${meHp.current}/${meHp.max} ┋ ${displayName(ctx, combat.foe as EntityId)} ${foeNow.current}/${foeNow.max}）`;
+        if (line !== combat.lastStatus) {
+          combat.lastStatus = line;
+          ctx.output.system(line);
+        }
+      }
     }
 
     // ---- Aggressive 接敌：同房的 Aggressive NPC → 自动进战斗 ----
@@ -114,6 +131,46 @@ export const DisengageCommand = defineCommand({
     const foeName = displayName(world, combat.foe as EntityId);
     world.emit(Disengaged, { entity: player });
     output.narrative(`你脱离了与「${foeName}」的战斗。`);
+    return null;
+  },
+});
+
+/**
+ * 攻击命令（侠客行版，0.18 战斗可读性）：替换 prefabs 的 AttackCommand——
+ * 战斗中 `attack` **不带目标 = 续打当前对手**（xkx 惯例：不必每次重复点名）；
+ * 带目标则照常解析（可换对手）。其余门控与 prefabs 版一致：
+ * 房间作用域解析、不许攻击自己、emit Attack 走统一结算管线。
+ */
+export const AttackCommand = defineCommand({
+  verbs: ['attack', 'kill', '攻击', '打'],
+  describe: '攻击（战斗中不带目标 = 继续打当前对手）',
+  args: { target: { type: 'optional_entity' } },
+  handle({ args, output, player, world }) {
+    const combat = world.getComponent(player, Combat);
+    // 续打：不带目标时直接用 foe 的实体 id——它不是名字，走解析反而查不到
+    if (!args.target) {
+      if (!combat?.foe) {
+        output.error('攻击谁？');
+        return null;
+      }
+      world.emit(Attack, { attacker: player, target: combat.foe as EntityId });
+      return null;
+    }
+    const pos = world.getComponent(player, Position);
+    if (!pos) {
+      output.error('你不在任何地方。');
+      return null;
+    }
+    const resolved = resolveOccupantIn(world, pos.roomId, args.target);
+    if (!resolved) {
+      output.error(`这里没有「${args.target}」。`);
+      return null;
+    }
+    if (resolved === player) {
+      output.error('你不能攻击自己。');
+      return null;
+    }
+    world.emit(Attack, { attacker: player, target: resolved });
     return null;
   },
 });

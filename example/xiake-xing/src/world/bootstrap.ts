@@ -45,7 +45,6 @@ import {
   BackCommand,
   TakeCommand,
   InventoryCommand,
-  AttackCommand,
   createDirectionCommand,
   // 组件
   Position,
@@ -117,7 +116,7 @@ import {
 import { AtmosphereSystem } from '../atmosphere';
 import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
 import { WolfSpawnSystem } from '../spawn';
-import { CombatRoundSystem, DisengageCommand } from '../combat-live';
+import { CombatRoundSystem, DisengageCommand, AttackCommand } from '../combat-live';
 import { PrayCommand } from '../pray';
 
 export interface BootstrapResult {
@@ -381,7 +380,7 @@ export function bootstrap(): BootstrapResult {
   });
   world.addComponent(playerId, Purse, { silver: 10 }); // 兜里几枚碎银
   world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
-  world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0 });
+  world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0, lastStatus: '' });
   world.addComponent(playerId, QuestLog, { active: {}, completed: [], turnedIn: [] });
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
   world.addComponent(playerId, Prayed, { done: false });

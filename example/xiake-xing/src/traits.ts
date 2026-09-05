@@ -104,6 +104,8 @@ export const ForSale = trait('for_sale', () => ({
 export const Combat = trait('combat', () => ({
   foe: '' as string,
   lastRoundAt: 0,
+  /** 上一条状态行文本（去重用——双方血量没变就不重刷） */
+  lastStatus: '',
 }));
 
 /** 主动攻击标记（0.14）：挂 NPC——同房有玩家则自动接敌（AggroSystem） */
