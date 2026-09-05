@@ -29,10 +29,10 @@ import {
   VisitationSystem,
   VerboseSystem,
   MiniMapSystem,
+  NpcWanderSystem,
   BacktrackSystem,
   ItemSystem,
   LootSystem,
-  DeathSystem,
   // 命令
   GoCommand,
   LookCommand,
@@ -57,6 +57,7 @@ import {
   Pose,
   MiniMap,
   Backtrack,
+  Wander,
   // 房间与区域
   defineRoom,
   defineArea,
@@ -91,6 +92,7 @@ import {
   MartialSystem,
 } from '../martial';
 import { AtmosphereSystem } from '../atmosphere';
+import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
 
 export interface BootstrapResult {
   world: World;
@@ -115,9 +117,11 @@ export function bootstrap(): BootstrapResult {
     VerboseSystem,
     ItemSystem,
     LootSystem,
-    DeathSystem,
     MiniMapSystem,
+    NpcWanderSystem,
     BacktrackSystem,
+    PresenceSystem,
+    PlayerAwareDeathSystem,
     MartialSystem,
     MeditationSystem,
     AtmosphereSystem,
@@ -342,6 +346,7 @@ export function bootstrap(): BootstrapResult {
     });
     // 姿态短语（xkx 身份感）：房间块的活体行会拼在名字后
     world.addComponent(id, Pose, { text: '压低前身，喉咙里滚出低低的呜声' });
+    world.addComponent(id, Wander); // 巡逻（每 3 息沿狼林出口游荡）
     world.addComponent(id, Position, { roomId: w.roomId });
     world.addComponent(id, Health, { current: 25, max: 25 });
     world.addComponent(id, Stats, { atk: 6, def: 1, dodge: 2 });

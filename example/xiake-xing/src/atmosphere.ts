@@ -9,7 +9,12 @@
  * 当前以块后独立行落地（priority 1，排在房间块 emitters 的 0 之后）。
  */
 import { defineSystem } from '@mud/ecs-engine';
-import { Area, Look, Moved, Position, shichenOf, weatherLabel, weatherOf } from '@mud/prefabs';
+import {
+  Area, Look, Moved, Position, isNight, shichenOf, weatherLabel, weatherOf,
+} from '@mud/prefabs';
+
+/** 狼林区域（夜嚎只在狼林听得到） */
+const WOODS_ROOMS = new Set(['woodsgate', 'thicket', 'den']);
 
 export const DAY_LENGTH_MS = 240_000;
 export const WEATHER_SEGMENT_MS = 60_000;
@@ -31,5 +36,10 @@ export const AtmosphereSystem = defineSystem({
     const shichen = shichenOf(event.timestamp, { dayLengthMs: DAY_LENGTH_MS });
     const kind = weatherOf(areaId, event.timestamp, { segmentMs: WEATHER_SEGMENT_MS });
     ctx.output.system(`时值${shichen}，${weatherLabel(kind)}。`);
+
+    // 夜狼嚎（0.14 沉浸钩子）：狼林 + 夜间三时辰 → 远处线索
+    if (WOODS_ROOMS.has(pos.roomId) && isNight(event.timestamp, { dayLengthMs: DAY_LENGTH_MS })) {
+      ctx.output.narrative('远处传来狼嚎。');
+    }
   },
 });

@@ -6,20 +6,21 @@ import { shichenOf, weatherOf, weatherLabel } from './atmosphere.js';
 
 describe('shichenOf', () => {
   it('默认刻度：一昼夜 4 分钟，12 时辰各 20 秒', () => {
-    expect(shichenOf(0)).toBe('子时');
-    expect(shichenOf(19_999)).toBe('子时');
-    expect(shichenOf(20_000)).toBe('丑时');
-    expect(shichenOf(120_000)).toBe('午时'); // 第 7 段
-    expect(shichenOf(239_999)).toBe('亥时');
-    expect(shichenOf(240_000)).toBe('子时'); // 翻日回子
+    // time=0 锚定卯时（清晨，与开场叙事一致）
+    expect(shichenOf(0)).toBe('卯时');
+    expect(shichenOf(19_999)).toBe('卯时');
+    expect(shichenOf(20_000)).toBe('辰时');
+    expect(shichenOf(120_000)).toBe('酉时'); // raw 6 → (6+3)%12 = 酉
+    expect(shichenOf(239_999)).toBe('寅时');
+    expect(shichenOf(240_000)).toBe('卯时'); // 翻日回卯
   });
 
   it('负数时间（回滚越过 0 的理论情形）也安全', () => {
-    expect(shichenOf(-1)).toBe('亥时');
+    expect(shichenOf(-1)).toBe('寅时');
   });
 
   it('自定义刻度', () => {
-    expect(shichenOf(1_500, { dayLengthMs: 12_000 })).toBe('丑时'); // 12s/12 段 = 1s 一时辰
+    expect(shichenOf(1_500, { dayLengthMs: 12_000 })).toBe('辰时'); // 12s/12 段 = 1s 一时辰
   });
 });
 

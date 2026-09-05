@@ -22,7 +22,8 @@ type FakeWorld = {
 function mountRenderer(opts?: {
   suggest?: (input: string) => string[];
   messages?: OutputMessage[];
-}): { renderer: WebRenderer; container: HTMLElement; execute: FakeWorld['execute']; row: HTMLElement; input: HTMLInputElement } {
+  prompt?: (playerId: string) => string | undefined;
+}): { renderer: WebRenderer; container: HTMLElement; execute: FakeWorld['execute']; row: HTMLElement; input: HTMLInputElement; status: HTMLElement } {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const execute = vi.fn(async () => null);
@@ -36,10 +37,12 @@ function mountRenderer(opts?: {
     world,
     playerId: 'player-1',
     suggest: opts?.suggest,
+    prompt: opts?.prompt,
   });
   const row = container.querySelector('#suggest-row') as HTMLElement;
   const input = container.querySelector('#cmd-input') as HTMLInputElement;
-  return { renderer, container, execute, row, input };
+  const status = container.querySelector('.mud-status-strip') as HTMLElement;
+  return { renderer, container, execute, row, input, status };
 }
 
 const press = (input: HTMLInputElement, key: string, init: KeyboardEventInit = {}) =>
@@ -218,5 +221,23 @@ describe('影子补全与候选说明（0.5 快速选择）', () => {
     type(input, 'at');
     const hint = row.querySelector('.chip-hint');
     expect(hint?.textContent).toBe('攻击同房间的目标');
+  });
+});
+
+describe('提示符状态（0.6,xkx prompt 惯例）', () => {
+  it('命令执行后刷新状态条;undefined 隐藏', async () => {
+    let text: string | undefined = '气血 82 · 内力 20';
+    const { input, status, execute } = mountRenderer({ prompt: () => text });
+    expect(status.style.display).toBe('block'); // 构造即求值（有文本）
+    type(input, 'look');
+    press(input, 'Enter');
+    await flush();
+    expect(status.textContent).toBe('气血 82 · 内力 20');
+    text = undefined;
+    type(input, 'look');
+    press(input, 'Enter');
+    await flush();
+    expect(status.style.display).toBe('none');
+    void execute;
   });
 });

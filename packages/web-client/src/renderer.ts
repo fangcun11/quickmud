@@ -57,7 +57,9 @@ export class WebRenderer {
   private suggestRowEl: HTMLElement;
   private world: RendererWorld;
   private playerId: string;
-  private suggestProvider?: (input: string) => string[];
+  private suggestProvider?: (input: string) => Array<string | { text: string; hint?: string }>;
+  private promptProvider?: (playerId: string) => string | undefined;
+  private statusEl: HTMLElement;
   private persistence?: RendererPersistence;
 
   // 输入历史（↑/↓ 召回；MUD 最高频的操作就是重复上一条）
@@ -86,6 +88,12 @@ export class WebRenderer {
      * 建议用 prefabs 的 createSuggester 生成。
      */
     suggest?: (input: string) => Array<string | { text: string; hint?: string }>;
+    /**
+     * 提示符状态（0.6，xkx prompt 惯例）：每次提示符出现时求值——
+     * 返回一行精简状态（如 `气血 82 · 内力 20`）渲染在输入行上方；
+     * 返回 undefined 则隐藏。非世界状态，只是玩家一览。
+     */
+    prompt?: (playerId: string) => string | undefined;
     /** 主题（0.4）：磷光绿（默认）/ 琥珀——设 <html data-theme>，样式在模板 CSS 变量里 */
     theme?: 'phosphor' | 'amber';
     /** 浏览器标签页标题（不传保持 HTML 模板默认） */
@@ -97,6 +105,8 @@ export class WebRenderer {
     this.world = config.world;
     this.playerId = config.playerId;
     this.suggestProvider = config.suggest;
+    this.suggestProvider = config.suggest;
+    this.promptProvider = config.prompt;
     this.persistence = config.persistence;
 
     if (config.title) {
@@ -113,9 +123,13 @@ export class WebRenderer {
     this.outputEl.id = 'output';
     this.container.appendChild(this.outputEl);
 
-    // 底部簇：命令建议条（有候选时才出现）+ 输入行
+    // 底部簇：状态条 + 命令建议条（有候选时才出现）+ 输入行
     const bottomWrap = document.createElement('div');
     bottomWrap.className = 'mud-bottom';
+
+    this.statusEl = document.createElement('div');
+    this.statusEl.className = 'mud-status-strip';
+    bottomWrap.appendChild(this.statusEl);
 
     this.suggestRowEl = document.createElement('div');
     this.suggestRowEl.id = 'suggest-row';
@@ -187,8 +201,9 @@ export class WebRenderer {
       this.inputEl.focus();
     });
 
-    // 初始聚焦
+    // 初始聚焦 + 状态条求值
     this.inputEl.focus();
+    this.updatePrompt();
 
     // 存档：启动时尝试读档（构造即恢复，世界随后就是"上次的样子"）
     if (this.persistence) {
@@ -345,6 +360,17 @@ export class WebRenderer {
       : '';
   }
 
+  /** 提示符状态刷新（prompt 回调求值；undefined 隐藏） */
+  private updatePrompt(): void {
+    const text = this.promptProvider?.(this.playerId);
+    if (text === undefined) {
+      this.statusEl.style.display = 'none';
+      return;
+    }
+    this.statusEl.textContent = text;
+    this.statusEl.style.display = 'block';
+  }
+
   private updateGhost(): void {
     const rest = this.ghostRemainder();
     if (!rest) {
@@ -486,7 +512,8 @@ export class WebRenderer {
     }
     this.world.output.clear();
 
-    // 存档 + 滚动
+    // 提示符状态 + 存档 + 滚动
+    this.updatePrompt();
     this.autosave();
     this.scrollToBottom();
   }
@@ -579,5 +606,6 @@ export class WebRenderer {
       kind: 'narrative',
       segments: [{ text: '' }],
     });
+    this.updatePrompt();
   }
 }

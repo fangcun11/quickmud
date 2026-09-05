@@ -51,6 +51,7 @@ import {
   Weapon,
   Wander,
   Loot,
+  Area,
   QuestGiver,
   QuestLog,
   Afflicted,
@@ -72,6 +73,7 @@ import {
 import { injuryWarning } from './vitals.js';
 import { queryRoomGate } from './behavior.js';
 import { directionLabel, layoutNeighborMiniMap } from './room.js';
+import { weatherOf } from './atmosphere.js';
 import { parseInlineMarkup } from '@mud/ecs-engine';
 
 /**
@@ -207,7 +209,7 @@ const INDENT = '　　';
  * 地上物**全列**（含拿不动的场景物，标注「（拿不动）」——能 look 到的东西
  * 不该在列示里隐身）。
  */
-function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): void {
+function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId, timestamp = 0): void {
   const name = ctx.getComponent(roomId, Name);
   const desc = ctx.getComponent(roomId, Description);
 
@@ -245,11 +247,22 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): 
     ]);
   }
 
-  // 同房活物（会动的 + 钉在房间的 NPC；不含查看者自己）——逐行，带姿态
+  // 同房活物（会动的 + 钉在房间的 NPC；不含查看者自己）——逐行，带姿态；
+  // 暴雪（0.14 玩法钩子）：雪盲——视线被雪遮住，只给氛围不给名单
   const others = occupantsIn(ctx, roomId).filter((id) => id !== viewer);
-  if (others.length + stationaryPersons.length > 0) {
-    emitOccupantLines(ctx, [...others, ...stationaryPersons]);
+  const occupants = [...others, ...stationaryPersons];
+  if (occupants.length > 0) {
+    if (weatherOf(areaIdOf(ctx, roomId), timestamp) === 'snow') {
+      ctx.output.system('大雪纷飞，你几乎看不清周围的动静。');
+    } else {
+      emitOccupantLines(ctx, occupants);
+    }
   }
+}
+
+/** 房间所属区域实体 id（无区域 → 房间自身 id，作天气种子） */
+function areaIdOf(ctx: SystemContext, roomId: EntityId): EntityId {
+  return ctx.getRelations(roomId, Area)[0] ?? roomId;
 }
 
 /**
@@ -378,7 +391,7 @@ export const MovementSystem = defineSystem({
     const seenBefore = ctx.getComponent(entity, Visited)?.rooms.includes(targetRoomId) ?? false;
     const fullDesc = !!desc && desc.text !== '' && (!seenBefore || ctx.getComponent(entity, Verbose)?.on === true);
     if (fullDesc) {
-      emitRoomBlock(ctx, targetRoomId, entity);
+      emitRoomBlock(ctx, targetRoomId, entity, event.timestamp);
     } else if (ctx.getComponent(targetRoomId, Short)?.text) {
       emitRoomBrief(ctx, targetRoomId, entity);
     } else {
@@ -501,7 +514,7 @@ export const DescriptionSystem = defineSystem({
     }
 
     // look = 重看一遍进房时的房间块（同一份输出，格式永不漂移）
-    emitRoomBlock(ctx, pos.roomId, entity);
+    emitRoomBlock(ctx, pos.roomId, entity, event.timestamp);
   },
 });
 
@@ -971,7 +984,10 @@ export const NpcWanderSystem = defineSystem({
       const dir = directions[round % directions.length]!;
       const to = exits![dir];
       if (!to || to === pos.roomId) continue;
+      const from = pos.roomId;
       pos.roomId = to;
+      // 移动事实广播 Moved（0.14）：进退场播报、场景系统从同一事件流感知世界
+      ctx.emit(Moved, { entity: npc, from, to, direction: dir });
     }
   },
 });

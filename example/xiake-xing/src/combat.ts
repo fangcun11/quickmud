@@ -16,7 +16,7 @@
  */
 import { defineCommand, defineSystem, Name, rich, yellow } from '@mud/ecs-engine';
 import type { Segment, SystemContext } from '@mud/ecs-engine';
-import { Attack, Died, Health, Position, Moved, displayName, injuryWarning } from '@mud/prefabs';
+import { Attack, Died, Health, Position, Moved, displayName, injuryWarning, isNight, weatherOf, Area } from '@mud/prefabs';
 import { Attacked, Fled, Strike } from './events';
 import { Stats, Retaliate, Trail, PlayerTag, Arsenal, Energy } from './traits';
 import { ARTS } from './arts';
@@ -123,10 +123,15 @@ export const WuxiaCombatSystem = defineSystem({
       }
     }
 
-    // ---- 纯公式三态（mult 进伤害式） ----
+    // ---- 纯公式三态（mult 进伤害式）+ 玩法钩子（0.14） ----
+    // 夜间（戌/亥/子）：野兽出没更凶（狼 atk+1）；雨天：出手打滑（攻方身法-1）
+    const timestamp = event.timestamp;
+    const nightBoost = isNight(timestamp) && ctx.getComponent(attacker, Retaliate) ? 1 : 0;
+    const areaId = ctx.getRelations(tgtPos.roomId, Area)[0] ?? tgtPos.roomId;
+    const slippery = weatherOf(areaId, timestamp) === 'rain' ? 1 : 0;
     const atkStats = ctx.getComponent(attacker, Stats);
     const defStats = ctx.getComponent(target, Stats);
-    const diff = (atkStats?.dodge ?? 0) - (defStats?.dodge ?? 0);
+    const diff = (atkStats?.dodge ?? 0) - slippery - (defStats?.dodge ?? 0);
     const result = diff >= 2 ? 'hit' : diff >= -1 ? 'blocked' : 'dodged';
 
     const targetName = displayName(ctx, target);
@@ -142,7 +147,8 @@ export const WuxiaCombatSystem = defineSystem({
       return;
     }
 
-    let damage = Math.max(1, Math.round((atkStats?.atk ?? 1) * mult - (defStats?.def ?? 0)));
+    const atkPower = (atkStats?.atk ?? 1) + nightBoost;
+    let damage = Math.max(1, Math.round(atkPower * mult - (defStats?.def ?? 0)));
     if (result === 'blocked') damage = Math.max(1, Math.round(damage * 0.7));
 
     const before = hp.current;

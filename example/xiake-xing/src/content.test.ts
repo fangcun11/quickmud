@@ -145,7 +145,9 @@ describe('侠客行 M0 · 三区域骨架', () => {
 import { Name } from '@mud/ecs-engine';
 import { Health, itemsInContainer } from '@mud/prefabs';
 import { Energy, Stats, Cultivating, Retaliate, Arsenal, Channeling } from './traits';
-import { Area, shichenOf, weatherLabel, weatherOf } from '@mud/prefabs';
+import {
+  Area, Health, Wander, isNight, shichenOf, weatherLabel, weatherOf,
+} from '@mud/prefabs';
 
 function fresh(): void {
   const b = bootstrap();
@@ -437,5 +439,134 @@ describe('侠客行 M2 · 武学与秘籍', () => {
     const learn = await run('learn 剑谱'); // 狼在身边 → 战斗中无法读书
     expect(learn).toContain('战斗中无法静心读书');
     // 脱战后（原路折回到武馆方向）即可读书（没秘籍会另说——门控先行）
+  });
+});
+
+// ============================================================
+// 沉浸支线（0.14）：狼巡逻/进退场播报/夜狼/雨滑/雪盲/夜嚎/死亡重生
+// ============================================================
+
+function drainText(): string {
+  return drain();
+}
+
+describe('侠客行沉浸支线 · 世界活着', () => {
+  it('狼巡逻：沿狼林三房轮换，不出界；进出玩家房间有播报', async () => {
+    fresh();
+    await gotoWolves(); // 玩家在 thicket，狼-1 也在 thicket
+    expect(world.getComponent('wolf-1', Position)!.roomId).toBe('thicket');
+    drain();
+    // wander every:3000 → 网格首触在第 3 个 tick（round1,dir=south）：狼 thicket→den（玩家房离开）
+    world.tick();
+    world.tick();
+    world.tick();
+    expect(drainText()).toContain('往南离开了');
+    expect(world.getComponent('wolf-1', Position)!.roomId).toBe('den');
+    for (let i = 0; i < 6; i++) world.tick();
+    drain();
+    // bounded：狼不出狼林三房
+    expect(['woodsgate', 'thicket', 'den']).toContain(world.getComponent('wolf-1', Position)!.roomId);
+  });
+
+  it('狼回到玩家房间 → 「从北面走了进来」', async () => {
+    fresh();
+    await gotoWolves();
+    drain();
+    world.tick(); // 狼去 woodsgate（r0 north）
+    drain();
+    world.tick(); // r0 仍 north?——exits 顺序轮换按 round;woodsgate round0 north→fringe 越界原地
+    world.tick();
+    drain();
+    world.tick();
+    drain();
+    // 轮换推进后狼总会折返 thicket;找到回场播报
+    let seen = drainText();
+    for (let i = 0; i < 8 && !seen.includes('走了进来'); i++) {
+      world.tick();
+      seen = drainText();
+    }
+    expect(seen).toContain('走了进来');
+  });
+
+  it('夜间狼更凶：伤害 3 → 4', async () => {
+    fresh();
+    // 造一只伴身狼（无 Wander,不乱跑;时间推到夜:raw 7 = 140s,戌时）
+    const wolf = world.entities.createWithId('test-wolf');
+    world.addComponent(wolf, Name, { text: '灰狼', aliases: [] });
+    world.addComponent(wolf, Retaliate);
+    world.addComponent(wolf, Stats, { atk: 6, def: 2, dodge: 2 });
+    world.addComponent(wolf, Health, { current: 50, max: 50 });
+    world.addComponent(wolf, Position, { roomId: 'inn' });
+    for (let i = 0; i < 140; i++) world.tick(); // t=140s → 戌时(夜)
+    const hit = await run('attack 灰狼');
+    // 玩家直拳:(5−2)×0.7 → 2;狼的**还手**带夜加成:(6+1−2)×0.7 → 4
+    expect(hit).toContain('「灰狼」全力出手，被你格挡，只造成 4 点伤害');
+  });
+
+  it('雨天打滑：命中降档（hit → blocked）', async () => {
+    fresh();
+    // 找 woods 区域最近的 rain 时段,tick 到位
+    const areaId = world.getRelations('inn', Area)[0] ?? 'inn';
+    let rainTime = 0;
+    for (let slot = 0; slot < 64; slot++) {
+      if (weatherOf(areaId, slot * 60_000) === 'rain') { rainTime = slot * 60_000; break; }
+    }
+    const wolf = world.entities.createWithId('test-wolf');
+    world.addComponent(wolf, Name, { text: '灰狼', aliases: [] });
+    world.addComponent(wolf, Retaliate);
+    world.addComponent(wolf, Stats, { atk: 6, def: 2, dodge: 2 });
+    world.addComponent(wolf, Health, { current: 200, max: 200 });
+    world.addComponent(wolf, Position, { roomId: 'inn' });
+    world.getComponent(player, Stats)!.dodge = 4; // 白天 diff+2 → 命中
+    drain();
+    const hit = await run('attack 灰狼');
+    expect(hit).toContain('命中');
+    for (let i = 0; i < rainTime / 1000; i++) world.tick();
+    drain();
+    const wet = await run('attack 灰狼');
+    expect(wet).toContain('格挡'); // 攻方身法-1 → diff 降档
+  });
+
+  it('雪盲：大雪时活体名单隐去', async () => {
+    fresh();
+    // 造一只伴身狼（雪盲只对“有活物的房间”有意义）
+    const wolf = world.entities.createWithId('test-wolf');
+    world.addComponent(wolf, Name, { text: '灰狼', aliases: [] });
+    world.addComponent(wolf, Health, { current: 50, max: 50 });
+    world.addComponent(wolf, Position, { roomId: 'inn' });
+    const areaId = world.getRelations('inn', Area)[0] ?? 'inn';
+    let snowTime = 0;
+    for (let slot = 0; slot < 64; slot++) {
+      if (weatherOf(areaId, slot * 60_000) === 'snow') { snowTime = slot * 60_000; break; }
+    }
+    for (let i = 0; i < snowTime / 1000; i++) world.tick();
+    const out = await run('look');
+    expect(out).toContain('大雪纷飞');
+    expect(out).not.toContain('灰狼'); // 名单被雪遮住
+  });
+
+  it('夜嚎：狼林夜间追加远处狼嚎', async () => {
+    fresh();
+    await gotoWolves();
+    for (let i = 0; i < 150; i++) world.tick(); // 推进到 150s → 戌时(夜,raw 7)
+    drain();
+    const out = await run('look');
+    expect(out).toContain('远处传来狼嚎');
+  });
+
+  it('死亡重生：黑屏文案 → 客栈醒来，生命回满内力清零，来路清空', async () => {
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Health)!.current = 6; // 三口就倒
+    world.getComponent(player, Energy)!.current = 50;
+    drain();
+    // 玩家攻击(狼还手)互相磨:玩家 6 血,狼咬 blocked 3/次 → 两次还手后倒
+    await run('attack 野狼');
+    const out = await run('attack 野狼');
+    expect(out + drainText()).toContain('眼前一黑');
+    expect(pos()).toBe('inn');
+    expect(hp()).toBe(100);
+    expect(energy().current).toBe(0);
+    expect(await run('回')).toContain('没有来路'); // 来路已断
   });
 });

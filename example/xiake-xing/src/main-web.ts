@@ -15,7 +15,9 @@
 import { bootstrap } from './world/bootstrap';
 import { WebRenderer } from '@mud/web-client';
 import type { SnapshotData } from '@mud/ecs-engine';
+import { Health } from '@mud/prefabs';
 import { createSuggester } from '@mud/prefabs';
+import { Energy } from './traits';
 
 function main() {
   const { world, playerId, commands, directionWords } = bootstrap();
@@ -38,10 +40,20 @@ function main() {
     playerId,
     title: '侠客行',
     suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
+    // 提示符状态（xkx prompt 惯例）：输入行上方常驻气血/内力
+    prompt: (pid) => {
+      const hp = world.getComponent(pid, Health);
+      const en = world.getComponent(pid, Energy);
+      if (!hp && !en) return undefined;
+      const parts: string[] = [];
+      if (hp) parts.push(`气血 ${hp.current}/${hp.max}`);
+      if (en) parts.push(`内力 ${en.current}/${en.max}`);
+      return parts.join(' · ');
+    },
     persistence: {
       // :m2 后缀作废旧档——M2 加了 Arsenal/Channeling/来路栈与招式体系，
       // 旧快照恢复出来的世界缺这些新内容（内容升级直接重开，不做迁移）
-      key: 'save:xiake-xing:m2',
+      key: 'save:xiake-xing:m2b',
       capture: () => world.createSnapshot(),
       restore: (snapshot) => world.rollbackWorld(snapshot as SnapshotData),
     },

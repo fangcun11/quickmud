@@ -10,6 +10,12 @@
  */
 export const SHICHEN_NAMES = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'] as const;
 
+/**
+ * 开局偏移：time=0 对应**卯时**（清晨）——与开场叙事（晨光）一致，开局是白天。
+ * 十二时辰序不变，只是把 time=0 锚在卯上。
+ */
+const SHICHEN_OFFSET = 3;
+
 export interface ShichenOptions {
   /** 一昼夜的现实时长（毫秒）；默认 240_000（4 分钟 = 12 时辰 × 20 秒） */
   dayLengthMs?: number;
@@ -19,7 +25,7 @@ export interface ShichenOptions {
 export function shichenOf(timeMs: number, options?: ShichenOptions): string {
   const day = options?.dayLengthMs ?? 240_000;
   const index = Math.floor(((timeMs % day) + day) % day / (day / 12));
-  return `${SHICHEN_NAMES[index]}时`;
+  return `${SHICHEN_NAMES[(index + SHICHEN_OFFSET) % 12]}时`;
 }
 
 export type WeatherKind = 'clear' | 'rain' | 'snow' | 'mist';
@@ -33,6 +39,14 @@ const WEATHER_LABELS: Record<WeatherKind, string> = {
 
 export function weatherLabel(kind: WeatherKind): string {
   return WEATHER_LABELS[kind];
+}
+
+/** 夜间判定（戌/亥/子三时辰）——夜狼、星象类玩法钩子的共享判据 */
+const NIGHT_INDEX = new Set([10, 11, 0]); // 偏移后序：戌(10)/亥(11)/子(0)
+export function isNight(timeMs: number, options?: ShichenOptions): boolean {
+  const day = options?.dayLengthMs ?? 240_000;
+  const index = Math.floor(((timeMs % day) + day) % day / (day / 12));
+  return NIGHT_INDEX.has((index + SHICHEN_OFFSET) % 12);
 }
 
 export interface WeatherOptions {
