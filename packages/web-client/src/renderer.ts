@@ -36,6 +36,19 @@ export interface WelcomeOptions {
 }
 
 /**
+ * 点击动作（交互标注②）：策略表返回什么，点击就做什么。
+ * 命令一律编译回命令层走 execute——与打字同管线（录像/help/建议零漂移）。
+ */
+export interface ClickAction {
+  /** 要执行的命令 */
+  command: string;
+  /** run=直接执行（默认，安全动词）；prefill=只预填输入框等玩家确认（危险动词用） */
+  mode?: 'run' | 'prefill';
+  /** hover 提示（不传显示命令本身） */
+  hint?: string;
+}
+
+/**
  * Web 渲染器 - 将 OutputMessage 转为 DOM
  *
  * 职责：
@@ -59,6 +72,7 @@ export class WebRenderer {
   private playerId: string;
   private suggestProvider?: (input: string) => Array<string | { text: string; hint?: string }>;
   private promptProvider?: (playerId: string) => string | undefined;
+  private clickPolicy?: (seg: Segment) => ClickAction | null;
   private statusEl: HTMLElement;
   private persistence?: RendererPersistence;
 
@@ -100,13 +114,21 @@ export class WebRenderer {
     title?: string;
     /** 存档接线（不传 = 无存档，刷新即重开） */
     persistence?: RendererPersistence;
+    /**
+     * 点击策略（可选，游戏侧注入）：tag→命令 的分发表。入参是输出段，
+     * 返回 `{ command, mode?, hint? }` 或 null（不可点）。
+     * 游戏侧有世界知识（ForSale/Portable/Located），按语境选动词：
+     * 出口方向→go、铺面商品→buy、地上物→take、敌怪→prefill attack 等。
+     * 不传用内置兜底（实体名点击 = look，维持旧行为）。
+     */
+    click?: (seg: Segment) => ClickAction | null;
   }) {
     this.container = config.container;
     this.world = config.world;
     this.playerId = config.playerId;
     this.suggestProvider = config.suggest;
-    this.suggestProvider = config.suggest;
     this.promptProvider = config.prompt;
+    this.clickPolicy = config.click;
     this.persistence = config.persistence;
 
     if (config.title) {
@@ -561,22 +583,42 @@ export class WebRenderer {
       }
       if (seg.style.bold) span.classList.add('mud-bold');
       if (seg.style.italic) span.classList.add('mud-italic');
+    }
 
-      // 标签样式：实体名可点击（= look 该实体），不是假 affordance
-      if (seg.style.tag === 'entity') {
-        span.classList.add('mud-entity');
-        span.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const name = seg.text.trim();
-          if (name) {
-            this.inputEl.focus();
-            void this.runCommand(`look ${name}`);
-          }
-        });
-      }
+    // 交互标注：策略表给的动作用可点击样式呈现（= 真 affordance，
+    // 不是假链接——点击执行的命令与打字完全同管线）
+    const action = this.clickActionFor(seg);
+    if (action) {
+      if (seg.style?.tag === 'entity') span.classList.add('mud-entity');
+      else if (seg.style?.tag === 'direction') span.classList.add('mud-direction');
+      span.title = action.hint ?? action.command;
+      span.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (action.mode === 'prefill') {
+          // 危险动词：只预填，等玩家按回车确认
+          this.inputEl.value = action.command;
+          this.inputEl.focus();
+          return;
+        }
+        this.inputEl.focus();
+        void this.runCommand(action.command);
+      });
     }
 
     return span;
+  }
+
+  /**
+   * 点击策略解析：游戏侧注入优先；未注入时内置兜底——
+   * 实体名点击 = look（v0.4 起的旧行为），方向段不可点。
+   */
+  private clickActionFor(seg: Segment): ClickAction | null {
+    if (this.clickPolicy) return this.clickPolicy(seg);
+    if (seg.style?.tag === 'entity') {
+      const name = seg.text.trim();
+      return name ? { command: `look ${name}`, hint: `看看「${name}」` } : null;
+    }
+    return null;
   }
 
   /**

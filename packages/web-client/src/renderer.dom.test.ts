@@ -23,6 +23,7 @@ function mountRenderer(opts?: {
   suggest?: (input: string) => string[];
   messages?: OutputMessage[];
   prompt?: (playerId: string) => string | undefined;
+  click?: (seg: { text: string; style?: { tag?: string }; entityRef?: string }) => { command: string; mode?: 'run' | 'prefill'; hint?: string } | null;
 }): { renderer: WebRenderer; container: HTMLElement; execute: FakeWorld['execute']; row: HTMLElement; input: HTMLInputElement; status: HTMLElement } {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -38,6 +39,8 @@ function mountRenderer(opts?: {
     playerId: 'player-1',
     suggest: opts?.suggest,
     prompt: opts?.prompt,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    click: opts?.click as any,
   });
   const row = container.querySelector('#suggest-row') as HTMLElement;
   const input = container.querySelector('#cmd-input') as HTMLInputElement;
@@ -194,6 +197,54 @@ describe('中文 IME 与既有行为', () => {
     tag.click();
     await flush();
     expect(execute).toHaveBeenLastCalledWith('look 野狼', 'player-1');
+  });
+});
+
+describe('点击策略表（交互标注②：tag→命令分发 + 危险预填）', () => {
+  it('策略注入：出口方向点击 = go；hover title = 策略给的提示', async () => {
+    const { renderer, container, execute } = mountRenderer({
+      messages: [{ kind: 'narrative', segments: [{ text: '北', style: { tag: 'direction' } }] }],
+      click: (seg) =>
+        seg.style?.tag === 'direction'
+          ? { command: 'go north', hint: '往北走' }
+          : null,
+    });
+    await renderer.runCommand('x');
+    const dir = container.querySelector('.mud-direction') as HTMLElement;
+    expect(dir).toBeTruthy();
+    expect(dir.title).toBe('往北走');
+    dir.click();
+    await flush();
+    expect(execute).toHaveBeenLastCalledWith('go north', 'player-1');
+  });
+
+  it('危险动词 mode:prefill → 只预填输入框不执行，回车才走', async () => {
+    const { renderer, container, execute, input } = mountRenderer({
+      messages: [{ kind: 'narrative', segments: [{ text: '野狼', style: { tag: 'entity' } }] }],
+      click: () => ({ command: 'attack 野狼', mode: 'prefill' }),
+    });
+    await renderer.runCommand('x');
+    const tag = container.querySelector('.mud-entity') as HTMLElement;
+    tag.click();
+    await flush();
+    expect(execute).not.toHaveBeenCalledWith('attack 野狼', 'player-1');
+    expect(input.value).toBe('attack 野狼');
+    // 玩家按回车 → 执行预填的命令
+    press(input, 'Enter');
+    await flush();
+    expect(execute).toHaveBeenLastCalledWith('attack 野狼', 'player-1');
+  });
+
+  it('策略返回 null 的段不可点（无交互类与事件）', async () => {
+    const { renderer, container, execute } = mountRenderer({
+      messages: [{ kind: 'narrative', segments: [{ text: '旁白', style: { tag: 'keyword' } }] }],
+      click: () => null,
+    });
+    await renderer.runCommand('x');
+    const span = container.querySelector('.output-line span') as HTMLElement;
+    span.click();
+    await flush();
+    expect(execute).toHaveBeenCalledTimes(1); // 只有 runCommand('x') 那一次
   });
 });
 

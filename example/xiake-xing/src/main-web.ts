@@ -17,6 +17,7 @@ import { WebRenderer } from '@mud/web-client';
 import type { SnapshotData } from '@mud/ecs-engine';
 import { Health } from '@mud/prefabs';
 import { createSuggester } from '@mud/prefabs';
+import { createClickPolicy } from './click';
 import { Energy, Purse } from './traits';
 
 function main() {
@@ -40,6 +41,8 @@ function main() {
     playerId,
     title: '侠客行',
     suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
+    // 点击策略（交互标注②）：出口=走、商品=买、地上物=拿、敌怪=预填攻击
+    click: createClickPolicy(world, playerId),
     // 提示符状态（xkx prompt 惯例）：输入行上方常驻气血/内力
     prompt: (pid) => {
       const hp = world.getComponent(pid, Health);

@@ -64,6 +64,14 @@ export function directionLabel(dir: string): string {
   return DIRECTION_LABELS[dir] ?? dir;
 }
 
+/** 中文名反查方向 id（北 → north）——出口文本可点击时翻译回机器真相用 */
+export function directionFromLabel(label: string): string | undefined {
+  for (const [dir, text] of Object.entries(DIRECTION_LABELS)) {
+    if (text === label) return dir;
+  }
+  return undefined;
+}
+
 export type { RoomDef };
 
 /** 平面推断的节点：id + 出口 + 可选显式坐标 */
