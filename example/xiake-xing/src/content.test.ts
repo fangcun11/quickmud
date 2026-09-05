@@ -883,15 +883,14 @@ describe('侠客行沉浸支线 · 刷怪与游走钉住', () => {
 // ============================================================
 
 describe('侠客行沉浸支线 · 战斗可读性', () => {
-  it('每息交手后跟双方气血状态行（数字档去重）', async () => {
+  it('被击行句尾跟被打者的气血（xkx 式，谁掉血谁报数）', async () => {
     fresh();
     await gotoWolves();
     drain();
-    await run('attack 野狼');
-    drain();
-    world.tick(); // 一息交手：双方互扣 3（格挡）
-    const text = drain();
-    expect(text).toContain('（你 94/100 ┋ 野狼 19/25）'); // 手动一息 + 自动一息各扣 3
+    const out = await run('attack 野狼');
+    // 你打狼一句带狼的血，狼还手一句带你的血
+    expect(out).toContain('只造成 3 点伤害。（气血：22/25）');
+    expect(out).toContain('被你格挡，只造成 3 点伤害。（气血：97/100）');
   });
 
   it('战斗中 attack 不带目标 = 续打当前对手', async () => {

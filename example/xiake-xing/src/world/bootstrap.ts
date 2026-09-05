@@ -380,7 +380,7 @@ export function bootstrap(): BootstrapResult {
   });
   world.addComponent(playerId, Purse, { silver: 10 }); // 兜里几枚碎银
   world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
-  world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0, lastStatus: '' });
+  world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0 });
   world.addComponent(playerId, QuestLog, { active: {}, completed: [], turnedIn: [] });
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
   world.addComponent(playerId, Prayed, { done: false });

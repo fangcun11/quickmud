@@ -37,7 +37,6 @@ export function exitCombat(ctx: SystemContext, entity: EntityId): void {
   const foe = combat.foe as EntityId;
   if (foe && ctx.getEntity(foe)) ctx.removeRelation(foe, WanderHold, entity);
   combat.foe = '';
-  combat.lastStatus = '';
 }
 
 /**
@@ -79,23 +78,12 @@ export const CombatRoundSystem = defineSystem({
           ctx.output.narrative(`「${displayName(ctx, combat.foe as EntityId)}」脱离了你的攻击范围，你收回了攻势。`);
         }
         combat.foe = '';
-        combat.lastStatus = '';
         continue;
       }
 
       // 自动出招（走正常管线——招式选择/伤势/击杀/升层全由 WuxiaCombatSystem 处理）
+      // 气血直接跟在被击行的句尾（combat.ts），不再单开状态行
       ctx.emit(Attack, { attacker: id, target: combat.foe as EntityId });
-
-      // 状态行（0.18 战斗可读性）：每息交手后报双方气血，数字没变不重刷
-      const meHp = ctx.getComponent(id, Health);
-      const foeNow = ctx.getComponent(combat.foe as EntityId, Health);
-      if (meHp && foeNow) {
-        const line = `（你 ${meHp.current}/${meHp.max} ┋ ${displayName(ctx, combat.foe as EntityId)} ${foeNow.current}/${foeNow.max}）`;
-        if (line !== combat.lastStatus) {
-          combat.lastStatus = line;
-          ctx.output.system(line);
-        }
-      }
     }
 
     // ---- Aggressive 接敌：同房的 Aggressive NPC → 自动进战斗 ----

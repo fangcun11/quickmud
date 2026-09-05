@@ -54,7 +54,7 @@ function combatLine(
   result: 'hit' | 'blocked' | 'dodged',
   damage: number,
   moveName?: string,
-): Segment[] | string {
+): Segment[] {
   const ATK = atk === '你' ? '你' : `「${atk}」`;
   const DEF = def === '你' ? '你' : `「${def}」`;
   // xkx 惯例：每回合报招式名（黄色标注，rich 模板）
@@ -147,7 +147,9 @@ export const WuxiaCombatSystem = defineSystem({
     const defLabel = defIsPlayer ? '你' : targetName;
 
     if (result === 'dodged') {
-      ctx.output.narrative(combatLine(atkLabel, defLabel, 'dodged', 0, moveName));
+      const line = combatLine(atkLabel, defLabel, 'dodged', 0, moveName);
+      line.push({ text: `（气血：${hp.current}/${hp.max}）`, style: { color: 'gray' } });
+      ctx.output.narrative(line);
       ctx.emit(Attacked, { attacker, target, damage: 0, result });
       return;
     }
@@ -158,7 +160,10 @@ export const WuxiaCombatSystem = defineSystem({
 
     const before = hp.current;
     hp.current = Math.max(0, hp.current - damage);
-    ctx.output.narrative(combatLine(atkLabel, defLabel, result, damage, moveName));
+    // 气血随被击者走（0.18 战斗可读性）：谁掉血，谁的余量跟在句尾
+    const line = combatLine(atkLabel, defLabel, result, damage, moveName);
+    line.push({ text: `（气血：${hp.current}/${hp.max}）`, style: { color: 'gray' } });
+    ctx.output.narrative(line);
 
     // 伤势警示（P2）：被打者掉档才出现（黄=轻伤、红=危急）
     const warn = injuryWarning(before, hp.current, hp.max, {
