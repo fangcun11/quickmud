@@ -112,6 +112,7 @@ import {
 } from '../shop';
 import { AtmosphereSystem } from '../atmosphere';
 import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
+import { WolfSpawnSystem } from '../spawn';
 import { CombatRoundSystem, DisengageCommand } from '../combat-live';
 
 export interface BootstrapResult {
@@ -140,6 +141,7 @@ export function bootstrap(): BootstrapResult {
     MiniMapSystem,
     NpcWanderSystem,
     CombatRoundSystem,
+    WolfSpawnSystem,
     BacktrackSystem,
     PresenceSystem,
     PlayerAwareDeathSystem,

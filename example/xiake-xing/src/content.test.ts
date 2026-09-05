@@ -526,7 +526,11 @@ describe('侠客行沉浸支线 · 世界活着', () => {
   it('夜嚎：狼林夜间追加远处狼嚎', async () => {
     fresh();
     await gotoWolves();
-    for (let i = 0; i < 150; i++) world.tick(); // 推进到 150s → 戌时(夜,raw 7)
+    // 移除狼的 Aggressive（否则巡逻+接敌 150 tick 内玩家必死）
+    for (const id of world.findByComponent(Aggressive)) {
+      world.removeComponent(id, Aggressive);
+    }
+    for (let i = 0; i < 150; i++) world.tick(); // 推进到 150s → 戌时(夜)
     drain();
     const out = await run('look');
     expect(out).toContain('远处传来狼嚎');
