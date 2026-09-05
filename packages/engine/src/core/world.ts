@@ -333,6 +333,7 @@ export class World {
         hasRelation: (id, rel, target) => this.entities.hasRelation(id, rel, target),
         findRelated: (rel, target) => this.entities.findRelated(rel, target),
         findEntity: (name: string) => this.findEntityByName(name),
+        listCommands: () => this.listCommands(),
       },
     };
 
@@ -551,7 +552,7 @@ export class World {
       for (const [key, def] of Object.entries(cmd.args ?? {})) {
         args[key] = { type: (def as ArgumentDefinition).type };
       }
-      out.push({ verbs: [...cmd.verbs], abbrev: [...(cmd.abbrev ?? [])], args });
+      out.push({ verbs: [...cmd.verbs], abbrev: [...(cmd.abbrev ?? [])], describe: cmd.describe, args });
     }
     return out;
   }

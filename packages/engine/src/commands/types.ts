@@ -42,6 +42,8 @@ export interface CommandDefinition<
 > {
   /** 动词列表（支持多语言） */
   verbs: string[];
+  /** 一句话用法说明（help 自动归集渲染；定义期 fail-fast 校验） */
+  describe: string;
   /** 缩写列表 */
   abbrev?: string[];
   /** 参数定义 */
@@ -75,6 +77,8 @@ export type AnyCommand = CommandDefinition<any>;
 export interface CommandMeta {
   verbs: readonly string[];
   abbrev: readonly string[];
+  /** 一句话用法说明（help 自动归集渲染） */
+  describe: string;
   /** 参数名 → 参数类型名（entity/optional_entity/direction/word/rest） */
   args: Readonly<Record<string, { type: 'entity' | 'optional_entity' | 'direction' | 'word' | 'rest' }>>;
 }
@@ -120,5 +124,7 @@ export interface CommandContext<
     /** 反查"谁指向 target"（索引，创建序） */
     findRelated: (rel: RelationDefinition, target: EntityId) => EntityId[];
     findEntity: (name: string) => EntityId | undefined;
+    /** 注册命令的只读元数据（help 自动归集等宿主用） */
+    listCommands: () => CommandMeta[];
   };
 }

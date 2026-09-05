@@ -16,6 +16,7 @@ export function createDialogueCommands(): AnyCommand[] {
   return [
     defineCommand({
       verbs: ['talk', 'ask', '说', '对话'],
+      describe: '与 NPC 对话（talk 酒保；选项用 talk 酒保 1）',
       args: {
         npc: { type: 'entity' },
         option: { type: 'word' },

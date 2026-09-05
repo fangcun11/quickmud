@@ -220,6 +220,7 @@ describe('三层同名', () => {
 
   it('命令侧 world 只读三件可用', async () => {
     const WhoCmd = defineCommand({
+    describe: '测试用命令',
       verbs: ['who'],
       args: { name: { type: 'word' } },
       handle({ args, world, output }) {

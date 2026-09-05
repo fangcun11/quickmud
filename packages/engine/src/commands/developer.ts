@@ -84,6 +84,7 @@ export const DeveloperEffectSystem = defineSystem({
 export function createDeveloperCommands(): AnyCommand[] {
   const TpCommand = defineCommand({
     verbs: ['/tp', '/teleport', '//tp'],
+    describe: '开发者：传送到指定房间（/tp <roomId>）',
     args: { room: { type: 'word' } },
     handle({ args, player, world }) {
       const pos = world.getComponent(player, PositionRef);
@@ -96,6 +97,7 @@ export function createDeveloperCommands(): AnyCommand[] {
 
   const HealCommand = defineCommand({
     verbs: ['/heal', '//heal'],
+    describe: '开发者：满血治疗（/heal [targetName]，缺省自己）',
     args: { target: { type: 'optional_entity' } },
     handle({ args, player, world }) {
       const targetId = (args.target && world.findEntity(args.target)) || player;
@@ -110,6 +112,7 @@ export function createDeveloperCommands(): AnyCommand[] {
 
   const DevHelpCommand = defineCommand({
     verbs: ['/dev-help', '//h'],
+    describe: '开发者：列出开发者命令（/tp /heal）',
     handle() {
       return [
         '开发者命令（组件命名约定：position/health）：',

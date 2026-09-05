@@ -84,6 +84,7 @@ function buildWorld(seed: number) {
   const clock = new ManualClock();
 
   const Attack = defineCommand({
+    describe: '测试用命令',
     verbs: ['attack'],
     args: { target: { type: 'word' } },
     handle({ args, player, world }) {
@@ -98,6 +99,7 @@ function buildWorld(seed: number) {
   });
 
   const Rest = defineCommand({
+    describe: '测试用命令',
     verbs: ['rest'],
     handle({ player, world }) {
       world.emit(Heal.token, { target: player, amount: 8 });

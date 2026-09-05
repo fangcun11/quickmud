@@ -174,6 +174,7 @@ describe('MUD Engine', () => {
     });
 
     const probe = defineCommand({
+    describe: '测试用命令',
       verbs: ['probe'],
       handle({ world }) {
         return world.findEntity('酒保') ? 'FOUND' : 'NOT_FOUND';
@@ -189,6 +190,7 @@ describe('MUD Engine', () => {
   it('P0-2: 异步命令的返回值不丢失', async () => {
     const w = createTestWorld();
     const AsyncCmd = defineCommand({
+    describe: '测试用命令',
       verbs: ['asyncmd'],
       handle: async () => '异步命令的反馈文本',
     });
@@ -200,8 +202,8 @@ describe('MUD Engine', () => {
 
   it('P0-3: 同动词命令注册冲突应显式报错', () => {
     const w = createTestWorld();
-    const A = defineCommand({ verbs: ['l'], handle: () => 'A' });
-    const B = defineCommand({ verbs: ['look', 'l'], handle: () => 'B' });
+    const A = defineCommand({ describe: '测试用命令', verbs: ['l'], handle: () => 'A' });
+    const B = defineCommand({ describe: '测试用命令', verbs: ['look', 'l'], handle: () => 'B' });
 
     w.world.registerCommands(A);
     // B 的动词 "l" 与 A 冲突 → 必须抛错而非静默覆盖
@@ -211,7 +213,7 @@ describe('MUD Engine', () => {
   });
 
   it('P0-4: defineCommand 不返回未声明的 verbMap 字段', () => {
-    const cmd = defineCommand({ verbs: ['go'], handle: () => null });
+    const cmd = defineCommand({ describe: '测试用命令', verbs: ['go'], handle: () => null });
     expect((cmd as Record<string, unknown>).verbMap).toBeUndefined();
   });
 
@@ -279,7 +281,7 @@ describe('MUD Engine', () => {
   });
 
   it('createTestWorld 工厂支持 commands（类型与运行时一致）', async () => {
-    const Probe = defineCommand({ verbs: ['probe'], handle: () => 'PROBED' });
+    const Probe = defineCommand({ describe: '测试用命令', verbs: ['probe'], handle: () => 'PROBED' });
     const w = createTestWorld({ commands: [Probe] });
     const player = w.entities.create();
     expect(await w.world.execute('probe', player)).toBe('PROBED');
@@ -322,6 +324,7 @@ describe('MUD Engine', () => {
 
   it('C-1: 命令上下文 findByComponent 可查询拥有组件的实体', async () => {
     const ProbeCmd = defineCommand({
+    describe: '测试用命令',
       verbs: ['probe-c'],
       handle({ world }) {
         return world.findByComponent(Position).join(',');
@@ -497,8 +500,8 @@ describe('B1/B3 v0.5 API 形态', () => {
     // 数组参数不炸、不静默吞
     expect(() => w.world.register(SysA, [SysB])).not.toThrow();
 
-    const CmdX = defineCommand({ verbs: ['x'], handle: () => 'X' });
-    const CmdY = defineCommand({ verbs: ['y'], handle: () => 'Y' });
+    const CmdX = defineCommand({ describe: '测试用命令', verbs: ['x'], handle: () => 'X' });
+    const CmdY = defineCommand({ describe: '测试用命令', verbs: ['y'], handle: () => 'Y' });
     expect(() => w.world.registerCommands(CmdX, [CmdY])).not.toThrow();
 
     const p = w.entities.create();

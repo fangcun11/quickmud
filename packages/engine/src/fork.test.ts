@@ -21,6 +21,7 @@ const HealSystem = defineSystem({
 });
 
 const Rest = defineCommand({
+    describe: '测试用命令',
   verbs: ['rest'],
   args: { minutes: { type: 'word' } },
   handle({ args, player, world }) {

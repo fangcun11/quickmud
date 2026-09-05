@@ -26,6 +26,12 @@ export function defineCommand<const A extends Record<string, ArgumentDefinition>
   if (!definition.verbs || definition.verbs.length === 0) {
     throw new Error('Command must have at least one verb');
   }
+  // 校验 describe（0.15）：help 自动归集依赖它——没描述的命令注册不进来
+  if (!definition.describe || !definition.describe.trim()) {
+    throw new Error(
+      `defineCommand: 动词「${definition.verbs[0]}」缺少 describe（help 自动归集依赖它，一句话说明用法）`,
+    );
+  }
 
   return { ...definition };
 }

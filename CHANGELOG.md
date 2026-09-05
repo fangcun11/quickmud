@@ -56,6 +56,18 @@
   （system 通道压灰；刻度一昼夜 4 分钟、天气每分钟轮换、各区域可不同天）；
   房间块内联插槽等引擎注入机制后迁入
 
+### 引擎/prefabs：help 自动归集（engine 0.15.0 breaking / prefabs 0.14 增补）
+
+- **`defineCommand` 新增必填 `describe`**（breaking，定义期 fail-fast）——
+  一句话用法说明；没描述的命令注册不进来，help 质量由类型合同保证
+  （测试夹具 31 处跟进）
+- `CommandMeta` 与 `CommandContext.world.listCommands()` 打通 describe；
+  开发者命令（/tp /heal /dev-help）与对话命令补齐描述
+- **prefabs `createAutoHelpCommand({ title, tips, hideVerbPrefixes })`**：
+  从 `world.listCommands()` 实时渲染（注册序，动词+缩写/别名+describe），
+  注册表即事实源——新命令写了 describe 就自动出现，**help 永不漂移**；
+  四个 example 的手写 help 全部换装（游戏侧提示走 tips）
+
 ### 引擎：命令元数据与兜底建议（@mud/ecs-engine 0.14.0，F6/F2 落地）
 
 - `world.listCommands()`（F6）：注册命令的只读元数据（动词/缩写/参数类型

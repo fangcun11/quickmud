@@ -144,6 +144,7 @@ describe('P1-5 TestWorld 探针增强（0.12）', () => {
   });
 
   const Hi = defineCommand({
+    describe: '测试用命令',
     verbs: ['hi'],
     handle: () => '你好',
   });

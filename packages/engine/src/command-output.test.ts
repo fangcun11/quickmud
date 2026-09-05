@@ -13,6 +13,7 @@ const Position = trait('position', () => ({ roomId: 'hall' }));
 const Pinged = defineEvent('pinged')<{ who: EntityId }>();
 
 const ScoreCommand = defineCommand({
+    describe: '测试用命令',
   verbs: ['score', '状态'],
   handle({ output, player }) {
     output.narrative([
@@ -41,6 +42,7 @@ describe('CommandContext.output', () => {
 
   it('返回 string 与 output 可共存（两条通道互不干扰）', async () => {
     const Both = defineCommand({
+    describe: '测试用命令',
       verbs: ['both'],
       handle({ output }) {
         output.dialogue('老王朝：行。');

@@ -278,6 +278,7 @@ describe('world.each / ctx.each（0.14）', () => {
 
   it('命令侧 world.each 可用（只读惯例）', async () => {
     const CountCmd = defineCommand({
+    describe: '测试用命令',
       verbs: ['count'],
       handle({ world, output }) {
         let count = 0;

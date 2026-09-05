@@ -1,33 +1,16 @@
-import { defineCommand } from '@mud/ecs-engine';
+/**
+ * 侠客行帮助（0.15 自动归集）：从注册表实时渲染，永不漂移——
+ * 新命令写 describe 即自动出现（未写则注册期报错）。游戏侧提示走 tips。
+ */
+import { createAutoHelpCommand } from '@mud/prefabs';
 
-/** 侠客行帮助命令（终端与网页共用；网页专属能力单独标注） */
-export const HelpCommand = defineCommand({
-  verbs: ['help', '帮助', 'h'],
-  handle() {
-    return [
-      '可用命令：',
-      '  look (l/看)      - 观察周围环境（出口和地上的东西都会列出来）',
-      '  移动             - 直接敲 北/南/东/西（或 n/s/e/w、往东、向东）',
-      '  打坐 (运功)      - 盘膝吐纳，每息回 20 内力；移动或被打会收功',
-      '  停 (收功)        - 结束打坐',
-      '  状态 (stats)     - 生命/内力/攻击/防御/身法一览',
-      '  攻击 (打) <目标> - 出手攻击（自动用已解锁的最高招式，耗内力）',
-      '  使 (use) <招式> [目标] - 指定招式出手（崩拳/横扫…武学 查看解锁）',
-      '  学 (learn) <秘籍> - 学会背包里的秘籍（武馆地上有剑谱与心法）',
-      '  运转 (practice) <心法> - 运转心法：打坐涨其熟练度（吐纳术回气翻倍）',
-      '  武学 (arts)      - 已习武学、层数与招式一览',
-      '  回/退 (back)     - 沿来路原路返回上一间（可连按走回出生点）',
-      '  逃 (flee)        - 拔腿就跑：身法够高退回来路，不够就挨一下',
-      '  拿 (take) <东西> - 把地上的东西捡进背包（拿/背包 看随身物品）',
-      '  map (地图)       - 当前区域的地图与已探明地点',
-      '  worldmap (世界地图) - 各区域之间的位置图',
-      '  详细 (verbose)   - 切换描述详略：默认重复经过的房间只报地名',
-      '  略图 (minimap)   - 进房邻接小图开关（当前位置红字标注）',
-      '  quit (退出)      - 退出（仅终端；网页版直接关页面）',
-      '  重开（网页版）   - 清除进度，从头开始（连输两次确认）',
-      '  /dev-help        - 开发者命令（/tp /heal）',
-    ].join('\n');
-  },
+export const HelpCommand = createAutoHelpCommand({
+  title: '侠客行 · 可用命令：',
+  tips: [
+    '  重开（网页版）   - 清除进度，从头开始（连输两次确认）',
+    '  quit (退出)      - 退出（仅终端；网页版直接关页面）',
+    '  /dev-help        - 开发者命令（/tp /heal）',
+  ],
 });
 
 /**
@@ -35,9 +18,12 @@ export const HelpCommand = defineCommand({
  * 终端 REPL 在 execute 之前拦截 quit，永远走不到这里；
  * 网页版 quit 没有终端语义，给一句人话而不是"我不明白"。
  */
+import { defineCommand } from '@mud/ecs-engine';
+
 export const QuitHintCommand = defineCommand({
   verbs: ['quit', 'exit', '退出'],
+  describe: '退出游戏（仅终端；网页版直接关页面）',
   handle() {
-    return '网页版直接关闭页面即可，进度会自动保存；想重新开始，输入 重开。';
+    return '网页版直接关闭页面即可；想清空进度输入 重开。';
   },
 });

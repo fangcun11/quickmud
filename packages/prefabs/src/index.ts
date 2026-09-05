@@ -15,6 +15,7 @@ export * from './room.js';
 export * from './area.js';
 export * from './systems.js';
 export * from './commands.js';
+export * from './help.js';
 export * from './queries.js';
 export * from './suggest.js';
 export * from './vitals.js';

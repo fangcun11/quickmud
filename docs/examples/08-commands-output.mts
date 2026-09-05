@@ -12,7 +12,7 @@ import {
 } from '@mud/ecs-engine';
 
 // ---- 1. args 五型：类型推导与运行时行为严格一致 ----
-const ProbeCommand = defineCommand({
+const ProbeCommand = defineCommand({ describe: '测试用命令',
   verbs: ['probe'],
   args: {
     action: { type: 'word' }, // 一个词 → string
@@ -29,7 +29,7 @@ const ProbeCommand = defineCommand({
 });
 
 // ---- 2. 返回串与 output 共存（v0.11）：命令可以又写流、又给反馈 ----
-const ScoreCommand = defineCommand({
+const ScoreCommand = defineCommand({ describe: '测试用命令',
   verbs: ['score'],
   handle({ output }) {
     output.narrative('【状态】生命 80/100'); // 字符串自动包装为 narrative 段
@@ -83,7 +83,7 @@ assert.strictEqual(
 
 // ---- 4. 动词冲突：定义期 fail-fast，绝不静默覆盖 ----
 assert.throws(
-  () => w.world.registerCommands(defineCommand({ verbs: ['probe'], handle: () => null })),
+  () => w.world.registerCommands(defineCommand({ describe: '测试用命令', verbs: ['probe'], handle: () => null })),
   /命令动词冲突/,
 );
 

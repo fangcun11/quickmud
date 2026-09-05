@@ -41,6 +41,7 @@ import {
 /** 移动命令：go/move/walk/走 <方向>，支持 n/s/e/w/北 等归一 */
 export const GoCommand = defineCommand({
   verbs: ['go', 'move', 'walk', '走', '移动', '前往'],
+  describe: '向指定方向移动（go 北 / 直接敲方向词与口语别名）',
   abbrev: ['g'],
   args: {
     direction: { type: 'direction' },
@@ -76,6 +77,7 @@ export const GoCommand = defineCommand({
 export function createDirectionCommand(direction: string, verbs: string[]): AnyCommand {
   return defineCommand({
     verbs,
+    describe: `朝「${direction}」方向移动（口语别名皆可）`,
     handle({ player, world }) {
       const pos = world.getComponent(player, Position);
       if (!pos) return '你不在任何地方。';
@@ -88,6 +90,7 @@ export function createDirectionCommand(direction: string, verbs: string[]): AnyC
 /** 查看命令：look/l/看 <目标?>（无目标时查看所在房间与地上物品） */
 export const LookCommand = defineCommand({
   verbs: ['look', 'l', '看', '观察'],
+  describe: '观察周围环境（出口、小图与地上东西都会列出来；look 剑 看物品）',
   args: {
     target: { type: 'optional_entity' },
   },
@@ -107,6 +110,7 @@ export const LookCommand = defineCommand({
  */
 export const VerboseCommand = defineCommand({
   verbs: ['verbose', '详细'],
+  describe: '切换描述详略：默认自动简略（重复进房只报一行），详细则每次全量',
   handle({ player, world }) {
     // 开关是否存在只看组件本身：before/after 对比会把「系统没注册、事件
     // 无人消费」误报成「没有详略开关」，两种失败不该共用一句文案
@@ -129,6 +133,7 @@ export const VerboseCommand = defineCommand({
  */
 export const MiniMapCommand = defineCommand({
   verbs: ['minimap', '略图', '小图'],
+  describe: '进房邻接小图开关（当前位置红字标注）',
   handle({ player, world }) {
     const mini = world.getComponent(player, MiniMap);
     if (!mini) return '这个世界的玩家没有进房略图开关。';
@@ -149,6 +154,7 @@ export const MiniMapCommand = defineCommand({
  */
 export const BackCommand = defineCommand({
   verbs: ['back', '回', '退', '返回'],
+  describe: '沿来路原路返回上一间（可连按走回出生点）',
   handle({ output, player, world }) {
     if (!world.getComponent(player, Position)) {
       output.error('你不在任何地方。');
@@ -166,6 +172,7 @@ export const BackCommand = defineCommand({
 /** 拾取命令：take/get/拿/拾取 <物品>（从当前房间拿进背包） */
 export const TakeCommand = defineCommand({
   verbs: ['take', 'get', '拿', '拾取'],
+  describe: '把地上的东西拿进背包（take 剑）',
   args: { item: { type: 'entity' } },
   handle({ args, output, player, world }) {
     if (!args.item) {
@@ -195,6 +202,7 @@ export const TakeCommand = defineCommand({
 /** 放下命令：drop/put/放下/丢 <物品>（从背包放到当前房间） */
 export const DropCommand = defineCommand({
   verbs: ['drop', 'put', '放下', '丢弃'],
+  describe: '把背包里的东西放到当前房间（drop 剑）',
   args: { item: { type: 'entity' } },
   handle({ args, output, player, world }) {
     if (!args.item) {
@@ -223,6 +231,7 @@ export const DropCommand = defineCommand({
 /** 背包命令：inventory/i/物品 <列出 Located.at == 玩家的物品> */
 export const InventoryCommand = defineCommand({
   verbs: ['inventory', 'i', '物品', '背包'],
+  describe: '查看随身物品',
   handle({ player, world }) {
     const names = itemsInContainer(world, player).map((id) => displayName(world, id));
     if (names.length === 0) {
@@ -235,6 +244,7 @@ export const InventoryCommand = defineCommand({
 /** 状态命令：score/状态 <生命与位置一览> */
 export const ScoreCommand = defineCommand({
   verbs: ['score', '状态', '属性'],
+  describe: '查看自己的状态（demo 件：生命与所在房间）',
   handle({ player, world }) {
     const health = world.getComponent(player, Health);
     const pos = world.getComponent(player, Position);
@@ -257,6 +267,7 @@ export const ScoreCommand = defineCommand({
  */
 export const QuestCommand = defineCommand({
   verbs: ['quests', 'quest', '任务'],
+  describe: '列出当前房间 NPC 的任务与自己的进度',
   handle({ player, world }) {
     const pos = world.getComponent(player, Position);
     if (!pos) return '你不在任何地方。';
@@ -286,6 +297,7 @@ export const QuestCommand = defineCommand({
 /** 交任务命令：turnin/交任务 <向同房间的发任务者交付已完成的任务，领奖> */
 export const TurnInCommand = defineCommand({
   verbs: ['turnin', '交任务', '交付'],
+  describe: '向同房间的发任务者交付已完成任务并领奖',
   handle({ output, player, world }) {
     const pos = world.getComponent(player, Position);
     if (!pos) {
@@ -318,6 +330,7 @@ export const TurnInCommand = defineCommand({
 /** 攻击命令：attack/kill/攻击/打 <目标>（目标须与自己同房间） */
 export const AttackCommand = defineCommand({
   verbs: ['attack', 'kill', '攻击', '打'],
+  describe: '攻击同房间的目标（对方会还手）',
   args: { target: { type: 'entity' } },
   handle({ args, output, player, world }) {
     if (!args.target) {
@@ -355,6 +368,7 @@ export const AttackCommand = defineCommand({
  */
 export const MapCommand = defineCommand({
   verbs: ['map', '地图'],
+  describe: '绘制当前区域的地图（已探明地点与连线）',
   handle({ player, world }) {
     const pos = world.getComponent(player, Position);
     const areaId = pos ? world.getRelations(pos.roomId, Area)[0] : undefined;
@@ -393,6 +407,7 @@ export const MapCommand = defineCommand({
  */
 export const WorldMapCommand = defineCommand({
   verbs: ['worldmap', 'wmap', '世界地图', '区域地图'],
+  describe: '绘制各区域之间的位置图',
   handle({ player, world }) {
     const areas = world
       .findByComponent(Coordinates)

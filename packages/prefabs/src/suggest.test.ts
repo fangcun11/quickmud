@@ -13,22 +13,25 @@ import { Position, Located } from './traits.js';
 import { createSuggester } from './suggest.js';
 
 const Go = defineCommand({
+    describe: '测试用命令',
   verbs: ['go', '走'],
   args: { direction: { type: 'direction' } },
   handle: () => null,
 });
 const Attack = defineCommand({
+    describe: '测试用命令',
   verbs: ['attack', '攻击'],
   args: { target: { type: 'entity' } },
   handle: () => null,
 });
 const Look = defineCommand({
+    describe: '测试用命令',
   verbs: ['look', '看'],
   args: { target: { type: 'optional_entity' } },
   handle: () => null,
 });
-const Meditate = defineCommand({ verbs: ['meditate', '打坐'], handle: () => null });
-const North = defineCommand({ verbs: ['north', '北'], handle: () => null });
+const Meditate = defineCommand({ describe: '测试用命令', verbs: ['meditate', '打坐'], handle: () => null });
+const North = defineCommand({ describe: '测试用命令', verbs: ['north', '北'], handle: () => null });
 
 function suggestWorld() {
   const world = new World();

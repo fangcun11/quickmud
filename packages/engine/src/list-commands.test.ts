@@ -5,16 +5,18 @@ import { describe, it, expect } from 'vitest';
 import { World, defineCommand } from './index';
 
 const Look = defineCommand({
+    describe: '测试用命令',
   verbs: ['look', '看'],
   args: { target: { type: 'optional_entity' } },
   handle: () => null,
 });
 const Go = defineCommand({
+    describe: '测试用命令',
   verbs: ['go', '走'],
   args: { direction: { type: 'direction' } },
   handle: () => null,
 });
-const North = defineCommand({ verbs: ['north', 'n', '北'], handle: () => null });
+const North = defineCommand({ describe: '测试用命令', verbs: ['north', 'n', '北'], handle: () => null });
 
 describe('world.listCommands（F6）', () => {
   it('返回去重后的元数据：动词/缩写/参数类型形状', () => {

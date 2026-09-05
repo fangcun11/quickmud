@@ -605,6 +605,7 @@ export function buildRoomBehaviors(world: World, defs: AnyRoomModuleDef[]): void
       world.registerCommands(
         defineCommand({
           verbs: cmd.verbs,
+          describe: `（房间专属）${canonical}`,
           handle({ player, world: w }) {
             const pos = w.getComponent(player, Position);
             if (!pos || pos.roomId !== roomId) return '我不明白你的意思。';
