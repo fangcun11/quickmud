@@ -20,7 +20,7 @@
 | F3 | 错误通道语义未约定：命令失败反馈有的走返回 string、有的走 output error 通道，两条路径混用无规则，宿主渲染无法统一着色/过滤 | M0 体验批 | engine | 错误通道语义重设计（返回值 vs `OutputCollector` 分工），牵动命令层契约，单独立项 | ✅ 定约落地（0.13）：7 通道语义写进 `OutputView` 类型契约，prefabs 使用类失败迁 error 通道；guide 06 同步。全量命令层清点（含第三方内容包的返回值习惯）留待收口 |
 | F4 | 无回退命令：玩家想原路返回只能重敲方向；「回/退」需要来路记录（`Visited` 只记房间集合无顺序） | M0 体验批 | prefabs | 新增来路 trait（栈式，进快照）+ `back/回/退` 命令 emit 意图，MovementSystem 消费 | 待拍板 |
 | F5 | web-client 零测试：渲染器 ~450 行纯 DOM 逻辑无任何自动化测试，本批 4 个缺陷（↑ 历史边界、重开输入残留、地图换行折叠、VerboseSystem 漏注册的误报路径）全是浏览器实测才暴露 | M0 体验批 | web-client | 引入 jsdom/happy-dom 测 `handleInput`/`recallHistory`/`tryRestore`/重开状态机；DOM 渲染断言覆盖 pre-wrap 与实体点击 | ✅ 已落地（web-client 0.3.0，vitest+happy-dom 14 例） |
-| F6 | 引擎无公开的命令枚举 API：`World.commands` 私有，宿主想知道"注册了哪些动词/参数形状"只能游戏侧从命令常量二次枚举（命令建议器现状）。注册表与建议源理论上可漂移 | M1 体验批 | engine | `world.listCommands(): { verbs, abbrev, args }[]` 元数据只读接口；建议器改吃它即可删除"命令表单一数据源"约定。注意与 F2（兜底近似匹配同样需要动词全集）是同一个缺口的两个症状 | 攒批评估 |
+| F6 | 引擎无公开的命令枚举 API：`World.commands` 私有，宿主想知道"注册了哪些动词/参数形状"只能游戏侧从命令常量二次枚举（命令建议器现状）。注册表与建议源理论上可漂移 | M1 体验批 | engine | `world.listCommands(): { verbs, abbrev, args, describe }[]` 元数据只读接口；建议器改吃它即可删除"命令表单一数据源"约定。注意与 F2（兜底近似匹配同样需要动词全集）是同一个缺口的两个症状 | ✅ 已落地（0.14/0.15：listCommands + describe 必填 + 兜底近似匹配；建议器/help 换装在 0.15 批） |
 
 ## 条目展开
 
@@ -126,3 +126,12 @@ IME 组合期 `isComposing` 防护、无顶部状态栏（MUD 传统）、实体
 **建议**：`world.listCommands(): { verbs, abbrev, args }[]` 只读元数据
 接口（args 只暴露类型名，不暴露 handle）。建议器与 F2 的近似匹配改吃
 它，游戏侧的"单一数据源"约定即可退役。与 F3 一样攒批评估。
+
+**落地**（2026-09-05，0.14/0.15）：
+- `listCommands()` 元数据（verbs/abbrev/args 类型形状 + describe），
+  World 顶层与 CommandContext.world 双入口
+- F2 同批落地：未识别动词的兜底文案近似匹配（前缀/编辑距离 ≤2）
+- 0.15 批：defineCommand 必填 describe（fail-fast）+ prefabs
+  createAutoHelpCommand——help 从注册表实时渲染，永不漂移；
+  侠客行 bootstrap 的"命令表单一数据源"约定仍保留（建议器用），
+  待建议器换吃 listCommands 后退役
