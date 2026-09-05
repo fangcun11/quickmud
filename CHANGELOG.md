@@ -2,6 +2,18 @@
 
 本项目遵循[语义化版本](https://semver.org/)。
 
+## [Unreleased]
+
+### prefabs/侠客行：消耗品（M4 通用件）
+
+- **prefabs**：`Consumable { hp, energy }` 挂物品 + `吃/consume` 命令 +
+  `ConsumableSystem`（回复 Health 通用资源 + destroy 物品）
+- **侠客行**：杂货铺上架馒头（2 碎银，气血 +30）/金创药（5 碎银，内力 +50）；
+  `EnergyConsumableSystem`（游戏层）处理内力回复（prefabs 只管 Health）
+- 经济消费出口闭合：打怪赚钱 → 买药 → 打更难的怪
+
+### example/xiake-xing：M3 装备与买卖（0.5.0）——碎银经济上线
+
 ## [0.17.0] - 2026-09-06
 
 主题：**新内容包开工 + 首批真实游玩反馈的体验修复 + 地图改版**——侠客行

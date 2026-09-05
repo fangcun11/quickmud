@@ -33,8 +33,10 @@ import {
   BacktrackSystem,
   ItemSystem,
   LootSystem,
+  ConsumableSystem,
   // 命令
   GoCommand,
+  ConsumeCommand,
   LookCommand,
   MapCommand,
   WorldMapCommand,
@@ -58,6 +60,7 @@ import {
   MiniMap,
   Backtrack,
   Wander,
+  Consumable,
   // 房间与区域
   defineRoom,
   defineArea,
@@ -81,6 +84,7 @@ import {
   CultivationToggleSystem,
   MeditationSystem,
   InterruptSystem,
+  EnergyConsumableSystem,
 } from '../cultivation';
 import {
   FleeCommand,
@@ -141,8 +145,10 @@ export function bootstrap(): BootstrapResult {
     PlayerAwareDeathSystem,
     EquipSystem,
     ShopSystem,
+    ConsumableSystem,
     MartialSystem,
     MeditationSystem,
+    EnergyConsumableSystem,
     AtmosphereSystem,
     CultivationToggleSystem,
     InterruptSystem,
@@ -179,6 +185,7 @@ export function bootstrap(): BootstrapResult {
     VerboseCommand,
     MiniMapCommand,
     BackCommand,
+    ConsumeCommand,
     EquipCommand,
     UnequipCommand,
     BuyCommand,
@@ -446,6 +453,21 @@ export function bootstrap(): BootstrapResult {
     world.addComponent(id, ForSale, { price: it.price });
     world.addComponent(id, Portable);
     world.addComponent(id, Located, { targets: ['smithy'] });
+  }
+
+  // ---- 杂货铺消耗品（M4）：馒头/金创药 ----
+  const consumables = [
+    { id: 'baozi', name: '馒头', aliases: ['包子'], hp: 30, energy: 0, price: 2, desc: '热腾腾的白面馒头，咬一口满嘴麦香。' },
+    { id: 'jinchuang', name: '金创药', aliases: ['药', '金创'], hp: 0, energy: 50, price: 5, desc: '小瓷瓶装的药粉，洒在伤口上刀枪痕都能收。' },
+  ];
+  for (const c of consumables) {
+    const id = world.entities.createWithId(c.id);
+    world.addComponent(id, Name, { text: c.name, aliases: c.aliases });
+    world.addComponent(id, Description, { text: c.desc });
+    world.addComponent(id, Consumable, { hp: c.hp, energy: c.energy });
+    world.addComponent(id, Portable);
+    world.addComponent(id, ForSale, { price: c.price });
+    world.addComponent(id, Located, { targets: ['grocery'] });
   }
 
   // ---- 武馆秘籍（M2）：学 剑谱 / 学 心法——学完即焚 ----

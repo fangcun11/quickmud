@@ -80,6 +80,16 @@ export const Weapon = trait('weapon', () => ({
   damage: 0,
 }));
 
+/**
+ * 消耗品（0.17，M4 通用件）：挂在物品实体上——
+ * 使用后回复对应资源并消耗物品（ConsumeSystem 落地）。
+ * hp 回复 prefabs 的 Health；energy 为游戏层资源（由游戏层系统处理）。
+ */
+export const Consumable = trait('consumable', () => ({
+  hp: 0,
+  energy: 0,
+}));
+
 /** 巡逻标记组件：带它 + Position 的实体由 NpcWanderSystem 驱动漫游 */
 export const Wander = trait('wander', () => ({}));
 

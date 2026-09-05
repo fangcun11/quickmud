@@ -38,6 +38,7 @@ import {
   BuffExpired,
   VerboseToggled,
   MiniMapToggled,
+  Consumed,
 } from './events.js';
 import {
   Position,
@@ -61,6 +62,7 @@ import {
   Verbose,
   MiniMap,
   Backtrack,
+  Consumable,
 } from './traits.js';
 import type { LootEntry, QuestDef, QuestLogData, BuffEffect } from './traits.js';
 import {
@@ -989,5 +991,32 @@ export const NpcWanderSystem = defineSystem({
       // 移动事实广播 Moved（0.14）：进退场播报、场景系统从同一事件流感知世界
       ctx.emit(Moved, { entity: npc, from, to, direction: dir });
     }
+  },
+});
+
+/**
+ * 消耗品系统（0.17，M4 通用件）：`Consumed` 的落地者
+ *
+ * 读 `Consumable` 组件的 hp 字段回复 Health（通用资源），然后 destroy 物品。
+ * energy 字段为游戏层资源——由游戏层额外注册的监听系统处理
+ * （此处只管 prefabs 层的 Health 通用回复）。
+ */
+export const ConsumableSystem = defineSystem({
+  name: 'prefab.consume',
+  on: [Consumed],
+  handle(event, ctx) {
+    const { entity, item } = event.data;
+    const consumable = ctx.getComponent(item, Consumable);
+    if (!consumable) return;
+    if (consumable.hp > 0) {
+      const hp = ctx.getComponent(entity, Health);
+      if (hp) {
+        const before = hp.current;
+        hp.current = Math.min(hp.max, hp.current + consumable.hp);
+        const gained = hp.current - before;
+        if (gained > 0) ctx.output.narrative(`你使用了${displayName(ctx, item)}，恢复了 ${gained} 点气血。`);
+      }
+    }
+    ctx.destroy(item);
   },
 });

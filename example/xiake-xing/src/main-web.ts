@@ -55,7 +55,7 @@ function main() {
     persistence: {
       // :m3 后缀作废旧档——M3 加了 Purse/Equipment/装备品，旧快照恢复
       // 出来的世界缺这些新内容（内容升级直接重开，不做迁移）
-      key: 'save:xiake-xing:m3',
+      key: 'save:xiake-xing:m4',
       capture: () => world.createSnapshot(),
       restore: (snapshot) => world.rollbackWorld(snapshot as SnapshotData),
     },

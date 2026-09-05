@@ -11,6 +11,8 @@
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
 import { Health, Position, Moved, displayName } from '@mud/prefabs';
 import { Energy, Stats, Cultivating, Channeling, Purse } from './traits';
+import { Consumable as ItemConsumable } from '@mud/prefabs';
+import { Consumed } from '@mud/prefabs';
 import { ARTS } from './arts';
 import { grantArtExp } from './martial';
 import { Attacked, MeditateRequested, StopRequested } from './events';
@@ -105,6 +107,21 @@ export const CultivationToggleSystem = defineSystem({
  * 引擎的 every 时相本身是 drift-free 固定网格（k × every），
  * `Cultivating.lastTickedAt` 记录上次结算时间，为快照/回滚后的一致性兜底。
  */
+/** 消耗品的内力回复（侠客行层）：ConsumableSystem 处理 hp，此处补 energy */
+export const EnergyConsumableSystem = defineSystem({
+  name: 'xk.energy-consume',
+  on: [Consumed],
+  handle(event, ctx) {
+    const { entity, item } = event.data;
+    const consumable = ctx.getComponent(item, ItemConsumable);
+    if (!consumable || consumable.energy <= 0) return;
+    const energy = ctx.getComponent(entity, Energy);
+    if (!energy) return;
+    energy.current = Math.min(energy.max, energy.current + consumable.energy);
+    ctx.output.narrative(`内力回复至 ${energy.current}/${energy.max}。`);
+  },
+});
+
 export const MeditationSystem = defineSystem({
   name: 'xk.meditation',
   every: 1000,

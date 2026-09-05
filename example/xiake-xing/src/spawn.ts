@@ -6,11 +6,10 @@
  *
  * 确定性：重生由固定时钟网格驱动（every 5000），零随机。
  */
-import { defineSystem } from '@mud/ecs-engine';
-import type { EntityId, SystemContext } from '@mud/ecs-engine';
-import { Position, Health, blueprint } from '@mud/prefabs';
-import type { ComponentDataTuple } from '@mud/ecs-engine';
-import { Name, Description, Retaliate, Wander, Aggressive, Pose, Loot, Stats } from './traits';
+import { defineSystem, blueprint, Name } from '@mud/ecs-engine';
+import type { EntityId, ComponentDataTuple } from '@mud/ecs-engine';
+import { Description, Position, Health, Wander, Loot } from '@mud/prefabs';
+import { Retaliate, Aggressive, Pose, Stats } from './traits';
 
 /** 每个区域的预期狼数（与 bootstrap 初始分配一致） */
 const WOLF_ZONES: Array<{ roomId: EntityId; expected: number }> = [
@@ -22,7 +21,7 @@ let spawnCounter = 0;
 
 /** 狼蓝图（与 bootstrap 手动创建的狼同款组件集） */
 function wolfBlueprint(roomId: EntityId, _seq: number) {
-  const components: ComponentDataTuple[] = [
+  const components: Array<[new (...args: unknown[]) => unknown, Record<string, unknown> | undefined]> = [
     [Name, { text: '野狼', aliases: ['狼', 'wolf'] }],
     [Description, { text: '一头精瘦的灰狼，绿油油的眼睛盯着你，喉咙里滚出低低的呜声。' }],
     [Pose, { text: '压低前身，喉咙里滚出低低的呜声' }],

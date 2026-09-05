@@ -170,3 +170,12 @@ export const VerboseToggled = defineEvent('verbose_toggled')<{
 export const MiniMapToggled = defineEvent('mini_map_toggled')<{
   entity: EntityId;
 }>();
+
+/**
+ * 消耗品使用意图（0.17）：{ entity, item }
+ * 由 `吃/consume` 命令 emit，`ConsumableSystem` 落地——命令不改状态。
+ */
+export const Consumed = defineEvent('consumed')<{
+  entity: EntityId;
+  item: EntityId;
+}>();

@@ -14,6 +14,7 @@ import {
   QuestTurnedIn,
   VerboseToggled,
   MiniMapToggled,
+  Consumed,
 } from './events.js';
 import {
   Position,
@@ -27,6 +28,7 @@ import {
   Backtrack,
   Exits,
   Area,
+  Consumable,
 } from './traits.js';
 import { renderAsciiMap, directionLabel } from './room.js';
 import { renderAsciiWorldMap, roomsOfArea } from './area.js';
@@ -442,5 +444,30 @@ export const WorldMapCommand = defineCommand({
 
     // 地名直书（v0.12）：区域名与 (你) 标注就在图上，不再需要图例和区域清单
     return renderAsciiWorldMap(areas, { current: currentArea, visited: explored });
+  },
+});
+
+/** 消耗品命令：consume/吃/喝 <物品>（回复 HP/Energy，物品消耗） */
+export const ConsumeCommand = defineCommand({
+  verbs: ['consume', '吃', '喝'],
+  describe: '使用消耗品（吃 馒头 回气血；喝 药 回内力）',
+  args: { item: { type: 'entity' } },
+  handle({ args, output, player, world }) {
+    if (!args.item) {
+      output.error('吃/喝什么？');
+      return null;
+    }
+    const itemId = resolveInContainer(world, player, args.item);
+    if (!itemId) {
+      output.error(`你背包里没有「${args.item}」。`);
+      return null;
+    }
+    const consumable = world.getComponent(itemId, Consumable);
+    if (!consumable) {
+      output.error(`「${args.item}」不是能吃喝的东西。`);
+      return null;
+    }
+    world.emit(Consumed, { entity: player, item: itemId });
+    return null;
   },
 });
