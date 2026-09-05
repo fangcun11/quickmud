@@ -367,6 +367,16 @@ export interface NeighborMiniMapLayout {
   vBottom: string;
   /** 南邻行（空串 = 无南邻） */
   bottom: string;
+  /** 北邻名（0.18 交互标注：undefined = 无北邻；网页端把名字渲染成可点段） */
+  northName?: string;
+  /** 北邻名的左侧空白（排版与 top 一致） */
+  northPad: number;
+  /** 南邻名 / 南邻名左侧空白 */
+  southName?: string;
+  southPad: number;
+  /** 西邻名 / 东邻名（连线段在 midWest/midEast 里已含，名字单独给出供分段） */
+  westName?: string;
+  eastName?: string;
 }
 
 /**
@@ -385,10 +395,8 @@ export function layoutNeighborMiniMap(
 
   const midEast = neighbors.east !== undefined ? '──' + neighbors.east : '';
 
-  const line = (name: string): string => {
-    const pad = Math.max(0, curCenter - Math.floor(displayWidth(name) / 2));
-    return ' '.repeat(pad) + name;
-  };
+  const padOf = (name: string): number => Math.max(0, curCenter - Math.floor(displayWidth(name) / 2));
+  const line = (name: string): string => ' '.repeat(padOf(name)) + name;
   const vLine = ' '.repeat(curCenter) + '│';
 
   return {
@@ -398,6 +406,12 @@ export function layoutNeighborMiniMap(
     midEast,
     vBottom: neighbors.south !== undefined ? vLine : '',
     bottom: neighbors.south !== undefined ? line(neighbors.south) : '',
+    northName: neighbors.north,
+    northPad: neighbors.north !== undefined ? padOf(neighbors.north) : 0,
+    southName: neighbors.south,
+    southPad: neighbors.south !== undefined ? padOf(neighbors.south) : 0,
+    westName: neighbors.west,
+    eastName: neighbors.east,
   };
 }
 

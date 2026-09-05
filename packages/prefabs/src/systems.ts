@@ -116,7 +116,7 @@ function exitDirectionSegments(dirs: string[]): Segment[] {
   const out: Segment[] = [];
   dirs.forEach((d, i) => {
     if (i > 0) out.push({ text: '、' });
-    out.push({ text: directionLabel(d), style: { tag: 'direction' } });
+    out.push({ text: directionLabel(d), style: { tag: 'direction' }, entityRef: d });
   });
   return out;
 }
@@ -330,14 +330,35 @@ function emitMiniMapIfOn(ctx: SystemContext, viewer: EntityId, roomId: EntityId)
     south: neighbor('south'),
     west: neighbor('west'),
   });
+  // 交互标注（0.18）：通路的邻格名是**可点段**（tag:direction + entityRef=方向 id）——
+  // 略图开着时方位文本行让位，图上的格子就是玩家点来走路的地方。拼接文本不变。
+  const walkable = (dir: string, name: string | undefined): Segment[] => {
+    if (name === undefined) return [];
+    return [{ text: name, style: { tag: 'direction' }, entityRef: dir }];
+  };
   const segments: Segment[] = [];
-  if (layout.top) segments.push({ text: layout.top + '\n' });
+  if (layout.northName !== undefined) {
+    segments.push(
+      { text: ' '.repeat(layout.northPad) },
+      ...walkable('north', layout.northName),
+      { text: '\n' },
+    );
+  }
   if (layout.vTop) segments.push({ text: layout.vTop + '\n' });
-  segments.push({ text: layout.midWest });
+  if (layout.westName !== undefined) {
+    segments.push(...walkable('west', layout.westName), { text: '──' });
+  }
   segments.push({ text: current, style: { color: 'red' } });
-  segments.push({ text: layout.midEast });
+  if (layout.eastName !== undefined) {
+    segments.push({ text: '──' }, ...walkable('east', layout.eastName));
+  }
   if (layout.vBottom) segments.push({ text: '\n' + layout.vBottom });
-  if (layout.bottom) segments.push({ text: '\n' + layout.bottom });
+  if (layout.southName !== undefined) {
+    segments.push(
+      { text: '\n' + ' '.repeat(layout.southPad) },
+      ...walkable('south', layout.southName),
+    );
+  }
   ctx.output.narrative(segments);
 }
 

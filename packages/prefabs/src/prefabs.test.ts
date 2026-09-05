@@ -699,6 +699,25 @@ describe('进房邻接小图（0.14 方案二）', () => {
     expect(await w.execute('略图', bare)).toContain('没有进房略图开关');
   });
 
+  it('略图上的通路邻格是可点段（tag:direction + entityRef=方向 id），拼接文本不变', async () => {
+    const { w, player } = buildMiniWorld(true);
+    await w.execute('south', player); // 甲 → 乙：乙的图上有 北(甲) 与 东(丙)
+    w.output.clear();
+    await w.execute('look', player);
+    const mapMsg = w.output
+      .getAll()
+      .find((m) => m.kind === 'narrative' && m.segments.some((s) => s.style?.tag === 'direction'))!;
+    const dirs = mapMsg.segments
+      .filter((s) => s.style?.tag === 'direction')
+      .map((s) => [s.text, s.entityRef]);
+    expect(dirs).toContainEqual(['甲房', 'north']); // 北邻通甲房：图上房名可点
+    expect(dirs).toContainEqual(['?', 'east']);
+    // 拼接文本仍是那幅图（可点化不改外观）
+    const text = mapMsg.segments.map((s) => s.text).join('');
+    expect(text).toContain('甲房');
+    expect(text).toContain('──?');
+  });
+
   it('进房渲染小图：当前房是独立红色段；已探明邻房显名、未探明显示 ?', async () => {
     const { w, player } = buildMiniWorld(true);
     await w.execute('south', player); // 乙房：北邻甲房（已探明）、东邻丙房（未探明）

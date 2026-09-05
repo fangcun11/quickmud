@@ -18,6 +18,7 @@ import type { Segment, World, EntityId } from '@mud/ecs-engine';
 import { Dialogue } from '@mud/ecs-engine';
 import type { ClickAction } from '@mud/web-client';
 import {
+  DIRECTION_LABELS,
   directionFromLabel,
   Located,
   Portable,
@@ -36,9 +37,11 @@ export function createClickPolicy(
     const text = seg.text.trim();
     if (!text) return null;
 
-    // 出口方向：中文名反查机器 id（北 → north）
+    // 出口方向：机器 id 直书（小地图可点格 entityRef=方向 id）或中文名反查
     if (tag === 'direction') {
-      const dir = directionFromLabel(text);
+      const ref = seg.entityRef;
+      const dir =
+        ref && ref in DIRECTION_LABELS ? ref : directionFromLabel(text);
       return dir ? { command: `go ${dir}`, hint: `往${text}走` } : null;
     }
     if (tag !== 'entity') return null;
