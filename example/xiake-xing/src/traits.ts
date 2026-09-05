@@ -109,6 +109,9 @@ export const Combat = trait('combat', () => ({
 /** 主动攻击标记（0.14）：挂 NPC——同房有玩家则自动接敌（AggroSystem） */
 export const Aggressive = trait('aggressive', () => ({}));
 
+/** 狼群标记（0.18）：刷怪系统的狼口统计口径——Retaliate 是通用战斗标记，不能当种族用 */
+export const WildWolf = trait('wild_wolf', () => ({}));
+
 /** 祈祷追踪（0.17 M5）：山神庙祈祷一次后有奇效（死亡重生时重置） */
 export const Prayed = trait('prayed', () => ({
   done: false,

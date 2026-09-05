@@ -77,7 +77,7 @@ import {
   Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag,
   Arsenal, Channeling, Scripture,
   Purse, Equipment, Bonus, Gear, ForSale,
-  Combat, Aggressive, Prayed,
+  Combat, Aggressive, Prayed, WildWolf,
 } from '../traits';
 import {
   MeditateCommand,
@@ -408,6 +408,7 @@ export function bootstrap(): BootstrapResult {
     world.addComponent(id, Health, { current: 25, max: 25 });
     world.addComponent(id, Stats, { atk: 6, def: 1, dodge: 2 });
     world.addComponent(id, Retaliate); // 被打自动还手一击
+    world.addComponent(id, WildWolf); // 狼群标记（刷怪狼口统计口径）
     world.addComponent(id, Loot, {
       drops: [
         {

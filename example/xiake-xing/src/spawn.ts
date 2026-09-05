@@ -9,7 +9,7 @@
 import { defineSystem, blueprint, Name } from '@mud/ecs-engine';
 import type { EntityId, BlueprintComponentInput } from '@mud/ecs-engine';
 import { Description, Position, Health, Wander, Loot, Pose } from '@mud/prefabs';
-import { Retaliate, Aggressive, Stats } from './traits';
+import { Retaliate, Aggressive, Stats, WildWolf } from './traits';
 
 /** 每个区域的预期狼数（与 bootstrap 初始分配一致） */
 const WOLF_ZONES: Array<{ roomId: EntityId; expected: number }> = [
@@ -32,6 +32,7 @@ function wolfBlueprint(roomId: EntityId, _seq: number) {
     [Health, { current: 25, max: 25 }],
     [Stats, { atk: 6, def: 1, dodge: 2 }],
     [Retaliate, {}],
+    [WildWolf, {}],
     [Aggressive, {}],
     [Wander, {}],
     [Loot, { drops: [{ name: '狼皮', aliases: ['皮', 'wolf skin'], description: '一张带腥味的狼皮，毛色油亮。' }] }],
@@ -44,9 +45,15 @@ export const WolfSpawnSystem = defineSystem({
   every: 30_000,
   handle(payload, ctx) {
     // 全局存活狼数（狼会游走，按"区域房间里的狼数"补会越刷越多——0.18 修复）
-    const alive = ctx.findByComponent(Retaliate).filter((id) => {
+    const alive = ctx.findByComponent(WildWolf).filter((id) => {
       return (ctx.getComponent(id, Health)?.current ?? 0) > 0;
     });
+    // 自愈：旧存档里可能带着刷怪 bug 攒出来的超额狼群——清剿到上限
+    // （findByComponent 按创建序，保留先来的，销毁多出来的）
+    if (alive.length > TOTAL_WOLVES) {
+      for (const id of alive.slice(TOTAL_WOLVES)) ctx.destroy(id);
+      return;
+    }
     if (alive.length >= TOTAL_WOLVES) return;
 
     // 补进狼最少的区域房间（缺几只也只补一只——30 息一补，温和回升）

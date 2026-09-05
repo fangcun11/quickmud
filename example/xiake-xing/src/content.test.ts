@@ -149,7 +149,7 @@ import { Energy, Stats, Cultivating, Retaliate, Channeling } from './traits';
 import {
   Area, Wander, WanderHold, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
-import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed } from './traits';
+import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed, WildWolf } from './traits';
 
 function fresh(): void {
   const b = bootstrap();
@@ -836,6 +836,25 @@ describe('侠客行沉浸支线 · 刷怪与游走钉住', () => {
       (id) => (world.getComponent(id, Health)?.current ?? 0) > 0,
     );
     expect(wolves.length).toBe(3); // 修复前：zone 按房计数 → 每网格越刷越多
+  });
+
+  it('自愈：旧档带来的超额狼群在刷怪网格被清剿到上限', async () => {
+    fresh();
+    // 模拟旧 bug 攒出来的 9 只狼（额外 6 只散在狼林各处）
+    for (let i = 0; i < 6; i++) {
+      const id = world.entities.createWithId(`bloated-wolf-${i}`);
+      world.addComponent(id, Name, { text: '野狼', aliases: ['狼'] });
+      world.addComponent(id, Position, { roomId: 'woodsgate' });
+      world.addComponent(id, Health, { current: 25, max: 25 });
+      world.addComponent(id, Retaliate, {});
+      world.addComponent(id, WildWolf, {});
+    }
+    for (let i = 0; i < 32; i++) world.tick(); // 越过 30 息刷怪网格
+    drain();
+    const wolves = world.findByComponent(WildWolf).filter(
+      (id) => (world.getComponent(id, Health)?.current ?? 0) > 0,
+    );
+    expect(wolves.length).toBe(3);
   });
 
   it('停战 → WanderHold 解除；Aggressive 下息再接敌 → 重新钉住', async () => {

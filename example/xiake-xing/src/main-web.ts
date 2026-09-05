@@ -58,9 +58,8 @@ function main() {
       return parts.join(' · ');
     },
     persistence: {
-      // :m3 后缀作废旧档——M3 加了 Purse/Equipment/装备品，旧快照恢复
-      // 出来的世界缺这些新内容（内容升级直接重开，不做迁移）
-      key: 'save:xiake-xing:m4',
+      // :m5 后缀作废旧档——刷怪 bug 的旧档里攒着超额狼群，直接重开不做迁移
+      key: 'save:xiake-xing:m5',
       capture: () => world.createSnapshot(),
       restore: (snapshot) => world.rollbackWorld(snapshot as SnapshotData),
     },
