@@ -109,6 +109,24 @@ function emitExitsLine(ctx: SystemContext, roomId: EntityId): void {
 }
 
 /**
+ * 出口信息（0.14 方案二迭代）：略图开着时方位由小图承担，平面方向文本行
+ * **让位**；up/down 不入图，恒以补充行交代（楼梯口不能没人说）。
+ * 略图未开（或世界没预挂）→ 原文本行（含死路句式）。
+ */
+function emitExitsBlock(ctx: SystemContext, viewer: EntityId, roomId: EntityId): void {
+  const exits = ctx.getComponent(roomId, Exits);
+  const vertical = exits ? Object.keys(exits).filter((d) => d === 'up' || d === 'down') : [];
+  if (ctx.getComponent(viewer, MiniMap)?.on === true) {
+    emitMiniMapIfOn(ctx, viewer, roomId);
+    if (vertical.length > 0) {
+      ctx.output.narrative(`另有出口：${vertical.map(directionLabel).join('、')}。`);
+    }
+    return;
+  }
+  emitExitsLine(ctx, roomId);
+}
+
+/**
  * 实体列示段（xkx「店小二2」词汇教学）：同名聚组，主名可点（tag:entity），
  * 别名并集与重名计数跟在名字后——`野狼(狼、wolf)×2`。
  * `groupSuffix` 可给整组追加标注（如地上物的「（拿不动）」）。
@@ -197,8 +215,7 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): 
   // 环境行预留位（时辰/天气落地后插在此处，见 prefabs README）
   ctx.output.narrative(desc && desc.text !== '' ? INDENT + desc.text : '这里没有任何描述。');
 
-  emitExitsLine(ctx, roomId);
-  emitMiniMapIfOn(ctx, viewer, roomId);
+  emitExitsBlock(ctx, viewer, roomId);
 
   // 房间绑定实体二分（xkx：人和物分开列）：有对话/任务/生命的视为活体
   // （钉在房间里的 NPC——酒保、村长——用 Located 关系），其余是物品
@@ -241,8 +258,7 @@ function emitRoomBrief(ctx: SystemContext, roomId: EntityId, viewer: EntityId): 
   if (short?.text) {
     ctx.output.narrative(INDENT + short.text);
   }
-  emitExitsLine(ctx, roomId);
-  emitMiniMapIfOn(ctx, viewer, roomId);
+  emitExitsBlock(ctx, viewer, roomId);
 }
 
 /**
@@ -339,8 +355,7 @@ export const MovementSystem = defineSystem({
       ctx.output.narrative([
         { text: `你来到了${roomName?.text ?? targetRoomId}。`, style: { bold: true } },
       ]);
-      emitExitsLine(ctx, targetRoomId);
-      emitMiniMapIfOn(ctx, entity, targetRoomId);
+      emitExitsBlock(ctx, entity, targetRoomId);
     }
 
     // 6. 广播"人真的到了"——探索记账、房间 enter/leave/firstEnter 都挂在这上面

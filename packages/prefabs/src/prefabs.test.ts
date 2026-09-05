@@ -579,6 +579,7 @@ describe('进房信息呈现（xkx 长短双描述,0.14）', () => {
     w.output.clear();
     await w.execute('north', player); // 折返回甲房（已来过 → 短描述档）
     expect(textOf(w.output.getAll(), 'title')).toEqual(['【甲房】']);
+    // 甲房世界没预挂 MiniMap → 出口文本行保留
     expect(textOf(w.output.getAll(), 'narrative')).toEqual(['　　甲房的一行短氛围。', '出口：南。']);
   });
 
@@ -588,10 +589,8 @@ describe('进房信息呈现（xkx 长短双描述,0.14）', () => {
     w.output.clear();
     await w.execute('east', player); // 丙房：首次 + 死路
     expect(textOf(w.output.getAll(), 'title')).toEqual(['【丙房】']);
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual([
-      '　　丙房的长描述。',
-      '这里没有任何出口。',
-    ]);
+    // 丙房世界没预挂 MiniMap → 死路句式保留
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['　　丙房的长描述。', '这里没有任何出口。']);
   });
 
   it('重复进房（无 short）：回退报名一行，但出口行恒显', async () => {
@@ -684,6 +683,24 @@ describe('进房邻接小图（0.14 方案二）', () => {
     await w.execute('south', player);
     const joined = w.output.getAll().map((m) => m.segments.map((s) => s.text).join('')).join('\n');
     expect(joined).not.toContain('──');
+  });
+
+  it('up/down 不入图：略图开着以「另有出口」补充行交代', async () => {
+    const { w, player } = buildMiniWorld(true);
+    const exits = w.getComponent('room_a', Exits)!;
+    exits['up'] = 'loft';
+    exits['down'] = 'cellar';
+    await w.execute('look', player);
+    const joined = textOf(w.output.getAll(), 'narrative').join('\n');
+    expect(joined).toContain('另有出口：上、下。');
+
+    // 略图关 → 回归完整文本行（含竖直方向）
+    await w.execute('略图', player);
+    w.output.clear();
+    await w.execute('look', player);
+    const joined2 = textOf(w.output.getAll(), 'narrative').join('\n');
+    expect(joined2).toContain('出口：南、上、下。');
+    expect(joined2).not.toContain('另有出口');
   });
 });
 
