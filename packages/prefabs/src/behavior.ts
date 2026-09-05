@@ -53,6 +53,11 @@ export interface RoomDef {
   name: string;
   aliases?: string[];
   description: string;
+  /**
+   * 可选：短描述（一行氛围，xkx 长短双描述惯例）——重复进房（自动简略）
+   * 时显示【名】+ short + 出口，不再光秃秃只报名；不写则回退旧行为
+   */
+  short?: string;
   /** 方向 → 房间 id（拓扑的唯一真相） */
   exits: Record<string, string>;
   /** 所属区域 id（v0.9-B；区域由 `defineArea` 声明） */
@@ -229,6 +234,9 @@ export function defineRoom<S extends Record<string, unknown> = Record<string, ne
 ): RoomModuleDef<S> {
   if (!def.id) throw new Error('defineRoom: 房间 id 不能为空');
   if (!def.name) throw new Error('defineRoom: 房间 name 不能为空');
+  if (def.short !== undefined && (!def.short || !def.short.trim())) {
+    throw new Error(`defineRoom: 房间 ${def.id} 的 short 需为非空字符串（留空请直接不写）`);
+  }
   if (def.on?.every !== undefined) {
     const ms = def.on.every.ms;
     if (!Number.isInteger(ms) || ms <= 0) {

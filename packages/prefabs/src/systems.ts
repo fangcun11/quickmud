@@ -13,7 +13,7 @@
  * - 巡逻：实体带 `Wander` 标记 + Position，由 NpcWanderSystem 按 every 时钟、
  *   沿房间 Exits 的方向序列确定性移动（不引入随机）
  */
-import { defineSystem, Name, blueprint } from '@mud/ecs-engine';
+import { defineSystem, Name, blueprint, Dialogue } from '@mud/ecs-engine';
 import type {
   EntityId,
   SystemContext,
@@ -42,6 +42,8 @@ import {
   Position,
   Exits,
   Description,
+  Short,
+  Pose,
   Located,
   Portable,
   Health,
@@ -98,22 +100,33 @@ function exitDirectionList(
   return dirs.length > 0 ? dirs.map(directionLabel).join('、') : undefined;
 }
 
+/** 出口行**恒显**（xkx 惯例，0.14）：有出口列方向；死路明说，不跳过 */
+function emitExitsLine(ctx: SystemContext, roomId: EntityId): void {
+  const exitList = exitDirectionList(ctx, roomId);
+  ctx.output.narrative(exitList ? `出口：${exitList}。` : '这里没有任何出口。');
+}
+
 /**
  * 实体列示段（xkx「店小二2」词汇教学）：同名聚组，主名可点（tag:entity），
  * 别名并集与重名计数跟在名字后——`野狼(狼、wolf)×2`。
+ * `groupSuffix` 可给整组追加标注（如地上物的「（拿不动）」）。
  */
-function entityListSegments(ctx: SystemContext, ids: EntityId[]): Segment[] {
-  const groups = new Map<string, { aliases: string[]; count: number }>();
+function entityListSegments(
+  ctx: SystemContext,
+  ids: EntityId[],
+  groupSuffix?: (groupIds: EntityId[], name: string) => string,
+): Segment[] {
+  const groups = new Map<string, { ids: EntityId[]; aliases: string[] }>();
   for (const id of ids) {
     const nc = ctx.getComponent(id, Name);
     const name = nc?.text && nc.text !== '' ? nc.text : id;
-    const group = groups.get(name) ?? { aliases: [], count: 0 };
-    if (group.count === 0) {
+    const group = groups.get(name) ?? { ids: [], aliases: [] };
+    if (group.ids.length === 0) {
       for (const alias of nc?.aliases ?? []) {
         if (alias !== name && !group.aliases.includes(alias)) group.aliases.push(alias);
       }
     }
-    group.count += 1;
+    group.ids.push(id);
     groups.set(name, group);
   }
   const out: Segment[] = [];
@@ -121,20 +134,56 @@ function entityListSegments(ctx: SystemContext, ids: EntityId[]): Segment[] {
   for (const [name, group] of groups) {
     out.push({ text: name, style: { tag: 'entity' } });
     const alias = group.aliases.length > 0 ? `(${group.aliases.join('、')})` : '';
-    const count = group.count > 1 ? `×${group.count}` : '';
+    const count = group.ids.length > 1 ? `×${group.ids.length}` : '';
+    const suffix = groupSuffix ? groupSuffix(group.ids, name) : '';
     const separator = index < groups.size - 1 ? '、' : '';
-    out.push({ text: `${alias}${count}${separator}` });
+    out.push({ text: `${alias}${count}${suffix}${separator}` });
     index += 1;
   }
   return out;
 }
 
 /**
- * 房间块（xkx 式）：【名】 → 描述 → 出口 → 地上物 → 同房活体。
+ * 活体逐行（xkx 式身份感，0.14）：每个同名片一行——
+ * `「野狼」(狼、wolf)×2压低前身，喉咙里滚出低低的呜声。`
+ * 姿态短语取组内首个成员的 `Pose`（内容层声明，Phrase 不带句尾标点）。
+ */
+function emitOccupantLines(ctx: SystemContext, ids: EntityId[]): void {
+  const groups = new Map<string, { ids: EntityId[]; aliases: string[]; pose: string }>();
+  for (const id of ids) {
+    const nc = ctx.getComponent(id, Name);
+    const name = nc?.text && nc.text !== '' ? nc.text : id;
+    const group = groups.get(name) ?? { ids: [], aliases: [], pose: '' };
+    if (group.ids.length === 0) {
+      for (const alias of nc?.aliases ?? []) {
+        if (alias !== name && !group.aliases.includes(alias)) group.aliases.push(alias);
+      }
+      group.pose = ctx.getComponent(id, Pose)?.text ?? '';
+    }
+    group.ids.push(id);
+    groups.set(name, group);
+  }
+  for (const [name, group] of groups) {
+    const alias = group.aliases.length > 0 ? `(${group.aliases.join('、')})` : '';
+    const count = group.ids.length > 1 ? `×${group.ids.length}` : '';
+    ctx.output.narrative([
+      { text: '「' },
+      { text: name, style: { tag: 'entity' } },
+      { text: `」${alias}${count}${group.pose}。` },
+    ]);
+  }
+}
+
+/** 描述缩进（xkx 惯例：全角两格） */
+const INDENT = '　　';
+
+/**
+ * 房间块（xkx 式）：【名】 → 描述 → 环境行(预留位) → 出口 → 地上物 → 活体。
  *
- * 进房（首次/详细模式）与 look 共用同一份输出——进房即全知，look 是重看；
- * 实体名都带 tag:entity（网页端可点击 = look）。标题走 title 通道
- * （渲染端有专属配色），不再混在 narrative 里。
+ * 进房（首次/详细）与 look 共用同一份输出——进房即全知，look 是重看；
+ * 实体名都带 tag:entity（网页端可点击 = look）。标题走 title 通道。
+ * 地上物**全列**（含拿不动的场景物，标注「（拿不动）」——能 look 到的东西
+ * 不该在列示里隐身）。
  */
 function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): void {
   const name = ctx.getComponent(roomId, Name);
@@ -143,34 +192,53 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): 
   if (name) {
     ctx.output.title(`【${name.text}】`);
   }
-  ctx.output.narrative(desc && desc.text !== '' ? desc.text : '这里没有任何描述。');
+  // 环境行预留位（时辰/天气落地后插在此处，见 prefabs README）
+  ctx.output.narrative(desc && desc.text !== '' ? INDENT + desc.text : '这里没有任何描述。');
 
-  const exitList = exitDirectionList(ctx, roomId);
-  if (exitList) {
-    ctx.output.narrative(`出口：${exitList}。`);
-  }
+  emitExitsLine(ctx, roomId);
 
-  // 地上可拾取物（Located.at == 房间 && Portable）
-  const groundItems = itemsInContainer(ctx, roomId).filter(
-    (id) => ctx.getComponent(id, Portable) !== undefined,
-  );
-  if (groundItems.length > 0) {
+  // 房间绑定实体二分（xkx：人和物分开列）：有对话/任务/生命的视为活体
+  // （钉在房间里的 NPC——酒保、村长——用 Located 关系），其余是物品
+  const bound = itemsInContainer(ctx, roomId);
+  const isPerson = (id: EntityId): boolean =>
+    ctx.getComponent(id, Dialogue) !== undefined ||
+    ctx.getComponent(id, QuestGiver) !== undefined ||
+    ctx.getComponent(id, Health) !== undefined;
+  const stationaryPersons = bound.filter(isPerson);
+  const objects = bound.filter((id) => !isPerson(id));
+
+  if (objects.length > 0) {
     ctx.output.narrative([
       { text: '你可以看到：' },
-      ...entityListSegments(ctx, groundItems),
+      ...entityListSegments(ctx, objects, (groupIds) => {
+        const portable = groupIds.every((id) => ctx.getComponent(id, Portable) !== undefined);
+        return portable ? '' : '（拿不动）';
+      }),
       { text: '。' },
     ]);
   }
 
-  // 同房活物（有身体的实体；不含查看者自己）
+  // 同房活物（会动的 + 钉在房间的 NPC；不含查看者自己）——逐行，带姿态
   const others = occupantsIn(ctx, roomId).filter((id) => id !== viewer);
-  if (others.length > 0) {
-    ctx.output.narrative([
-      { text: '这里还有：' },
-      ...entityListSegments(ctx, others),
-      { text: '。' },
-    ]);
+  if (others.length + stationaryPersons.length > 0) {
+    emitOccupantLines(ctx, [...others, ...stationaryPersons]);
   }
+}
+
+/**
+ * 短描述档（xkx 长短双描述，0.14）：重复进房（自动简略）时——
+ * 【名】+ 一行短氛围 + 出口。房间没写 `short` 时由 MovementSystem 回退旧行为。
+ */
+function emitRoomBrief(ctx: SystemContext, roomId: EntityId): void {
+  const name = ctx.getComponent(roomId, Name);
+  if (name) {
+    ctx.output.title(`【${name.text}】`);
+  }
+  const short = ctx.getComponent(roomId, Short);
+  if (short?.text) {
+    ctx.output.narrative(INDENT + short.text);
+  }
+  emitExitsLine(ctx, roomId);
 }
 
 export const MovementSystem = defineSystem({
@@ -216,22 +284,26 @@ export const MovementSystem = defineSystem({
     // 4. 落位（唯一改状态处）
     pos.roomId = targetRoomId;
 
-    // 5. 输出目标房间：首次进入（或详细模式）给 xkx 式完整房间块——
-    //    进房即全知，不再"你来到了X"+描述双报名；重复进入只报地名一行
-    //    （自动简略，v0.11）。来没来过查 `Visited`（VisitationSystem 在
-    //    Moved 之后记账，本系统 emit Moved 前查到的"没有"就是真的第一次）。
-    //    细节随时可以用 look 重看。
+    // 5. 输出目标房间（xkx 长短双描述，0.14 三档）：
+    //    - 首次进入（或详细模式）→ 完整房间块（【名】+描述+出口+实体）
+    //    - 重复进入：写了 `short` 的房间 → 短描述档（【名】+一行氛围+出口）；
+    //      没写的 → 回退旧行为（报名一行 + 出口行）
+    //    出口行**恒显**（含死路句式）——"回城往哪走"不该靠 look。
+    //    来没来过查 `Visited`（VisitationSystem 在 Moved 之后记账，本系统
+    //    emit Moved 前查到的"没有"就是真的第一次）。细节随时用 look 重看。
     const desc = ctx.getComponent(targetRoomId, Description);
     const seenBefore = ctx.getComponent(entity, Visited)?.rooms.includes(targetRoomId) ?? false;
-    const hasDesc = !!desc && desc.text !== '';
-    const fullDesc = hasDesc && (!seenBefore || ctx.getComponent(entity, Verbose)?.on === true);
+    const fullDesc = !!desc && desc.text !== '' && (!seenBefore || ctx.getComponent(entity, Verbose)?.on === true);
     if (fullDesc) {
       emitRoomBlock(ctx, targetRoomId, entity);
+    } else if (ctx.getComponent(targetRoomId, Short)?.text) {
+      emitRoomBrief(ctx, targetRoomId);
     } else {
       const roomName = ctx.getComponent(targetRoomId, Name);
       ctx.output.narrative([
         { text: `你来到了${roomName?.text ?? targetRoomId}。`, style: { bold: true } },
       ]);
+      emitExitsLine(ctx, targetRoomId);
     }
 
     // 6. 广播"人真的到了"——探索记账、房间 enter/leave/firstEnter 都挂在这上面

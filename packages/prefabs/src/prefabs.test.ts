@@ -14,6 +14,7 @@ import {
   VerboseSystem,
   VisitationSystem,
 } from './systems.js';
+import { markVisited } from './room.js';
 import {
   GoCommand,
   createDirectionCommand,
@@ -29,6 +30,8 @@ import {
   Health,
   Position,
   Description,
+  Short,
+  Pose,
   Exits,
   Portable,
   Weapon,
@@ -124,7 +127,7 @@ describe('prefabs 移动', () => {
     // 首次进入 = xkx 式房间块：【名】(title 通道) + 描述 + 出口
     expect(textOf(w.output.getAll(), 'title')).toEqual(['【酒馆】']);
     const lines = textOf(w.output.getAll(), 'narrative');
-    expect(lines[0]).toBe('你走进热闹的酒馆。');
+    expect(lines[0]).toBe('　　你走进热闹的酒馆。'); // xkx 惯例：描述全角两格缩进
     expect(lines[1]).toBe('出口：南。');
   });
 
@@ -146,10 +149,10 @@ describe('prefabs 查看与物品', () => {
     await w.execute('look', player);
     expect(textOf(w.output.getAll(), 'title')).toEqual(['【城镇广场】']);
     const lines = textOf(w.output.getAll(), 'narrative');
-    expect(lines[0]).toBe('你站在城镇广场上。北面是酒馆。');
-    expect(lines[1]).toBe('出口：北。'); // v0.11：出口清单来自 Exits 数据
-    // 石像不可拾取 → 不在列表；别名跟在主名后（P3 词汇教学）
-    expect(lines[2]).toBe('你可以看到：生锈的剑(剑、sword)、金币(coin)。');
+    expect(lines[0]).toBe('　　你站在城镇广场上。北面是酒馆。');
+    expect(lines[1]).toBe('出口：北。'); // 出口行恒显（v0.11：清单来自 Exits 数据）
+    // 石像不可拾取但也**可见**（xkx 惯例）：全列 + 拿不动标注；别名跟在主名后
+    expect(lines[2]).toBe('你可以看到：生锈的剑(剑、sword)、金币(coin)、石像（拿不动）。');
   });
 
   it('take 把当前房间的可携物放入背包，inventory 可见', async () => {
@@ -470,22 +473,23 @@ describe('详略模式与出口提示（v0.11）', () => {
   it('重复进房自动简略：描述只在首次出现，look 随时看全，详细命令切回', async () => {
     const { w, player } = buildTwoRooms();
 
-    // 首次进入：xkx 式房间块（【名】走 title 通道）+ 描述 + 出口
+    // 首次进入：xkx 式房间块（【名】走 title 通道）+ 描述缩进 + 出口
     await w.execute('south', player);
     expect(textOf(w.output.getAll(), 'title')).toEqual(['【乙房】']);
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['乙房的描述。', '出口：北。']);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['　　乙房的描述。', '出口：北。']);
     w.output.clear();
 
     // 折返再进：只报地名（Visited 里已有，自动简略）
     await w.execute('north', player);
     w.output.clear();
     await w.execute('south', player);
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。']);
+    // 乙房没写 short → 回退旧行为：报名一行 + 出口行（出口恒显，0.14）
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '出口：北。']);
     w.output.clear();
 
     // look 随时能重看全部细节（+出口清单）
     await w.execute('look', player);
-    const looked = textOf(w.output.getAll(), 'narrative');
+    const looked = textOf(w.output.getAll(), 'narrative').join('\n');
     expect(looked).toContain('乙房的描述。');
     expect(looked).toContain('出口：北。');
     w.output.clear();
@@ -495,7 +499,7 @@ describe('详略模式与出口提示（v0.11）', () => {
     await w.execute('north', player);
     w.output.clear();
     await w.execute('south', player);
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['乙房的描述。', '出口：北。']);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['　　乙房的描述。', '出口：北。']);
     // 再切回自动简略
     expect(await w.execute('verbose', player)).toContain('自动简略');
   });
@@ -519,6 +523,90 @@ describe('详略模式与出口提示（v0.11）', () => {
     await w.execute('south', player);
     // 没挂 Visited：seenBefore 恒 false ⇒ 每次全量（内容没声明探索就不简略）
     expect(textOf(w.output.getAll(), 'title')).toEqual(['【乙房】']);
-    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['乙房的描述。']); // room_b 无出口，无出口行
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['　　乙房的描述。', '这里没有任何出口。']);
+  });
+});
+
+describe('进房信息呈现（xkx 长短双描述,0.14）', () => {
+  /** 甲房(有 short+金币+石像+带姿态的狼) ⇄ 乙房(无 short) → 丙房(死路) */
+  function buildShortWorld() {
+    const w = new World({ tickInterval: 500 });
+    w.register(MovementSystem, DescriptionSystem, VisitationSystem);
+    w.registerCommands(
+      GoCommand,
+      createDirectionCommand('north', ['north']),
+      createDirectionCommand('south', ['south']),
+      createDirectionCommand('east', ['east']),
+      LookCommand,
+    );
+    const player = w.entities.createWithId('player-1');
+    w.addComponent(player, Position, { roomId: 'room_a' });
+    w.addComponent(player, Visited, { rooms: [] });
+    w.addComponent(player, Name, { text: '冒险者', aliases: [] });
+    markVisited(w, player); // 出生房也要记账（真实游戏同款），否则折返出生房不算"来过"
+    const rooms = [
+      { id: 'room_a', name: '甲房', desc: '甲房的长描述。', short: '甲房的一行短氛围。', exits: { south: 'room_b' } },
+      { id: 'room_b', name: '乙房', desc: '乙房的长描述。', exits: { north: 'room_a', east: 'room_c' } },
+      { id: 'room_c', name: '丙房', desc: '丙房的长描述。', exits: {} },
+    ];
+    for (const room of rooms) {
+      w.entities.createWithId(room.id);
+      w.addComponent(room.id, Name, { text: room.name });
+      w.addComponent(room.id, Description, { text: room.desc });
+      if (room.short) w.addComponent(room.id, Short, { text: room.short });
+      w.addComponent(room.id, Exits, { ...room.exits });
+    }
+    const coin = w.entities.createWithId('coin');
+    w.addComponent(coin, Name, { text: '金币', aliases: [] });
+    w.addComponent(coin, Portable);
+    w.addComponent(coin, Located, { targets: ['room_a'] });
+    const statue = w.entities.createWithId('statue');
+    w.addComponent(statue, Name, { text: '石像', aliases: [] });
+    w.addComponent(statue, Located, { targets: ['room_a'] });
+    const wolf = w.entities.createWithId('wolf-1');
+    w.addComponent(wolf, Name, { text: '野狼', aliases: ['狼'] });
+    w.addComponent(wolf, Pose, { text: '压低前身，喉咙里滚出低低的呜声' });
+    w.addComponent(wolf, Position, { roomId: 'room_a' });
+    return { w, player };
+  }
+
+  it('重复进房（有 short）：【名】+ 一行短氛围 + 出口，不再是孤零零一行', async () => {
+    const { w, player } = buildShortWorld();
+    await w.execute('south', player); // 乙房（首次，全量块）
+    w.output.clear();
+    await w.execute('north', player); // 折返回甲房（已来过 → 短描述档）
+    expect(textOf(w.output.getAll(), 'title')).toEqual(['【甲房】']);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['　　甲房的一行短氛围。', '出口：南。']);
+  });
+
+  it('首次进房仍是完整房间块；死路房明说「这里没有任何出口」', async () => {
+    const { w, player } = buildShortWorld();
+    await w.execute('south', player);
+    w.output.clear();
+    await w.execute('east', player); // 丙房：首次 + 死路
+    expect(textOf(w.output.getAll(), 'title')).toEqual(['【丙房】']);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual([
+      '　　丙房的长描述。',
+      '这里没有任何出口。',
+    ]);
+  });
+
+  it('重复进房（无 short）：回退报名一行，但出口行恒显', async () => {
+    const { w, player } = buildShortWorld();
+    await w.execute('south', player); // 乙房首次
+    w.output.clear();
+    await w.execute('north', player); // 甲房（短描述档）
+    w.output.clear();
+    await w.execute('south', player); // 乙房重复（无 short）
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你来到了乙房。', '出口：北、东。']);
+  });
+
+  it('look：活体逐行带姿态短语；地上物全列（场景物标注拿不动）', async () => {
+    const { w, player } = buildShortWorld();
+    await w.execute('look', player);
+    const lines = textOf(w.output.getAll(), 'narrative');
+    expect(lines).toContain('　　甲房的长描述。');
+    expect(lines).toContain('你可以看到：金币、石像（拿不动）。');
+    expect(lines).toContain('「野狼」(狼)压低前身，喉咙里滚出低低的呜声。');
   });
 });

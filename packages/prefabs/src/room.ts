@@ -15,7 +15,7 @@
  */
 import type { World, EntityId } from '@mud/ecs-engine';
 import { Name } from '@mud/ecs-engine';
-import { Exits, Description, Coordinates, Position, Visited, Area, areaEntityId } from './traits.js';
+import { Exits, Description, Short, Coordinates, Position, Visited, Area, areaEntityId } from './traits.js';
 import type { RoomDef } from './behavior.js';
 
 
@@ -306,6 +306,10 @@ export function buildRooms(world: World, layout: { rooms: LayoutRoom[] }): void 
     const id = world.entities.createWithId(room.id as EntityId);
     world.addComponent(id, Name, { text: room.name, aliases: room.aliases ?? [] });
     world.addComponent(id, Description, { text: room.description });
+    if (room.short) {
+      // 短描述（xkx 长短双描述）：重复进房（自动简略）时的一行氛围
+      world.addComponent(id, Short, { text: room.short });
+    }
     world.addComponent(id, Exits, { ...room.exits });
     if (room.coords) {
       world.addComponent(id, Coordinates, { ...room.coords });

@@ -48,6 +48,7 @@ import {
   Health,
   Description,
   Loot,
+  Pose,
   // 房间与区域
   defineRoom,
   defineArea,
@@ -172,6 +173,7 @@ export function bootstrap(): BootstrapResult {
       name: '悦来客栈',
       description:
         '大堂里飘着酒菜香，跑堂的正挨着桌子擦。柜台后挂一面小旗，写着「悦来」二字。江湖消息跟着行商的驮队一起到，这里最灵。',
+      short: '酒菜香混着人声，跑堂的正挨着桌子擦。',
       area: 'town',
       exits: { east: 'street' },
     }),
@@ -180,6 +182,7 @@ export function bootstrap(): BootstrapResult {
       name: '青石街',
       description:
         '镇子正中的青石板路，被独轮车磨得发亮。北边是杂货铺，南边是望岳武馆，往东出镇口，往西回客栈。',
+      short: '青石板被独轮车磨得发亮，吆喝声此起彼伏。',
       area: 'town',
       exits: { west: 'inn', north: 'grocery', south: 'wuguan', east: 'gate' },
     }),
@@ -204,6 +207,7 @@ export function bootstrap(): BootstrapResult {
       name: '镇口',
       description:
         '青石镇的南门。守门的老卒靠着门框打盹，长枪歪在肩上。出了门就是通往终南山的山道。',
+      short: '守门的老卒靠着门框打盹，长枪歪在肩上。',
       area: 'town',
       exits: { west: 'street', south: 'path' },
     }),
@@ -256,6 +260,7 @@ export function bootstrap(): BootstrapResult {
       name: '密林',
       description:
         '树冠遮天蔽日，脚下的落叶厚得没过鞋面。草根间露出几截白骨，看不清是兽是畜——再往南，腥臊味越来越重。',
+      short: '树冠遮天蔽日，脚下的落叶厚得没过鞋面。',
       area: 'woods',
       exits: { north: 'woodsgate', south: 'den' },
     }),
@@ -302,6 +307,8 @@ export function bootstrap(): BootstrapResult {
     world.addComponent(id, Description, {
       text: '一头精瘦的灰狼，绿油油的眼睛盯着你，喉咙里滚出低低的呜声。',
     });
+    // 姿态短语（xkx 身份感）：房间块的活体行会拼在名字后
+    world.addComponent(id, Pose, { text: '压低前身，喉咙里滚出低低的呜声' });
     world.addComponent(id, Position, { roomId: w.roomId });
     world.addComponent(id, Health, { current: 25, max: 25 });
     world.addComponent(id, Stats, { atk: 6, def: 1, dodge: 2 });

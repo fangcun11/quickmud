@@ -16,6 +16,22 @@ export const Description = trait('description', () => ({
   text: '',
 }));
 
+/**
+ * 房间短描述（0.14，xkx 长短双描述惯例）：重复进房（自动简略）时显示
+ * 【名】+ 一行短氛围 + 出口。由 `defineRoom({ short })` 注入（buildRooms 挂载）
+ */
+export const Short = trait('room-short', () => ({
+  text: '',
+}));
+
+/**
+ * 活体姿态短语（0.14，xkx「店小二」式身份感）：房间块的活体行把它拼在
+ * 名字后（"「野狼」×2趴在草窝里打盹。"）。由内容层给 NPC/怪声明
+ */
+export const Pose = trait('pose', () => ({
+  text: '',
+}));
+
 /** 生命值组件（/heal 的约定目标） */
 export const Health = trait('health', () => ({
   current: 100,
