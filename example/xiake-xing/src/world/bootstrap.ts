@@ -72,6 +72,7 @@ import {
   Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag,
   Arsenal, Channeling, Scripture,
   Purse, Equipment, Bonus, Gear, ForSale,
+  Combat, Aggressive,
 } from '../traits';
 import {
   MeditateCommand,
@@ -107,6 +108,7 @@ import {
 } from '../shop';
 import { AtmosphereSystem } from '../atmosphere';
 import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
+import { CombatRoundSystem, DisengageCommand } from '../combat-live';
 
 export interface BootstrapResult {
   world: World;
@@ -133,6 +135,7 @@ export function bootstrap(): BootstrapResult {
     LootSystem,
     MiniMapSystem,
     NpcWanderSystem,
+    CombatRoundSystem,
     BacktrackSystem,
     PresenceSystem,
     PlayerAwareDeathSystem,
@@ -180,6 +183,7 @@ export function bootstrap(): BootstrapResult {
     UnequipCommand,
     BuyCommand,
     SellCommand,
+    DisengageCommand,
     LearnCommand,
     UseCommand,
     ChannelCommand,
@@ -358,6 +362,7 @@ export function bootstrap(): BootstrapResult {
   });
   world.addComponent(playerId, Purse, { silver: 10 }); // 兜里几枚碎银
   world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
+  world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0 });
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
   markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
 
@@ -378,6 +383,7 @@ export function bootstrap(): BootstrapResult {
     // 姿态短语（xkx 身份感）：房间块的活体行会拼在名字后
     world.addComponent(id, Pose, { text: '压低前身，喉咙里滚出低低的呜声' });
     world.addComponent(id, Wander); // 巡逻（每 3 息沿狼林出口游荡）
+    world.addComponent(id, Aggressive); // 主动接敌（玩家进狼林即被攻击）
     world.addComponent(id, Position, { roomId: w.roomId });
     world.addComponent(id, Health, { current: 25, max: 25 });
     world.addComponent(id, Stats, { atk: 6, def: 1, dodge: 2 });

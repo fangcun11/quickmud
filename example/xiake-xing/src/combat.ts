@@ -22,6 +22,7 @@ import { Stats, Retaliate, Trail, PlayerTag, Arsenal, Energy } from './traits';
 import { ARTS } from './arts';
 import { foesInRoom, grantArtExp } from './martial';
 import { effectiveStats } from './equipment';
+import { enterCombat, exitCombat } from './combat-live';
 
 // ---------------------------------------------------------------- 命令 --
 
@@ -90,6 +91,9 @@ export const WuxiaCombatSystem = defineSystem({
       return;
     }
     if (hp.current <= 0) return; // 已经死了（同轮多重 Attack 的防御）
+
+    // ---- 进入战斗（0.14 持续战斗）----
+    enterCombat(ctx, attacker, target);
 
     // ---- 招式解析（M2）：attack 自动选已解锁且内力够的最高系数；
     // use 命令（Strike）显式指定（此处再校验一次——系统是执行者） ----
@@ -174,6 +178,8 @@ export const WuxiaCombatSystem = defineSystem({
       ctx.output.narrative([
         { text: `「${targetName}」惨嚎一声，轰然倒地。`, style: { color: 'red', bold: true } },
       ]);
+      // 击杀 → 玩家脱战（对方倒了）
+      if (defIsPlayer === false) exitCombat(ctx, attacker);
       ctx.emit(Died, { entity: target, killer: attacker, roomId: tgtPos.roomId });
     }
   },
@@ -258,6 +264,7 @@ export const FleeSystem = defineSystem({
       ]);
       // 手动改位置不走 MovementSystem，Moved 要自己发（打断打坐、记录来路都靠它）
       ctx.emit(Moved, { entity: id, from, to: trail.roomId, direction: 'flee' });
+      exitCombat(ctx, id); // 逃跑成功 → 脱战
       return;
     }
 

@@ -11,7 +11,7 @@
 import { defineSystem } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 import { Died, Moved, Position, displayName, directionLabel } from '@mud/prefabs';
-import { PlayerTag, Energy, Cultivating, Trail, Purse } from './traits';
+import { PlayerTag, Energy, Cultivating, Trail, Purse, Combat as CombatLive } from './traits';
 import { Health, Backtrack } from '@mud/prefabs';
 
 const INN_ROOM_ID = 'inn';
@@ -71,6 +71,8 @@ export const PlayerAwareDeathSystem = defineSystem({
     if (energy) energy.current = 0;
     const cultivating = ctx.getComponent(entity, Cultivating);
     if (cultivating) cultivating.on = false;
+    const combatLive = ctx.getComponent(entity, CombatLive);
+    if (combatLive) combatLive.foe = ''; // 脱战
     const backtrack = ctx.getComponent(entity, Backtrack);
     if (backtrack) backtrack.rooms = [];
     const trail = ctx.getComponent(entity, Trail);

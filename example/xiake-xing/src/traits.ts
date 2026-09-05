@@ -95,3 +95,16 @@ export const Equipment = trait('equipment', () => ({
 export const ForSale = trait('for_sale', () => ({
   price: 0,
 }));
+
+/**
+ * 持续战斗标记（0.14）：挂玩家，{ foe, lastRoundAt }——
+ * foe = 当前交战对手；lastRoundAt 与 Cultivating/Channeling 同款时间账本。
+ * CombatRoundSystem 每息自动交手；脱战时移除组件。
+ */
+export const Combat = trait('combat', () => ({
+  foe: '' as string,
+  lastRoundAt: 0,
+}));
+
+/** 主动攻击标记（0.14）：挂 NPC——同房有玩家则自动接敌（AggroSystem） */
+export const Aggressive = trait('aggressive', () => ({}));

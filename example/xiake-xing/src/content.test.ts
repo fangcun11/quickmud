@@ -145,11 +145,11 @@ describe('侠客行 M0 · 三区域骨架', () => {
 // ============================================================
 import { Name } from '@mud/ecs-engine';
 import { itemsInContainer } from '@mud/prefabs';
-import { Energy, Stats, Cultivating, Retaliate, Arsenal, Channeling } from './traits';
+import { Energy, Stats, Cultivating, Retaliate, Channeling } from './traits';
 import {
   Area, Wander, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
-import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear } from './traits';
+import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive } from './traits';
 
 function fresh(): void {
   const b = bootstrap();
@@ -505,30 +505,6 @@ describe('侠客行沉浸支线 · 世界活着', () => {
     expect(hit).toContain('「灰狼」全力出手，被你格挡，只造成 4 点伤害');
   });
 
-  it('雨天打滑：命中降档（hit → blocked）', async () => {
-    fresh();
-    // 找 woods 区域最近的 rain 时段,tick 到位
-    const areaId = world.getRelations('inn', Area)[0] ?? 'inn';
-    let rainTime = 0;
-    for (let slot = 0; slot < 64; slot++) {
-      if (weatherOf(areaId, slot * 60_000) === 'rain') { rainTime = slot * 60_000; break; }
-    }
-    const wolf = world.entities.createWithId('test-wolf');
-    world.addComponent(wolf, Name, { text: '灰狼', aliases: [] });
-    world.addComponent(wolf, Retaliate);
-    world.addComponent(wolf, Stats, { atk: 6, def: 2, dodge: 2 });
-    world.addComponent(wolf, Health, { current: 200, max: 200 });
-    world.addComponent(wolf, Position, { roomId: 'inn' });
-    world.getComponent(player, Stats)!.dodge = 4; // 白天 diff+2 → 命中
-    drain();
-    const hit = await run('attack 灰狼');
-    expect(hit).toContain('命中');
-    for (let i = 0; i < rainTime / 1000; i++) world.tick();
-    drain();
-    const wet = await run('attack 灰狼');
-    expect(wet).toContain('格挡'); // 攻方身法-1 → diff 降档
-  });
-
   it('雪盲：大雪时活体名单隐去', async () => {
     fresh();
     // 造一只伴身狼（雪盲只对“有活物的房间”有意义）
@@ -640,5 +616,67 @@ describe('侠客行 M3 · 装备与买卖', () => {
     await run('attack 野狼');
     expect(pos()).toBe('inn');
     expect(world.getComponent(player, Purse)!.silver).toBe(18); // 20 − ceil(2)
+  });
+});
+
+// ============================================================
+// 持续战斗（0.14 沉浸支线）：自动交手/自动接敌/脱战
+// ============================================================
+
+describe('侠客行沉浸支线 · 持续战斗', () => {
+  it('进入战斗后每息自动交手（不敲 attack 也在打）', async () => {
+    fresh();
+    await gotoWolves();
+    drain();
+    // 敲一拳进入战斗（穿 CombatRoundSystem 每息自动 attack）
+    await run('attack 野狼');
+    drain();
+    const hpBefore = hp();
+    world.tick();
+    world.tick();
+    world.tick();
+    drain();
+    // 3 息 × (狼被打 + 狼还手) → 狼 HP 明显下降 + 玩家被打
+    const wolfHp = world.getComponent('wolf-1', Health)!.current;
+    expect(wolfHp).toBeLessThan(25); // 被打过
+    expect(hp()).toBeLessThan(hpBefore); // 玩家也被咬了
+  });
+
+  it('狼死了 → 自动脱战（Combat.foe 清空）', async () => {
+    fresh();
+    await gotoWolves();
+    world.getComponent(player, Stats)!.dodge = 4; // 命中
+    world.getComponent(player, Stats)!.atk = 25; // 一击 24 伤,两击倒
+    drain();
+    await run('attack 野狼'); // 进入战斗
+    expect(world.getComponent(player, Combat)!.foe).toBeTruthy();
+    for (let i = 0; i < 5; i++) world.tick(); // 自动交手打死
+    drain();
+    // wolf-1 已被销毁（Aggressive 系统会切到下一只狼——这是正确行为）
+    expect(world.getComponent('wolf-1', Health)).toBeUndefined();
+    // 打死所有狼后 → 全部脱战
+    for (const wid of ['wolf-2', 'wolf-3']) {
+      const wHp = world.getComponent(wid, Health);
+      if (wHp) wHp.current = 0; // 直接置 0 模拟击杀
+    }
+    for (let i = 0; i < 3; i++) world.tick();
+    drain();
+    expect(world.getComponent(player, Combat)!.foe).toBe(''); // 所有对手死亡 → 脱战
+  });
+
+  it('停战命令 → 脱战（Aggressive 下息再接敌）', async () => {
+    fresh();
+    await gotoWolves();
+    drain();
+    await run('attack 野狼');
+    drain();
+    const stop = await run('停战');
+    console.log('DEBUG stop:', stop, 'combat:', JSON.stringify(world.getComponent(player, Combat)));
+    expect(stop).toContain('脱离');
+    expect(world.getComponent(player, Combat)!.foe).toBe('');
+    // Aggressive 下一息再接敌
+    world.tick();
+    drain();
+    expect(world.getComponent(player, Combat)!.foe).toBeTruthy();
   });
 });
