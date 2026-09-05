@@ -59,6 +59,7 @@ export function grantArtExp(
 /** 学武命令：learn/学 <秘籍>（秘籍在背包里；学了写入 Arsenal、消耗秘籍） */
 export const LearnCommand = defineCommand({
   verbs: ['learn', '学'],
+  describe: '学会背包里的秘籍（武馆地上有剑谱与心法，学完即焚）',
   args: { item: { type: 'entity' } },
   handle({ args, output, player, world }) {
     if (!args.item) {
@@ -98,6 +99,7 @@ export const LearnCommand = defineCommand({
  */
 export const UseCommand = defineCommand({
   verbs: ['use', '使'],
+  describe: '用已解锁招式攻击（use 崩拳 野狼；耗内力、伤害按系数）',
   args: { move: { type: 'word' }, target: { type: 'optional_entity' } },
   handle({ args, output, player, world }) {
     if (!args.move) {
@@ -154,6 +156,7 @@ export const UseCommand = defineCommand({
 /** 运转命令：practice/运转 <心法>（同时只能运转一门；打坐时涨其熟练度） */
 export const ChannelCommand = defineCommand({
   verbs: ['practice', '运转'],
+  describe: '运转心法（打坐涨其熟练度；吐纳术使打坐回气翻倍）',
   args: { art: { type: 'word' } },
   handle({ args, output, player, world }) {
     const channel = world.getComponent(player, Channeling);
@@ -181,6 +184,7 @@ export const ChannelCommand = defineCommand({
 /** 武学一览：arts/武学（等级/熟练度进度/已解锁招式/运转标记） */
 export const ArtsCommand = defineCommand({
   verbs: ['arts', '武学'],
+  describe: '已习武学、层数与招式一览',
   handle({ player, world }) {
     const arsenal = world.getComponent(player, Arsenal);
     if (!arsenal || Object.keys(arsenal.arts).length === 0) {

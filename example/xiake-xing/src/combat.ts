@@ -27,6 +27,7 @@ import { grantArtExp } from './martial';
 /** 逃/flee：发逃跑意图，成败由 FleeSystem 按身法差结算 */
 export const FleeCommand = defineCommand({
   verbs: ['flee', '逃', '逃跑'],
+  describe: '拔腿就跑：身法够高退回来路，不够就原地挨一击',
   handle({ output, player, world }) {
     if (!world.getComponent(player, Position)) {
       output.error('你不在任何地方。');

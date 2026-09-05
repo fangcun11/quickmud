@@ -23,6 +23,7 @@ export const MEDITATE_GAIN = 20;
 /** 打坐/meditate：发打坐意图（on 翻转由系统落地） */
 export const MeditateCommand = defineCommand({
   verbs: ['meditate', '打坐', '运功'],
+  describe: '盘膝打坐回内力（每息 +20；移动或被打会收功）',
   handle({ output, player, world }) {
     if (!world.getComponent(player, Energy)) {
       output.error('你还没有内力可修。');
@@ -40,6 +41,7 @@ export const MeditateCommand = defineCommand({
 /** 停/stop：发收功意图 */
 export const StopCommand = defineCommand({
   verbs: ['stop', '停', '收功'],
+  describe: '结束打坐（内力保留）',
   handle({ output, player, world }) {
     if (!world.getComponent(player, Cultivating)?.on) {
       output.error('你并没有在打坐。');
@@ -53,6 +55,7 @@ export const StopCommand = defineCommand({
 /** 状态/stats：生命/内力/三围一览（替换 prefabs ScoreCommand 的注册位） */
 export const StatusCommand = defineCommand({
   verbs: ['stats', '状态', '属性'],
+  describe: '生命/内力/三围/位置一览',
   handle({ player, world }) {
     const hp = world.getComponent(player, Health);
     const energy = world.getComponent(player, Energy);
