@@ -162,6 +162,32 @@ describe('prefabs 查看与物品', () => {
     expect(lines[2]).toBe('你可以看到：生锈的剑(剑、sword)、金币(coin)、石像（拿不动）。');
   });
 
+  it('出口方向与实体名带交互标注（direction/entity + entityRef，网页端点击用）', async () => {
+    const { w, player, sword } = buildWorld();
+    await w.execute('look', player);
+    const msgs = w.output.getAll();
+
+    // 出口行的每个方向词打 tag:direction（点击 = 走过去）
+    const exitsMsg = msgs.find((m) => m.kind === 'narrative' && m.segments[0]?.text === '出口：')!;
+    const dirSegs = exitsMsg.segments.filter((s) => s.style?.tag === 'direction');
+    expect(dirSegs.map((s) => s.text)).toEqual(['北']);
+
+    // 地上物主名段带 entityRef（点击可精确指认实体，同名不歧义）
+    const objectsMsg = msgs.find((m) => m.kind === 'narrative' && m.segments[0]?.text === '你可以看到：')!;
+    const swordSeg = objectsMsg.segments.find((s) => s.entityRef === sword)!;
+    expect(swordSeg.text).toBe('生锈的剑');
+    expect(swordSeg.style?.tag).toBe('entity');
+
+    // 背包物品同样带 entityRef（点击语境 = 背包内操作）
+    await w.execute('take 剑', player);
+    w.output.clear();
+    await w.execute('inventory', player);
+    const invMsg = w.output.getAll().find((m) => m.kind === 'narrative')!;
+    const invSeg = invMsg.segments.find((s) => s.entityRef === sword)!;
+    expect(invSeg.text).toBe('生锈的剑');
+    expect(invSeg.style?.tag).toBe('entity');
+  });
+
   it('attack 不允许以自己为目标（自杀门控）', async () => {
     const { w, player } = buildWorld();
     w.registerCommands(AttackCommand); // buildWorld 默认没注册战斗命令
@@ -175,7 +201,9 @@ describe('prefabs 查看与物品', () => {
 
     expect(w.getRelations(sword, Located)[0]).toBe(player);
     expect(textOf(w.output.getAll(), 'narrative')).toContain('你拿起了「生锈的剑」。');
-    expect(await w.execute('inventory', player)).toBe('你的背包里有：生锈的剑');
+    w.output.clear();
+    await w.execute('inventory', player);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你的背包里有：生锈的剑']);
   });
 
   it('take 不在当前房间的物品 → 错误反馈且不转移', async () => {
@@ -205,7 +233,9 @@ describe('prefabs 查看与物品', () => {
     await w.execute('north', player); // 去酒馆再丢
     await w.execute('drop 剑', player);
     expect(w.getRelations(sword, Located)[0]).toBe('tavern');
-    expect(await w.execute('inventory', player)).toBe('你的背包是空的。');
+    w.output.clear();
+    await w.execute('inventory', player);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你的背包是空的。']);
   });
 
   it('开发者命令 /tp /heal 仍按约定生效，/give 不再注册', async () => {
@@ -283,7 +313,9 @@ describe('R3 审查修复（作用域解析与 look target）', () => {
     // 修复前：解析到先建的 coin-t（不在当前房间）→ 永久拿不到眼前的 coin-s
     expect(w.getRelations(coinS, Located)[0]).toBe(player);
     expect(w.getRelations(coinT, Located)[0]).toBe('tavern');
-    expect(await w.execute('inventory', player)).toBe('你的背包里有：金币');
+    w.output.clear();
+    await w.execute('inventory', player);
+    expect(textOf(w.output.getAll(), 'narrative')).toEqual(['你的背包里有：金币']);
   });
 
   it('drop 只从自己背包解析，同名物在地上不干扰', async () => {

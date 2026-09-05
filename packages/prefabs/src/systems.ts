@@ -108,10 +108,32 @@ function exitDirectionList(
   return dirs.length > 0 ? dirs.map(directionLabel).join('、') : undefined;
 }
 
+/**
+ * 出口方向段：每个方向词打 `tag:'direction'`（网页端可点击 = 走过去）。
+ * 文本内容与原纯文本版逐字一致——端到端拼接结果不变，只是多了交互语义。
+ */
+function exitDirectionSegments(dirs: string[]): Segment[] {
+  const out: Segment[] = [];
+  dirs.forEach((d, i) => {
+    if (i > 0) out.push({ text: '、' });
+    out.push({ text: directionLabel(d), style: { tag: 'direction' } });
+  });
+  return out;
+}
+
 /** 出口行**恒显**（xkx 惯例，0.14）：有出口列方向；死路明说，不跳过 */
 function emitExitsLine(ctx: SystemContext, roomId: EntityId): void {
-  const exitList = exitDirectionList(ctx, roomId);
-  ctx.output.narrative(exitList ? `出口：${exitList}。` : '这里没有任何出口。');
+  const exits = ctx.getComponent(roomId, Exits);
+  const dirs = exits ? Object.keys(exits) : [];
+  if (dirs.length === 0) {
+    ctx.output.narrative('这里没有任何出口。');
+    return;
+  }
+  ctx.output.narrative([
+    { text: '出口：' },
+    ...exitDirectionSegments(dirs),
+    { text: '。' },
+  ]);
 }
 
 /**
@@ -125,7 +147,11 @@ function emitExitsBlock(ctx: SystemContext, viewer: EntityId, roomId: EntityId):
   if (ctx.getComponent(viewer, MiniMap)?.on === true) {
     emitMiniMapIfOn(ctx, viewer, roomId);
     if (vertical.length > 0) {
-      ctx.output.narrative(`另有出口：${vertical.map(directionLabel).join('、')}。`);
+      ctx.output.narrative([
+        { text: '另有出口：' },
+        ...exitDirectionSegments(vertical),
+        { text: '。' },
+      ]);
     }
     return;
   }
@@ -158,7 +184,7 @@ function entityListSegments(
   const out: Segment[] = [];
   let index = 0;
   for (const [name, group] of groups) {
-    out.push({ text: name, style: { tag: 'entity' } });
+    out.push({ text: name, style: { tag: 'entity' }, entityRef: group.ids[0] });
     const alias = group.aliases.length > 0 ? `(${group.aliases.join('、')})` : '';
     const count = group.ids.length > 1 ? `×${group.ids.length}` : '';
     const suffix = groupSuffix ? groupSuffix(group.ids, name) : '';
@@ -194,7 +220,7 @@ function emitOccupantLines(ctx: SystemContext, ids: EntityId[]): void {
     const count = group.ids.length > 1 ? `×${group.ids.length}` : '';
     ctx.output.narrative([
       { text: '「' },
-      { text: name, style: { tag: 'entity' } },
+      { text: name, style: { tag: 'entity' }, entityRef: group.ids[0] },
       { text: `」${alias}${count}${group.pose}。` },
     ]);
   }

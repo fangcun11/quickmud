@@ -4,7 +4,7 @@
  * 命令只翻译输入并 emit 事件，状态改动由对应系统完成（三条铁律）。
  */
 import { defineCommand, Name } from '@mud/ecs-engine';
-import type { AnyCommand } from '@mud/ecs-engine';
+import type { AnyCommand, Segment } from '@mud/ecs-engine';
 import {
   MoveRequested,
   Look,
@@ -234,12 +234,21 @@ export const DropCommand = defineCommand({
 export const InventoryCommand = defineCommand({
   verbs: ['inventory', 'i', '物品', '背包'],
   describe: '查看随身物品',
-  handle({ player, world }) {
-    const names = itemsInContainer(world, player).map((id) => displayName(world, id));
-    if (names.length === 0) {
-      return '你的背包是空的。';
+  handle({ output, player, world }) {
+    const ids = itemsInContainer(world, player);
+    if (ids.length === 0) {
+      output.narrative('你的背包是空的。');
+      return null;
     }
-    return `你的背包里有：${names.join('、')}`;
+    // 每件物品的名字单独成段（tag:entity + entityRef）——网页端可点击，
+    // 点击语境是"在背包里"（→ drop/装备 等背包内操作）
+    const segments: Segment[] = [{ text: '你的背包里有：' }];
+    ids.forEach((id, i) => {
+      if (i > 0) segments.push({ text: '、' });
+      segments.push({ text: displayName(world, id), style: { tag: 'entity' }, entityRef: id });
+    });
+    output.narrative(segments);
+    return null;
   },
 });
 
