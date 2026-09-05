@@ -28,7 +28,7 @@ import {
   Exits,
   Area,
 } from './traits.js';
-import { renderAsciiMap } from './room.js';
+import { renderAsciiMap, directionLabel } from './room.js';
 import { renderAsciiWorldMap, roomsOfArea } from './area.js';
 import {
   itemsInContainer,
@@ -77,7 +77,7 @@ export const GoCommand = defineCommand({
 export function createDirectionCommand(direction: string, verbs: string[]): AnyCommand {
   return defineCommand({
     verbs,
-    describe: `朝「${direction}」方向移动（口语别名皆可）`,
+    describe: `朝「${directionLabel(direction)}」方向移动（口语别名皆可）`,
     handle({ player, world }) {
       const pos = world.getComponent(player, Position);
       if (!pos) return '你不在任何地方。';
