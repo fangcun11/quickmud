@@ -266,10 +266,10 @@ export class WebRenderer {
       spacer.className = 'mud-spacer';
       this.outputEl.appendChild(spacer);
     }
-    this.appendOutput({
-      kind: 'system',
-      segments: [{ text: `> ${input}`, style: { color: 'gray' } }],
-    });
+    this.appendOutput(
+      { kind: 'system', segments: [{ text: `> ${input}` }] },
+      'mud-echo',
+    );
     if (this.history[this.history.length - 1] !== input) {
       this.history.push(input);
     }
@@ -441,9 +441,9 @@ export class WebRenderer {
    * 样式全部由 CSS 类承担（模板的 .output-{kind} / .mud-* 系列）——
    * 主题切换只动 CSS 变量，渲染器不感知颜色值。
    */
-  private appendOutput(msg: OutputMessage): void {
+  private appendOutput(msg: OutputMessage, extraClass?: string): void {
     const line = document.createElement('div');
-    line.className = `output-line output-${msg.kind}`;
+    line.className = `output-line output-${msg.kind}` + (extraClass ? ` ${extraClass}` : '');
 
     // 渲染 segments
     for (const seg of msg.segments) {

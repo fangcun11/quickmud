@@ -31,6 +31,7 @@
       --green: #7dffb0;
       --blue: #7ab8ff;
       --white: #eafff0;
+      --echo: #49684f;
       --glow: rgba(125, 255, 176, 0.16);
       --glow-strong: rgba(125, 255, 176, 0.38);
     }
@@ -51,6 +52,7 @@
       --green: #ffc46b;
       --blue: #ffc46b;
       --white: #fff3e0;
+      --echo: #6b5638;
       --glow: rgba(255, 196, 107, 0.15);
       --glow-strong: rgba(255, 196, 107, 0.36);
     }
@@ -97,6 +99,8 @@
     .output-dialogue { color: var(--c-dialogue); }
     .output-status { color: var(--c-status); }
     .output-prompt { color: var(--c-prompt); }
+    /* 回显行：比 system 再暗一档——命令痕迹可考，但不与叙事抢眼 */
+    .mud-echo { color: var(--echo); }
     .mud-spacer { height: 0.55em; }
 
     /* ---- Segment 语义样式（引擎 seg.style 的渲染映射） ---- */
