@@ -66,6 +66,20 @@ export interface CommandDefinition<
 export type AnyCommand = CommandDefinition<any>;
 
 /**
+ * 注册命令的只读元数据（0.14，engine-feedback F6 落地）
+ *
+ * `world.listCommands()` 的元素：宿主（命令建议器、help 生成、兜底近似
+ * 匹配）由此拿到动词全集与参数形状，不再依赖内容层二次枚举。
+ * 只暴露形状（动词/缩写/参数类型名），不暴露 handle。
+ */
+export interface CommandMeta {
+  verbs: readonly string[];
+  abbrev: readonly string[];
+  /** 参数名 → 参数类型名（entity/optional_entity/direction/word/rest） */
+  args: Readonly<Record<string, { type: 'entity' | 'optional_entity' | 'direction' | 'word' | 'rest' }>>;
+}
+
+/**
  * 命令上下文 - 命令执行时的环境
  */
 export interface CommandContext<

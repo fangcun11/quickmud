@@ -15,7 +15,27 @@ import type { SystemErrorRecord } from '../events/event-pump';
 
 /** every 系统收到的合成 tick 事件 token（实现在 events/tick.ts，此处 re-export 保持 API 稳定） */
 export { TICK_TOKEN };
-import type { AnyCommand, CommandContext } from '../commands/types';
+import type { AnyCommand, CommandContext, CommandMeta, ArgumentDefinition } from '../commands/types';
+
+/** 带截断的编辑距离（F2 兜底近似匹配用；超过 max 提前返回 max+1） */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const prev = new Array<number>(b.length + 1);
+  const curr = new Array<number>(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    let rowMin = curr[0];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      rowMin = Math.min(rowMin, curr[j]);
+    }
+    if (rowMin > max) return max + 1; // 整行都超界，提前剪枝
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+  }
+  return prev[b.length]!;
+}
 import type { EventDefinition, EventPayload, TypedEmit } from '../events/types';
 import type { SnapshotData } from '../persistence/types';
 import type { Segment, OutputMessage } from '../output/types';
@@ -277,7 +297,9 @@ export class World {
     const normalizedVerb = this.verbMap.get(verb);
 
     if (!normalizedVerb) {
-      return '我不明白你的意思。';
+      // 兜底近似匹配（F2）：有相近动词就递一句「你是想…？」，没有保持原文案
+      const hint = this.suggestVerb(verb);
+      return hint ? `我不明白你的意思。你是想「${hint}」吗？` : '我不明白你的意思。';
     }
 
     const command = this.commands.get(normalizedVerb);
@@ -511,6 +533,48 @@ export class World {
    */
   findEntity(name: string): EntityId | undefined {
     return this.findEntityByName(name);
+  }
+
+  /**
+   * 注册命令的只读元数据（0.14，F6）：动词/缩写/参数类型形状。
+   *
+   * 宿主（命令建议器、help 生成、兜底近似匹配）由此拿全集，不再依赖
+   * 内容层把命令常量二次收编。同一名册去重；顺序 = 注册序（确定性）。
+   */
+  listCommands(): CommandMeta[] {
+    const seen = new Set<AnyCommand>();
+    const out: CommandMeta[] = [];
+    for (const cmd of this.commands.values()) {
+      if (seen.has(cmd)) continue;
+      seen.add(cmd);
+      const args: CommandMeta['args'] = {};
+      for (const [key, def] of Object.entries(cmd.args ?? {})) {
+        args[key] = { type: (def as ArgumentDefinition).type };
+      }
+      out.push({ verbs: [...cmd.verbs], abbrev: [...(cmd.abbrev ?? [])], args });
+    }
+    return out;
+  }
+
+  /**
+   * 兜底近似匹配（0.14，F2）：未识别动词 → 从注册表找最接近的动词。
+   * 前缀命中（双向）优先，否则编辑距离 ≤2 取最小者；无命中返回 undefined。
+   */
+  private suggestVerb(token: string): string | undefined {
+    const t = token.toLowerCase();
+    if (!t) return undefined;
+    let best: string | undefined;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const verb of new Set(this.commands.keys())) {
+      const v = verb.toLowerCase();
+      if (v.startsWith(t) || t.startsWith(v)) return verb;
+      const d = editDistance(t, v, 2);
+      if (d <= 2 && d < bestDist) {
+        best = verb;
+        bestDist = d;
+      }
+    }
+    return best;
   }
 
   /**

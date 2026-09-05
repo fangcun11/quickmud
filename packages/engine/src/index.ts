@@ -34,7 +34,7 @@ export {
   DevTeleported,
   DevHealed,
 } from './commands/developer';
-export type { CommandDefinition, CommandContext, ArgumentDefinition, AnyCommand, ParsedArgs, ParsedArgValue } from './commands/types';
+export type { CommandDefinition, CommandContext, ArgumentDefinition, AnyCommand, ParsedArgs, ParsedArgValue, CommandMeta } from './commands/types';
 
 // 输出
 export { OutputCollector, s, seg } from './output/output-collector';
