@@ -105,8 +105,11 @@ if (w.getComponent(p, Position)?.roomId !== 'town') throw new Error('ESM 返回�
 w.output.clear();
 await w.execute('take 剑', p);
 if (!w.hasRelation(sword, Located, p)) throw new Error('ESM take 契约失败');
-const inv = await w.execute('inventory', p);
-if (!inv.includes('生锈的剑')) throw new Error('ESM inventory 契约失败: ' + inv);
+// inventory 输出走 output 通道（每件物品带 tag/entityRef 供网页点击），返回 null
+w.output.clear();
+await w.execute('inventory', p);
+const invLines = w.output.getAll().map(m => m.segments.map(s => s.text).join(''));
+if (!invLines.some(l => l.includes('生锈的剑'))) throw new Error('ESM inventory 契约失败: ' + invLines.join(' | '));
 await w.execute('drop 剑', p);
 if (!w.hasRelation(sword, Located, 'town')) throw new Error('ESM drop 契约失败');
 w.output.clear();
@@ -157,8 +160,10 @@ await w.execute('turnin', p);
 if (!w.getComponent(p, QuestLog).turnedIn.includes('dog-hunt')) {
   throw new Error('ESM turnin 契约失败');
 }
-const bag = await w.execute('inventory', p);
-if (!bag.includes('麦酒')) throw new Error('ESM 任务奖励契约失败: ' + bag);
+w.output.clear();
+await w.execute('inventory', p);
+const bagLines = w.output.getAll().map(m => m.segments.map(s => s.text).join(''));
+if (!bagLines.some(l => l.includes('麦酒'))) throw new Error('ESM 任务奖励契约失败: ' + bagLines.join(' | '));
 // v0.7 buff 链路：毒上低血怪 → 手动 tick 推进世界时间 → 毒杀走完整死亡管线
 // （掉落照常、victim 身上的 buff 被清干净、killer 归属 source）
 const rat = w.entities.createWithId('rat');
