@@ -350,6 +350,10 @@ export const AttackCommand = defineCommand({
       output.error(`这里没有「${args.target}」。`);
       return null;
     }
+    if (target === player) {
+      output.error('你不能攻击自己。');
+      return null;
+    }
 
     world.emit(Attack, { attacker: player, target });
     return null;

@@ -20,7 +20,7 @@ import { Attack, Died, Health, Position, Moved, displayName, injuryWarning } fro
 import { Attacked, Fled, Strike } from './events';
 import { Stats, Retaliate, Trail, PlayerTag, Arsenal, Energy } from './traits';
 import { ARTS } from './arts';
-import { grantArtExp } from './martial';
+import { foesInRoom, grantArtExp } from './martial';
 
 // ---------------------------------------------------------------- 命令 --
 
@@ -228,13 +228,8 @@ export const FleeSystem = defineSystem({
     const pos = ctx.getComponent(id, Position);
     if (!pos) return;
 
-    // 房内还活着的敌对目标（挂 Retaliate 的）
-    const foes = [...ctx.findByComponent(Retaliate)].filter((f) => {
-      if (f === id) return false;
-      const fp = ctx.getComponent(f, Position);
-      const fh = ctx.getComponent(f, Health);
-      return fp?.roomId === pos.roomId && !!fh && fh.current > 0;
-    });
+    // 房内还活着的敌对目标（共享判据，场景门控同款）
+    const foes = foesInRoom(ctx, id, pos.roomId);
     if (foes.length === 0) {
       ctx.output.narrative('周围没有威胁，不必逃。');
       return;

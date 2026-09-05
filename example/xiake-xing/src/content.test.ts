@@ -428,4 +428,14 @@ describe('侠客行 M2 · 武学与秘籍', () => {
     const expected = `时值${shichenOf(0, { dayLengthMs: 240_000 })}，${weatherLabel(weatherOf(areaId, 0, { segmentMs: 60_000 }))}。`;
     expect(out).toContain(expected); // time=0 → 子时；天气按区域+时段哈希
   });
+
+  it('场景门控：attack/use 不许指自己；战斗中无法学武', async () => {
+    fresh();
+    await gotoWolves();
+    expect(await run('attack 少年侠客')).toContain('你不能攻击自己');
+    expect(await run('使 直拳 少年侠客')).toContain('你不能攻击自己');
+    const learn = await run('learn 剑谱'); // 狼在身边 → 战斗中无法读书
+    expect(learn).toContain('战斗中无法静心读书');
+    // 脱战后（原路折回到武馆方向）即可读书（没秘籍会另说——门控先行）
+  });
 });

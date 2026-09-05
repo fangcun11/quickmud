@@ -135,3 +135,10 @@ IME 组合期 `isComposing` 防护、无顶部状态栏（MUD 传统）、实体
   createAutoHelpCommand——help 从注册表实时渲染，永不漂移；
   侠客行 bootstrap 的"命令表单一数据源"约定仍保留（建议器用），
   待建议器换吃 listCommands 后退役
+
+**决策记录（场景门控，2026-09-05）**：不为 defineCommand 加通用
+`when?` 前置条件框架——MUD 传统是"命令永远可敲，世界给语境回应"，
+且现有门控（目标解析/房间专属动词/优雅降级）已覆盖大多数场景。
+只补了两处真实缺口：attack/use 不许以自己为目标；战斗中（同房有
+带 Retaliate 的活物，`foesInRoom` 共享判据）无法学武。
+第三处同类需求出现时再抽象 `guard` 机制。

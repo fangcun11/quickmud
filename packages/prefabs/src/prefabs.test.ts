@@ -29,6 +29,7 @@ import {
   VerboseCommand,
   MiniMapCommand,
   BackCommand,
+  AttackCommand,
 } from './commands.js';
 import {
   Health,
@@ -159,6 +160,13 @@ describe('prefabs 查看与物品', () => {
     expect(lines[1]).toBe('出口：北。'); // 出口行恒显（v0.11：清单来自 Exits 数据）
     // 石像不可拾取但也**可见**（xkx 惯例）：全列 + 拿不动标注；别名跟在主名后
     expect(lines[2]).toBe('你可以看到：生锈的剑(剑、sword)、金币(coin)、石像（拿不动）。');
+  });
+
+  it('attack 不允许以自己为目标（自杀门控）', async () => {
+    const { w, player } = buildWorld();
+    w.registerCommands(AttackCommand); // buildWorld 默认没注册战斗命令
+    expect(await w.execute('attack 冒险者', player)).toBeNull();
+    expect(textOf(w.output.getAll(), 'error')).toContain('你不能攻击自己。');
   });
 
   it('take 把当前房间的可携物放入背包，inventory 可见', async () => {

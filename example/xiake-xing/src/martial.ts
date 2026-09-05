@@ -5,17 +5,40 @@
  * - 命令：学（learn）、使（use <招式>）、运转（practice <心法>）、武学（arts）
  * - 熟练度规则（grantArtExp）：战斗命中 +1（击杀 +3）、打坐运转每息 +1；
  *   exp ≥ art.expPerLevel → 升一层（可解锁新招式），输出走黄色里程碑。
+ * - 场景门控（0.14 决策）：战斗中无法学武；attack/use 不许以自己为目标。
  *
  * 铁律照旧：命令只翻译意图（ArtLearned/Strike/ChannelRequested），
  * 写状态的是系统（可变读特权与 hp 同款）；输出走 output 通道。
  */
 import { defineCommand, defineSystem } from '@mud/ecs-engine';
+import type { ComponentDefinition, EntityId, SystemContext } from '@mud/ecs-engine';
 import { Health, Position } from '@mud/prefabs';
-import type { EntityId, SystemContext } from '@mud/ecs-engine';
 import { resolveInContainer, resolveOccupantIn, occupantsIn } from '@mud/prefabs';
-import { Arsenal, Channeling, Scripture } from './traits';
+import { Arsenal, Channeling, Scripture, Retaliate } from './traits';
 import { ARTS } from './arts';
 import { ArtLearned, Strike, ChannelRequested } from './events';
+
+// ------------------------------------------------------------ 判据 --
+
+/**
+ * 同房的敌对活物（挂 `Retaliate` 且活着，不含自己）——
+ * 逃跑结算与场景门控（学武等）共用的"是否处于战斗中"判据。
+ */
+export function foesInRoom(
+  ctx: {
+    getComponent: <T>(id: EntityId, c: ComponentDefinition<T>) => T | undefined;
+    findByComponent: <T>(c: ComponentDefinition<T>) => EntityId[];
+  },
+  entity: EntityId,
+  roomId: EntityId,
+): EntityId[] {
+  return ctx.findByComponent(Retaliate).filter((f) => {
+    if (f === entity) return false;
+    const fp = ctx.getComponent(f, Position);
+    const fh = ctx.getComponent(f, Health);
+    return fp?.roomId === roomId && !!fh && fh.current > 0;
+  });
+}
 
 // ------------------------------------------------------------ 熟练度 --
 
@@ -62,6 +85,12 @@ export const LearnCommand = defineCommand({
   describe: '学会背包里的秘籍（武馆地上有剑谱与心法，学完即焚）',
   args: { item: { type: 'entity' } },
   handle({ args, output, player, world }) {
+    // 场景门控：同房有敌对活物 → 无法静心读书（语境回应而非命令锁定）
+    const posNow = world.getComponent(player, Position);
+    if (posNow && foesInRoom(world, player, posNow.roomId).length > 0) {
+      output.error('战斗中无法静心读书。');
+      return null;
+    }
     if (!args.item) {
       output.error('学什么？（把秘籍拿进背包：学 剑谱）');
       return null;
@@ -95,7 +124,7 @@ export const LearnCommand = defineCommand({
  * 出招命令：use/使 <招式> [目标]（M2）
  *
  * 招式必须在已习武学中且已解锁（level ≥ tier）；目标缺省自动选同房
- * 带生命的活物。内力校验与消耗在 WuxiaCombatSystem（结算处）。
+ * 带生命的活物（不含自己）；内力校验与消耗在 WuxiaCombatSystem（结算处）。
  */
 export const UseCommand = defineCommand({
   verbs: ['use', '使'],
@@ -135,11 +164,14 @@ export const UseCommand = defineCommand({
       return null;
     }
 
-    // 目标：显式指定 → 房间作用域解析；缺省 → 同房第一个带生命的活物
-    const posData = world.getComponent(player, Position);
-    let target = args.target && posData ? resolveOccupantIn(world, posData.roomId, args.target) : undefined;
+    // 目标：显式指定 → 房间作用域解析（不许指自己）；缺省 → 同房第一个带生命的活物
+    let target = args.target ? resolveOccupantIn(world, pos.roomId, args.target) : undefined;
+    if (target === player) {
+      output.error('你不能攻击自己。');
+      return null;
+    }
     if (!target) {
-      target = occupantsIn(world, posData!.roomId).find(
+      target = occupantsIn(world, pos.roomId).find(
         (id) => id !== player && world.getComponent(id, Health) !== undefined,
       );
     }
@@ -165,15 +197,16 @@ export const ChannelCommand = defineCommand({
       return null;
     }
     if (!args.art) {
-      const current = channel.artId ? `正在运转「${ARTS[channel.artId]?.name ?? channel.artId}」。` : '当前没有运转任何心法。';
-      return current;
+      return channel.artId
+        ? `正在运转「${ARTS[channel.artId]?.name ?? channel.artId}」。`
+        : '当前没有运转任何心法。';
     }
     const arsenal = world.getComponent(player, Arsenal);
     const art = Object.values(ARTS).find(
-      (a) => (a.id === args.art || a.name === args.art || a.name.startsWith(args.art)),
+      (a) => a.id === args.art || a.name === args.art || a.name.startsWith(args.art),
     );
     if (!art || !arsenal?.arts[art.id]) {
-      output.error(`你没学过「${args.art ?? ''}」，运转不了。`);
+      output.error(`你没学过「${args.art}」，运转不了。`);
       return null;
     }
     world.emit(ChannelRequested, { entity: player, artId: art.id });
