@@ -12,6 +12,7 @@ import { defineSystem } from '@mud/ecs-engine';
 import {
   Area, Look, Moved, Position, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
+import { PlayerTag } from './traits';
 
 /** 狼林区域（夜嚎只在狼林听得到） */
 const WOODS_ROOMS = new Set(['woodsgate', 'thicket', 'den']);
@@ -26,6 +27,9 @@ export const AtmosphereSystem = defineSystem({
   handle(event, ctx) {
     // look <目标> 不报环境（看的是东西不是房间）
     if (event.token === Look.token && event.data.target !== undefined) return;
+
+    // **只对玩家自身**的移动/查看报环境——NPC 游荡的 Moved 不刷屏（0.14 bug 修正）
+    if (!ctx.getComponent(event.data.entity, PlayerTag)) return;
 
     const entity = event.data.entity;
     const pos = ctx.getComponent(entity, Position);
