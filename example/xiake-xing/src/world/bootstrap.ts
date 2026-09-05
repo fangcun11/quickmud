@@ -55,6 +55,8 @@ import {
   Description,
   Portable,
   Located,
+  QuestGiver,
+  QuestLog,
   Loot,
   Pose,
   MiniMap,
@@ -68,14 +70,14 @@ import {
   buildRooms,
   buildAreas,
   buildRoomBehaviors,
-  markVisited,
+  spawnPlayerAt,
 } from '@mud/prefabs';
 import { HelpCommand, QuitHintCommand } from '../commands/help';
 import {
   Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag,
   Arsenal, Channeling, Scripture,
   Purse, Equipment, Bonus, Gear, ForSale,
-  Combat, Aggressive,
+  Combat, Aggressive, Prayed,
 } from '../traits';
 import {
   MeditateCommand,
@@ -100,6 +102,8 @@ import {
   ArtsCommand,
   MartialSystem,
 } from '../martial';
+import { QuestSystem, QuestCommand, TurnInCommand } from '@mud/prefabs';
+import type { QuestDef } from '@mud/prefabs';
 import {
   EquipCommand,
   UnequipCommand,
@@ -114,6 +118,7 @@ import { AtmosphereSystem } from '../atmosphere';
 import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
 import { WolfSpawnSystem } from '../spawn';
 import { CombatRoundSystem, DisengageCommand } from '../combat-live';
+import { PrayCommand } from '../pray';
 
 export interface BootstrapResult {
   world: World;
@@ -148,6 +153,7 @@ export function bootstrap(): BootstrapResult {
     EquipSystem,
     ShopSystem,
     ConsumableSystem,
+    QuestSystem,
     MartialSystem,
     MeditationSystem,
     EnergyConsumableSystem,
@@ -193,10 +199,13 @@ export function bootstrap(): BootstrapResult {
     BuyCommand,
     SellCommand,
     DisengageCommand,
+    PrayCommand,
     LearnCommand,
     UseCommand,
     ChannelCommand,
     ArtsCommand,
+    QuestCommand,
+    TurnInCommand,
     TakeCommand,
     InventoryCommand,
     AttackCommand,
@@ -306,6 +315,7 @@ export function bootstrap(): BootstrapResult {
       name: '山神庙',
       description:
         '一间小小的山神庙，香案上的香炉积着厚厚的香灰。塑像落满了尘，脚下倒是扫得干净——像是常年有人来。',
+      short: '香炉积灰，塑像蒙尘。',
       area: 'road',
       exits: { west: 'pines' },
     }),
@@ -372,8 +382,9 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Purse, { silver: 10 }); // 兜里几枚碎银
   world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
   world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0 });
+  world.addComponent(playerId, QuestLog, { active: {}, completed: [], turnedIn: [] });
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
-  markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
+  world.addComponent(playerId, Prayed, { done: false });
 
   // ---- 野狼×3（野怪区，M1 的沙包）----
   // 数值 { hp 25, atk 6, def 1, dodge 2 }：玩家 atk5 打它 4 伤 7 击倒，
@@ -415,6 +426,14 @@ export function bootstrap(): BootstrapResult {
     text: '铁塔似的汉子，胳膊上的肌肉比砧子还硬。手里的锤子起起落落，火星四溅。',
   });
   world.addComponent(smith, Pose, { text: '手里的锤子起起落落，火星四溅' });
+  world.addComponent(smith, QuestGiver, {
+    quests: [{
+      id: 'wolf-pelts',
+      title: '收集狼皮',
+      objective: { type: 'collect', target: '狼皮', count: 3 },
+      reward: { items: [{ name: '金创药', description: '小瓷瓶装的药粉。' }], heal: 20 },
+    } as QuestDef],
+  });
   world.addComponent(smith, Position, { roomId: 'smithy' });
 
   const shopItems = [

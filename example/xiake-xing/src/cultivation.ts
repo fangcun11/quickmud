@@ -111,6 +111,9 @@ export const CultivationToggleSystem = defineSystem({
 export const EnergyConsumableSystem = defineSystem({
   name: 'xk.energy-consume',
   on: [Consumed],
+  // priority −10：prefab.consume（同为 Consumed 订阅者）读组件后 destroy 物品，
+  // 内力数值必须抢在它前面读走
+  priority: -10,
   handle(event, ctx) {
     const { entity, item } = event.data;
     const consumable = ctx.getComponent(item, ItemConsumable);

@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { World } from '@mud/ecs-engine';
-import { Health } from '@mud/prefabs';
+import { Health, QuestLog } from '@mud/prefabs';
 import { record, verifyReplay } from '@mud/ecs-engine';
 import { Position } from '@mud/prefabs';
 import { bootstrap } from './world/bootstrap';
@@ -149,7 +149,7 @@ import { Energy, Stats, Cultivating, Retaliate, Channeling } from './traits';
 import {
   Area, Wander, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
-import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive } from './traits';
+import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed } from './traits';
 
 function fresh(): void {
   const b = bootstrap();
@@ -675,12 +675,131 @@ describe('侠客行沉浸支线 · 持续战斗', () => {
     await run('attack 野狼');
     drain();
     const stop = await run('停战');
-    console.log('DEBUG stop:', stop, 'combat:', JSON.stringify(world.getComponent(player, Combat)));
     expect(stop).toContain('脱离');
     expect(world.getComponent(player, Combat)!.foe).toBe('');
     // Aggressive 下一息再接敌
     world.tick();
     drain();
     expect(world.getComponent(player, Combat)!.foe).toBeTruthy();
+  });
+});
+
+// ============================================================
+// M4 · 消耗品（杂货铺）+ M5 · 铁匠任务与山神庙祈祷
+// ============================================================
+
+describe('侠客行 M4 · 消耗品（杂货铺）', () => {
+  it('铺面买卖不挑房间：杂货铺买馒头 2 碎银入背包，吃了 +30 气血', async () => {
+    fresh();
+    const purse = () => world.getComponent(player, Purse)!.silver;
+    await run('e');
+    await run('n'); // 青石街 → 杂货铺
+
+    expect(await run('买馒头')).toContain('馒头');
+    expect(purse()).toBe(8); // 10 − 2
+
+    world.getComponent(player, Health)!.current = 60;
+    const eat = await run('吃馒头');
+    expect(eat).toContain('恢复了 30 点气血');
+    expect(hp()).toBe(90);
+
+    // 馒头已消耗：再吃 → 明说背包里没有
+    expect(await run('吃馒头')).toContain('背包里没有');
+  });
+
+  it('金创药回内力（游戏层 energy 由侠客行系统结算）', async () => {
+    fresh();
+    await run('e');
+    await run('n');
+
+    expect(await run('买金创药')).toContain('金创药');
+    expect(world.getComponent(player, Purse)!.silver).toBe(5); // 10 − 5
+
+    world.getComponent(player, Energy)!.current = 10;
+    const drink = await run('喝金创药');
+    expect(drink).toContain('内力回复至 60/100');
+    expect(energy().current).toBe(60);
+  });
+});
+
+describe('侠客行 M5 · 铁匠任务与山神庙祈祷', () => {
+  it('收集狼皮：捡皮记账、达标完成、回铁匠铺交付领奖', async () => {
+    fresh();
+    await gotoWolves();
+    const stats = world.getComponent(player, Stats)!;
+    stats.atk = 25; // 一击 24 伤，两击倒
+    stats.dodge = 4; // 狼的还手全被闪掉
+    const log = () => world.getComponent(player, QuestLog)!;
+
+    // 林中杀一狼捡皮 → 记账 1/3
+    await run('attack 野狼');
+    await run('attack 野狼');
+    await run('take 狼皮');
+    expect(log().active['wolf-pelts']).toBe(1);
+
+    // 南下狼穴再杀两只 → 3/3 达标完成
+    await run('south');
+    for (let i = 0; i < 4; i++) await run('attack 野狼');
+    await run('take 狼皮');
+    await run('take 狼皮');
+    expect(log().active['wolf-pelts']).toBe(3);
+    expect(log().completed).toContain('wolf-pelts');
+
+    // 折返铁匠铺：任务清单显示可交付
+    for (let i = 0; i < 6; i++) await run('north');
+    await run('west');
+    await run('west'); // gate → 客栈
+    await run('east');
+    await run('north');
+    await run('north'); // 青石街 → 杂货铺 → 铁匠铺
+    const list = await run('任务');
+    expect(list).toContain('收集狼皮');
+    expect(list).toContain('可交付');
+
+    // 交付 → 奖金创药 + 回血 20（只此一次）
+    world.getComponent(player, Health)!.current = 50;
+    const reward = await run('交任务');
+    expect(reward).toContain('金创药');
+    expect(reward).toContain('恢复了 20 点生命');
+    expect(log().turnedIn).toContain('wolf-pelts');
+    expect(hp()).toBe(70);
+
+    // 奖励金创药真的进了背包
+    const inv = itemsInContainer(world, player);
+    expect(inv.some((id) => world.getComponent(id, Name)!.text === '金创药')).toBe(true);
+  });
+
+  it('任务进度是全局账本：皮还没凑齐时交付被婉拒', async () => {
+    fresh();
+    await gotoWolves();
+    const stats = world.getComponent(player, Stats)!;
+    stats.atk = 25;
+    stats.dodge = 4;
+    await run('attack 野狼');
+    await run('attack 野狼');
+    await run('take 狼皮'); // 1/3
+    for (let i = 0; i < 5; i++) await run('north'); // 狼林 → 镇口
+    await run('west');
+    await run('west');
+    await run('east');
+    await run('north');
+    await run('north');
+    const list = await run('任务');
+    expect(list).toContain('1/3');
+    expect(await run('交任务')).toContain('没有可交付');
+  });
+
+  it('山神庙祈祷：不在庙里明说；拜一次回 30 气血；山神不回应第二次', async () => {
+    fresh();
+    expect(await run('pray')).toContain('山神庙');
+
+    for (const dir of ['e', 'e', 's', 's', 'e']) await run(dir); // 客栈 → 松林道 → 山神庙
+    world.getComponent(player, Health)!.current = 40;
+    expect(await run('拜')).toContain('暖流');
+    expect(hp()).toBe(70);
+    expect(world.getComponent(player, Prayed)!.done).toBe(true);
+
+    expect(await run('祈祷')).toContain('不再回应');
+    expect(hp()).toBe(70); // 未再回血
   });
 });

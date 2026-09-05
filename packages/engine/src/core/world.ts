@@ -297,6 +297,17 @@ export class World {
     const normalizedVerb = this.verbMap.get(verb);
 
     if (!normalizedVerb) {
+      // 中文粘连输入兜底（xkx 惯例）：买馒头 = 买 + 馒头
+      const split = this.splitCjkCompound(trimmed);
+      if (split) {
+        const normalized = this.verbMap.get(split.verb);
+        if (normalized) {
+          const command = this.commands.get(normalized);
+          if (command) {
+            return this.runCommand(command, trimmed, split.rest ? [split.rest] : [], playerId);
+          }
+        }
+      }
       // 兜底近似匹配（F2）：有相近动词就递一句「你是想…？」，没有保持原文案
       const hint = this.suggestVerb(verb);
       return hint ? `我不明白你的意思。你是想「${hint}」吗？` : '我不明白你的意思。';
@@ -306,16 +317,44 @@ export class World {
     if (!command) {
       return '命令未找到。';
     }
+    return this.runCommand(command, trimmed, parts.slice(1), playerId);
+  }
 
+  /**
+   * 拆中文粘连输入：无空格、且开头恰好是**纯 CJK**的已注册动词前缀时，
+   * 把剩余部分整体作为参数（买馒头 → 买 + 馒头）。
+   * 最长前缀优先（往北走啊 → 往北走 + 啊）；只拆 CJK 动词，
+   * 英文永不劈裂（gone 不会被拆成 go + ne）。
+   */
+  private splitCjkCompound(input: string): { verb: string; rest: string } | undefined {
+    if (/\s/.test(input)) return undefined;
+    for (let len = input.length - 1; len >= 1; len--) {
+      const head = input.slice(0, len).toLowerCase();
+      if (!this.verbMap.has(head)) continue;
+      if (!/^[\u4e00-\u9fff]+$/.test(head)) continue;
+      return { verb: head, rest: input.slice(len) };
+    }
+    return undefined;
+  }
+
+  /**
+   * 解析参数并执行一条已定位的命令（execute 与粘连拆词共用此出口）
+   */
+  private async runCommand(
+    command: AnyCommand,
+    raw: string,
+    argParts: string[],
+    playerId: EntityId,
+  ): Promise<string | null> {
     // 简单参数解析
     // parseArgs 是动态键控实现，无法在编译期逐键推导；
     // 类型正确性由 ParsedArgValue 与 parseArgs 行为的契约注释保证（见 commands/types.ts），
     // 此处是引擎内部唯一的收敛点。
-    const args = this.parseArgs(command, parts.slice(1)) as CommandContext['args'];
+    const args = this.parseArgs(command, argParts) as CommandContext['args'];
 
     // 执行命令
     const context: CommandContext = {
-      raw: trimmed,
+      raw,
       args,
       player: playerId,
       // 0.11：命令侧输出通道。铁律"命令不改状态"对输出放宽——
