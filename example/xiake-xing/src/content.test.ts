@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { World } from '@mud/ecs-engine';
+import { record, verifyReplay } from '@mud/ecs-engine';
 import { Position } from '@mud/prefabs';
 import { bootstrap } from './world/bootstrap';
 
@@ -143,7 +144,7 @@ describe('侠客行 M0 · 三区域骨架', () => {
 // ============================================================
 import { Name } from '@mud/ecs-engine';
 import { Health, itemsInContainer } from '@mud/prefabs';
-import { Energy, Stats, Cultivating, Retaliate } from './traits';
+import { Energy, Stats, Cultivating, Retaliate, Arsenal, Channeling } from './traits';
 
 function fresh(): void {
   const b = bootstrap();
@@ -223,7 +224,8 @@ describe('侠客行 M1 · 内功根基', () => {
     await gotoWolves();
     world.getComponent(player, Stats)!.dodge = 4;
     const hit = await run('attack 野狼');
-    expect(hit).toContain('一击命中');
+    expect(hit).toContain('命中「野狼」'); // 招式名随回合报出（M2：自动选招直拳）
+    expect(hit).toContain('一记「直拳」');
     expect(hit).toContain('造成 4 点伤害');
 
     // 差 0 → 格挡：round(4 × 0.7) = 3 伤；狼还手同样被格挡（3 伤，被动视角）
@@ -321,5 +323,100 @@ describe('侠客行 M1 · 内功根基', () => {
         (cmd.abbrev ?? []).some((a) => text.includes(a));
       expect(hit, `help 缺少命令：${cmd.verbs.join('/')}`).toBe(true);
     }
+  });
+});
+
+// ============================================================
+// M2 · 武学与秘籍：学/招/运转/熟练度升级 + 原路折返
+// 每用例独立世界（fresh），录像重放走一遍验收通关序列
+// ============================================================
+
+/** 客栈 → 武馆（东、南） */
+async function gotoWuguan(): Promise<void> {
+  await run('东');
+  await run('南');
+  expect(pos()).toBe('wuguan');
+}
+
+describe('侠客行 M2 · 武学与秘籍', () => {
+  it('学秘籍：武馆地上有剑谱/心法，拿进背包学成，秘籍即焚', async () => {
+    fresh();
+    await gotoWuguan();
+    expect(await run('look')).toContain('基础剑法');
+    expect(await run('take 剑谱')).toContain('拿起了');
+    expect(await run('learn 剑谱')).toContain('学会了');
+    const arsenal = world.getComponent(player, Arsenal)!.arts;
+    expect(arsenal.basic_sword).toEqual({ level: 1, exp: 0 });
+    // 秘籍即焚：背包空了，再学一次会明说
+    expect(itemsInContainer(world, player)).toHaveLength(0);
+    expect(await run('learn 剑谱')).toContain('背包里没有');
+  });
+
+  it('武学一览与运转心法（打坐内力翻倍 + 心法熟练度每息增长）', async () => {
+    fresh();
+    expect(await run('武学')).toContain('开山拳');
+    await gotoWuguan();
+    await run('take 吐纳');
+    await run('学 吐纳');
+    expect(await run('运转 吐纳术')).toContain('运转');
+    expect(world.getComponent(player, Channeling)!.artId).toBe('tuna');
+
+    await run('回'); // 回客栈打坐
+    await run('打坐');
+    world.tick();
+    drain();
+    world.tick();
+    drain();
+    // 20 + 40×2 = 100（吐纳术 meditateBonus 2）
+    expect(energy().current).toBe(100);
+    // 心法熟练度每息 +1
+    expect(world.getComponent(player, Arsenal)!.arts.tuna.exp).toBe(2);
+  });
+
+  it('战斗熟练度：自动选招直拳、升层解锁崩拳、use 崩拳耗内力提伤害', async () => {
+    fresh();
+    await gotoWolves();
+    // level 1 时崩拳（tier 2）未解锁 → 明说
+    expect(await run('使 崩拳 野狼')).toContain('没练成');
+    // 直拳（自动选招）：身法差 0 → 全被格挡，每击 3 伤；命中 +1/击
+    const outs: string[] = [];
+    for (let i = 0; i < 8; i++) outs.push(await run('attack 野狼')); // 8 击 24 伤，+8 熟练 → 第 8 击后升 2 层
+    outs.push(await run('attack 野狼')); // 第 9 击（此时自动选招已是崩拳）：狼倒地；击杀 +3
+    const all = outs.join('\n');
+    expect(all).toContain('悟出了新招式「崩拳」'); // 第 8 击后升 2 层解锁
+    expect(all).toContain('轰然倒地');
+    expect(all).toContain('一记「崩拳」'); // 击杀那击自动用了崩拳（内力够、系数最高）
+    expect(world.getComponent(player, Arsenal)!.arts.kaishan_fist.level).toBe(2);
+  });
+
+  it('use 崩拳：耗内力、按系数结算伤害', async () => {
+    fresh();
+    await gotoWolves();
+    await run('南'); // 密林→狼穴：两只狼，够打
+    // 直接置 2 层（升层路径由上一用例覆盖），验证招式数值
+    world.getComponent(player, Arsenal)!.arts.kaishan_fist.level = 2;
+    const before = energy().current; // 20
+    const hit = await run('使 崩拳 野狼');
+    expect(hit).toContain('一记「崩拳」');
+    // 身法差 0 → 被格挡：round(round(5×1.7−1)×0.7) = 6
+    expect(hit).toContain('只造成 6 点伤害');
+    expect(energy().current).toBe(before - 8);
+  });
+
+  it('验收通关序列全程录像重放一致（M2 验收）', async () => {
+    fresh();
+    const rec = record(world);
+    const inputs = [
+      '东', '南', 'take 剑谱', 'learn 剑谱',
+      '南', '南', '南', '南', '南',
+      'attack 野狼', 'attack 野狼', 'attack 野狼',
+      'attack 野狼', 'attack 野狼', 'attack 野狼', 'attack 野狼',
+      '使 崩拳 野狼', '回', '武学',
+    ];
+    for (const cmd of inputs) await rec.execute(cmd, player);
+
+    const result = await verifyReplay(rec.stop(), () => bootstrap().world);
+    expect(result.ok).toBe(true);
+    expect(result.diff).toBeUndefined();
   });
 });

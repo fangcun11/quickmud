@@ -43,3 +43,26 @@ export const PlayerTag = trait('player_tag', () => ({}));
 export const Trail = trait('trail', () => ({
   roomId: '',
 }));
+
+/**
+ * 已习武学进度（M2）：artId → { level, exp }。键控数组组件——等出现
+ * "武学实例需要被指向"的真实需求（M5 师承）再实体化。
+ */
+export const Arsenal = trait('arsenal', () => ({
+  arts: {} as Record<string, { level: number; exp: number }>,
+}));
+
+/**
+ * 当前运转的心法（M2）：同时只能运转一门；打坐时该心法随 tick 涨熟练度，
+ * 吐纳术运转时打坐内力回复翻倍。`lastTickedAt` 与 Cultivating 同理由：
+ * 时间账本走组件（快照/回滚一致）。
+ */
+export const Channeling = trait('channeling', () => ({
+  artId: '',
+  lastTickedAt: 0,
+}));
+
+/** 秘籍标记（M2）：挂在物品实体上——`学 <秘籍>` 消耗物品、写入 Arsenal */
+export const Scripture = trait('scripture', () => ({
+  artId: '',
+}));

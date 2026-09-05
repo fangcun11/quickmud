@@ -10,7 +10,9 @@
  */
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
 import { Health, Position, Moved, displayName } from '@mud/prefabs';
-import { Energy, Stats, Cultivating } from './traits';
+import { Energy, Stats, Cultivating, Channeling } from './traits';
+import { ARTS } from './arts';
+import { grantArtExp } from './martial';
 import { Attacked, MeditateRequested, StopRequested } from './events';
 
 /** 每 tick 吐纳回复的内力（打坐 5 tick 内从 20 回满 100） */
@@ -113,7 +115,11 @@ export const MeditationSystem = defineSystem({
       const energy = ctx.getComponent(id, Energy);
       if (!energy) continue; // 组件不全 → 静默跳过
       if (energy.current >= energy.max) continue; // 已满：保持打坐状态，不再回复
-      energy.current = Math.min(energy.max, energy.current + MEDITATE_GAIN);
+      // 运转心法的两项收益（M2）：吐纳术打坐内力翻倍；运转心法每息熟练度 +1
+      const channel = ctx.getComponent(id, Channeling);
+      const bonus = ARTS[channel?.artId ?? '']?.meditateBonus ?? 1;
+      energy.current = Math.min(energy.max, energy.current + MEDITATE_GAIN * bonus);
+      if (channel?.artId) grantArtExp(ctx, id, channel.artId, 1);
       if (energy.current >= energy.max) {
         // 充满：里程碑一句 + 自动收功（继续吐纳没有收益，纯占状态）
         ctx.output.narrative([

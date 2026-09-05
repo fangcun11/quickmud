@@ -29,6 +29,7 @@ import {
   VisitationSystem,
   VerboseSystem,
   MiniMapSystem,
+  BacktrackSystem,
   ItemSystem,
   LootSystem,
   DeathSystem,
@@ -38,6 +39,8 @@ import {
   MapCommand,
   WorldMapCommand,
   VerboseCommand,
+  MiniMapCommand,
+  BackCommand,
   TakeCommand,
   InventoryCommand,
   AttackCommand,
@@ -48,9 +51,12 @@ import {
   Verbose,
   Health,
   Description,
+  Portable,
+  Located,
   Loot,
   Pose,
   MiniMap,
+  Backtrack,
   // 房间与区域
   defineRoom,
   defineArea,
@@ -61,7 +67,7 @@ import {
   markVisited,
 } from '@mud/prefabs';
 import { HelpCommand, QuitHintCommand } from '../commands/help';
-import { Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag } from '../traits';
+import { Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag, Arsenal, Channeling, Scripture } from '../traits';
 import {
   MeditateCommand,
   StopCommand,
@@ -77,6 +83,13 @@ import {
   FleeSystem,
   TrailSystem,
 } from '../combat';
+import {
+  LearnCommand,
+  UseCommand,
+  ChannelCommand,
+  ArtsCommand,
+  MartialSystem,
+} from '../martial';
 
 export interface BootstrapResult {
   world: World;
@@ -103,6 +116,8 @@ export function bootstrap(): BootstrapResult {
     LootSystem,
     DeathSystem,
     MiniMapSystem,
+    BacktrackSystem,
+    MartialSystem,
     MeditationSystem,
     CultivationToggleSystem,
     InterruptSystem,
@@ -137,6 +152,12 @@ export function bootstrap(): BootstrapResult {
     MapCommand,
     WorldMapCommand,
     VerboseCommand,
+    MiniMapCommand,
+    BackCommand,
+    LearnCommand,
+    UseCommand,
+    ChannelCommand,
+    ArtsCommand,
     TakeCommand,
     InventoryCommand,
     AttackCommand,
@@ -202,6 +223,7 @@ export function bootstrap(): BootstrapResult {
       name: '望岳武馆',
       description:
         '院里立着一排木桩，几个弟子在扎马步，汗把青砖滴湿了一片。墙上挂一块「望岳」的匾。教头说过：想学真功夫，先练好底子。',
+      short: '木桩林立，弟子们扎马步的呼吸声整整齐齐。',
       area: 'town',
       exits: { north: 'street' },
     }),
@@ -215,7 +237,6 @@ export function bootstrap(): BootstrapResult {
       exits: { west: 'street', south: 'path' },
     }),
 
-    // ================= 终南山道（road，过渡）=================
     defineRoom({
       id: 'path',
       name: '南山道',
@@ -295,6 +316,12 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Cultivating, { on: false, lastTickedAt: 0 }); // 打坐开关（预挂，Verbose 同款）
   world.addComponent(playerId, Trail, { roomId: layout.entry }); // 逃跑的"来路"
   world.addComponent(playerId, MiniMap, { on: true }); // 进房略图默认开（略图 命令可关）
+  world.addComponent(playerId, Backtrack, { rooms: [] }); // 来路栈（回 命令用）
+  // M2：出生自带开山拳 1 级；运转心法初始为空（运转 吐纳术 启用）
+  world.addComponent(playerId, Arsenal, {
+    arts: { kaishan_fist: { level: 1, exp: 0 } },
+  });
+  world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
   markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
 
   // ---- 野狼×3（野怪区，M1 的沙包）----
@@ -326,6 +353,22 @@ export function bootstrap(): BootstrapResult {
         },
       ],
     });
+  }
+
+  // ---- 武馆秘籍（M2）：学 剑谱 / 学 心法——学完即焚 ----
+  const scriptures = [
+    { id: 'scripture_sword', name: '基础剑法', aliases: ['剑谱', '剑法', '秘籍'], artId: 'basic_sword' },
+    { id: 'scripture_tuna', name: '吐纳术', aliases: ['心法', '吐纳', '秘籍'], artId: 'tuna' },
+  ];
+  for (const sc of scriptures) {
+    const id = world.entities.createWithId(sc.id);
+    world.addComponent(id, Name, { text: sc.name, aliases: sc.aliases });
+    world.addComponent(id, Description, {
+      text: '一本泛黄的册子，封皮上的字迹已经斑驳，翻开来是一招一式的图谱与口诀。',
+    });
+    world.addComponent(id, Scripture, { artId: sc.artId });
+    world.addComponent(id, Portable);
+    world.addComponent(id, Located, { targets: ['wuguan'] });
   }
 
   return { world, playerId, commands, directionWords };

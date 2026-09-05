@@ -35,3 +35,27 @@ export const MeditateRequested = defineEvent('meditate_requested')<{
 export const StopRequested = defineEvent('stop_requested')<{
   entity: string;
 }>();
+
+/**
+ * 招式出招意图（M2）：use 命令发出——招式已解锁校验在命令侧（读 Arsenal），
+ * 内力消耗与结算在 WuxiaCombatSystem（可变写特权）。
+ */
+export const Strike = defineEvent('strike')<{
+  attacker: string;
+  target: string;
+  artId: string;
+  moveId: string;
+}>();
+
+/** 学武意图（M2）：学命令发出，MartialSystem 写 Arsenal 并消耗秘籍 */
+export const ArtLearned = defineEvent('art_learned')<{
+  entity: string;
+  item: string;
+  artId: string;
+}>();
+
+/** 运转意图（M2）：运转命令发出，MartialSystem 写 Channeling */
+export const ChannelRequested = defineEvent('channel_requested')<{
+  entity: string;
+  artId: string;
+}>();

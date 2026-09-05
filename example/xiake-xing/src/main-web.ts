@@ -39,9 +39,9 @@ function main() {
     title: '侠客行',
     suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
     persistence: {
-      // :m1c 后缀作废旧档——0.14 先后给房间加 Short、狼挂 Pose、玩家预挂
-      // MiniMap，旧快照恢复出来的世界缺这些新内容（内容升级直接重开，不做迁移）
-      key: 'save:xiake-xing:m1c',
+      // :m2 后缀作废旧档——M2 加了 Arsenal/Channeling/来路栈与招式体系，
+      // 旧快照恢复出来的世界缺这些新内容（内容升级直接重开，不做迁移）
+      key: 'save:xiake-xing:m2',
       capture: () => world.createSnapshot(),
       restore: (snapshot) => world.rollbackWorld(snapshot as SnapshotData),
     },

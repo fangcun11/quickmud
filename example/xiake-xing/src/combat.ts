@@ -15,10 +15,12 @@
  * 自动还手一击（走同一内核）——攻守两向共用一套公式，平衡可推演。
  */
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
-import type { Segment } from '@mud/ecs-engine';
+import type { Segment, SystemContext } from '@mud/ecs-engine';
 import { Attack, Died, Health, Position, Moved, displayName, injuryWarning } from '@mud/prefabs';
-import { Attacked, Fled } from './events';
-import { Stats, Retaliate, Trail, PlayerTag } from './traits';
+import { Attacked, Fled, Strike } from './events';
+import { Stats, Retaliate, Trail, PlayerTag, Arsenal, Energy } from './traits';
+import { ARTS } from './arts';
+import { grantArtExp } from './martial';
 
 // ---------------------------------------------------------------- 命令 --
 
@@ -48,12 +50,15 @@ function combatLine(
   def: string,
   result: 'hit' | 'blocked' | 'dodged',
   damage: number,
+  moveName?: string,
 ): Segment[] | string {
   const ATK = atk === '你' ? '你' : `「${atk}」`;
   const DEF = def === '你' ? '你' : `「${def}」`;
-  if (result === 'hit') return `${ATK}一击命中${DEF}，造成 ${damage} 点伤害。`;
-  if (result === 'blocked') return `${ATK}全力出手，被${DEF}格挡，只造成 ${damage} 点伤害。`;
-  return `${ATK}这一击落了空——${DEF}轻巧地闪过。`;
+  // xkx 惯例：每回合报招式名（自动选招的「直拳」也报——玩家知道自己在用什么）
+  const lead = moveName ? `一记「${moveName}」` : '';
+  if (result === 'hit') return `${ATK}${lead}命中${DEF}，造成 ${damage} 点伤害。`;
+  if (result === 'blocked') return `${ATK}${lead}全力出手，被${DEF}格挡，只造成 ${damage} 点伤害。`;
+  return `${ATK}${lead || '这一击'}落了空——${DEF}轻巧地闪过。`;
 }
 
 // ---------------------------------------------------------------- 系统 --
@@ -65,10 +70,11 @@ function combatLine(
  */
 export const WuxiaCombatSystem = defineSystem({
   name: 'xk.combat',
-  on: [Attack],
+  on: [Attack, Strike],
   priority: 0,
   handle(event, ctx) {
-    const { attacker, target } = event.data;
+    const attacker = event.data.attacker;
+    const target = event.data.target;
 
     const hp = ctx.getComponent(target, Health);
     if (!hp) {
@@ -83,7 +89,40 @@ export const WuxiaCombatSystem = defineSystem({
     }
     if (hp.current <= 0) return; // 已经死了（同轮多重 Attack 的防御）
 
-    // ---- 纯公式三态 ----
+    // ---- 招式解析（M2）：attack 自动选已解锁且内力够的最高系数；
+    // use 命令（Strike）显式指定（此处再校验一次——系统是执行者） ----
+    let mult = 1.0;
+    let artId = '';
+    let moveName: string | undefined;
+    if (event.token === Strike.token) {
+      const { artId: aid, moveId } = event.data;
+      const progress = ctx.getComponent(attacker, Arsenal)?.arts[aid];
+      const move = ARTS[aid]?.moves.find((m) => m.id === moveId);
+      const energy = ctx.getComponent(attacker, Energy);
+      if (!progress || !move || progress.level < move.tier) {
+        ctx.output.error('你还没练成这一招。');
+        return;
+      }
+      if (!energy || energy.current < move.cost) {
+        ctx.output.error('内力不济，使不出这一招。');
+        return;
+      }
+      energy.current -= move.cost;
+      artId = aid;
+      mult = move.mult;
+      moveName = move.name;
+    } else {
+      const picked = autoSelectMove(ctx, attacker);
+      artId = picked.artId;
+      mult = picked.mult;
+      moveName = picked.moveName;
+      if (picked.cost > 0) {
+        const energy = ctx.getComponent(attacker, Energy)!;
+        energy.current -= picked.cost;
+      }
+    }
+
+    // ---- 纯公式三态（mult 进伤害式） ----
     const atkStats = ctx.getComponent(attacker, Stats);
     const defStats = ctx.getComponent(target, Stats);
     const diff = (atkStats?.dodge ?? 0) - (defStats?.dodge ?? 0);
@@ -97,17 +136,17 @@ export const WuxiaCombatSystem = defineSystem({
     const defLabel = defIsPlayer ? '你' : targetName;
 
     if (result === 'dodged') {
-      ctx.output.narrative(combatLine(atkLabel, defLabel, 'dodged', 0));
+      ctx.output.narrative(combatLine(atkLabel, defLabel, 'dodged', 0, moveName));
       ctx.emit(Attacked, { attacker, target, damage: 0, result });
       return;
     }
 
-    let damage = Math.max(1, Math.round((atkStats?.atk ?? 1) - (defStats?.def ?? 0)));
+    let damage = Math.max(1, Math.round((atkStats?.atk ?? 1) * mult - (defStats?.def ?? 0)));
     if (result === 'blocked') damage = Math.max(1, Math.round(damage * 0.7));
 
     const before = hp.current;
     hp.current = Math.max(0, hp.current - damage);
-    ctx.output.narrative(combatLine(atkLabel, defLabel, result, damage));
+    ctx.output.narrative(combatLine(atkLabel, defLabel, result, damage, moveName));
 
     // 伤势警示（P2）：被打者掉档才出现（黄=轻伤、红=危急）
     const warn = injuryWarning(before, hp.current, hp.max, {
@@ -118,7 +157,11 @@ export const WuxiaCombatSystem = defineSystem({
 
     ctx.emit(Attacked, { attacker, target, damage, result });
 
+    // ---- 熟练度（M2）：命中即 +1（闪避无心得）；击杀再 +3 ----
+    if (artId) grantArtExp(ctx, attacker, artId, 1);
+
     if (before > 0 && hp.current <= 0) {
+      if (artId) grantArtExp(ctx, attacker, artId, 3);
       // 死亡是视觉事件（xkx 惯例）：独立强调
       ctx.output.narrative([
         { text: `「${targetName}」惨嚎一声，轰然倒地。`, style: { color: 'red', bold: true } },
@@ -127,6 +170,30 @@ export const WuxiaCombatSystem = defineSystem({
     }
   },
 });
+
+/**
+ * 自动选招（attack 增强，M2）：已习武学里**已解锁且内力够**的最高系数招式；
+ * 一个都凑不出来 → 直拳档（mult 1.0，零耗）。野怪没有 Arsenal → 普通攻击。
+ */
+function autoSelectMove(
+  ctx: SystemContext,
+  attacker: string,
+): { artId: string; cost: number; mult: number; moveName?: string } {
+  const arsenal = ctx.getComponent(attacker, Arsenal);
+  const energy = ctx.getComponent(attacker, Energy);
+  if (!arsenal || !energy) return { artId: '', cost: 0, mult: 1, moveName: undefined };
+  let best: { artId: string; cost: number; mult: number; moveName: string } | null = null;
+  for (const [artId, progress] of Object.entries(arsenal.arts)) {
+    const art = ARTS[artId];
+    if (!art) continue;
+    for (const move of art.moves) {
+      if (progress.level < move.tier) continue; // 未解锁
+      if (energy.current < move.cost) continue; // 内力不够
+      if (!best || move.mult > best.mult) best = { artId, cost: move.cost, mult: move.mult, moveName: move.name };
+    }
+  }
+  return best ?? { artId: '', cost: 0, mult: 1, moveName: undefined };
+}
 
 /**
  * 还手（on Attacked，priority 10 → 排在打断之后）：
