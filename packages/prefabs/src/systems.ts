@@ -72,6 +72,7 @@ import {
 import { injuryWarning } from './vitals.js';
 import { queryRoomGate } from './behavior.js';
 import { directionLabel, layoutNeighborMiniMap } from './room.js';
+import { parseInlineMarkup } from '@mud/ecs-engine';
 
 /**
  * 移动系统（v0.9-A 重写）：`MoveRequested` 的**唯一**订阅者
@@ -214,7 +215,12 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId): 
     ctx.output.title(`【${name.text}】`);
   }
   // 环境行预留位（时辰/天气落地后插在此处，见 prefabs README）
-  ctx.output.narrative(desc && desc.text !== '' ? INDENT + desc.text : '这里没有任何描述。');
+  // 描述支持内联标记（{{语义|文本}}）——emit 时解析为段，三个渲染器白得高亮
+  ctx.output.narrative(
+    desc && desc.text !== ''
+      ? [{ text: INDENT }, ...parseInlineMarkup(desc.text)]
+      : '这里没有任何描述。',
+  );
 
   emitExitsBlock(ctx, viewer, roomId);
 
@@ -488,7 +494,7 @@ export const DescriptionSystem = defineSystem({
       const targetDesc = ctx.getComponent(targetId, Description);
       ctx.output.narrative(
         targetDesc && targetDesc.text !== ''
-          ? targetDesc.text
+          ? parseInlineMarkup(targetDesc.text)
           : `「${targetName}」看起来没什么特别的。`,
       );
       return;

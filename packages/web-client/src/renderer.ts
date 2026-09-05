@@ -82,9 +82,10 @@ export class WebRenderer {
     /**
      * 命令建议提供器（可选，游戏侧注入）。入参 = 输入框当前全文，
      * 返回**候选全集**（渲染器按光标前最后一个词做前缀过滤、取前 8 个）；
+     * 候选 = `{ text, hint? }`（动词候选的 hint 用 describe）或纯字符串；
      * 建议用 prefabs 的 createSuggester 生成。
      */
-    suggest?: (input: string) => string[];
+    suggest?: (input: string) => Array<string | { text: string; hint?: string }>;
     /** 主题（0.4）：磷光绿（默认）/ 琥珀——设 <html data-theme>，样式在模板 CSS 变量里 */
     theme?: 'phosphor' | 'amber';
     /** 浏览器标签页标题（不传保持 HTML 模板默认） */

@@ -813,3 +813,30 @@ describe('来路栈与回退（0.14,F4）', () => {
     expect(errs).toContain('这个世界没有来路记录。');
   });
 });
+
+describe('描述内联标记（{{语义|文本}}）', () => {
+  it('look 解析描述标记 → 带样式段；fail-soft 原样渲染未知语义', async () => {
+    const w = new World({ tickInterval: 500 });
+    w.register(MovementSystem, DescriptionSystem, VisitationSystem);
+    w.registerCommands(GoCommand, LookCommand, createDirectionCommand('north', ['north']));
+    const player = w.entities.createWithId('player-1');
+    w.addComponent(player, Position, { roomId: 'arch' });
+    w.addComponent(player, Visited, { rooms: [] });
+    w.entities.createWithId('arch');
+    w.addComponent('arch', Name, { text: '城隍庙' });
+    w.addComponent('arch', Description, {
+      text: '你站在{{bold|城隍庙}}前。{{ent|村长}}朝你望来。{{blurp|坏语法}}',
+    });
+    w.addComponent('arch', Exits, {});
+
+    await w.execute('look', player);
+    const segs = w.output
+      .getAll()
+      .flatMap((m) => m.segments);
+    expect(segs).toContainEqual({ text: '城隍庙', style: { bold: true } });
+    expect(segs).toContainEqual({ text: '村长', style: { tag: 'entity' } });
+    // fail-soft:字面量保留(与相邻纯文本合并为一个段)
+    expect(segs.some((seg) => seg.text.includes('{{blurp|坏语法}}'))).toBe(true);
+    expect(segs.some((s) => s.text.includes('你站在'))).toBe(true);
+  });
+});

@@ -38,6 +38,8 @@ export type { CommandDefinition, CommandContext, ArgumentDefinition, AnyCommand,
 
 // 输出
 export { OutputCollector, s, seg } from './output/output-collector';
+export { rich, red, green, yellow, blue, gray, white, cyan, magenta, bold, italic, entity } from './output/rich';
+export { parseInlineMarkup, isInlineMarkupMod } from './output/inline-markup';
 export { renderAnsi, renderSemanticHtml, renderPlainText } from './output/render';
 export type { AnsiRenderOptions } from './output/render';
 export type { OutputMessage, Segment, OutputKind, SemanticColor, SegmentTag } from './output/types';

@@ -10,7 +10,7 @@
  * 铁律照旧：命令只翻译意图（ArtLearned/Strike/ChannelRequested），
  * 写状态的是系统（可变读特权与 hp 同款）；输出走 output 通道。
  */
-import { defineCommand, defineSystem } from '@mud/ecs-engine';
+import { defineCommand, defineSystem, rich, yellow } from '@mud/ecs-engine';
 import type { ComponentDefinition, EntityId, SystemContext } from '@mud/ecs-engine';
 import { Health, Position } from '@mud/prefabs';
 import { resolveInContainer, resolveOccupantIn, occupantsIn } from '@mud/prefabs';
@@ -70,9 +70,7 @@ export function grantArtExp(
       },
     ]);
     for (const move of art.moves.filter((m) => m.tier === progress.level)) {
-      ctx.output.narrative([
-        { text: `你悟出了新招式「${move.name}」！`, style: { color: 'yellow', bold: true } },
-      ]);
+      ctx.output.narrative(rich`你悟出了新招式「${yellow(move.name)}」！`);
     }
   }
 }
@@ -260,12 +258,7 @@ export const MartialSystem = defineSystem({
       if (!arsenal || !art) return;
       arsenal.arts[artId] = { level: 1, exp: 0 };
       ctx.destroy(item);
-      ctx.output.narrative([
-        {
-          text: `你翻开《${art.name}》，如饥似渴地读了起来——学会了！`,
-          style: { color: 'yellow' },
-        },
-      ]);
+      ctx.output.narrative(rich`你翻开《${yellow(art.name)}》，如饥似渴地读了起来——学会了！`);
       return;
     }
 

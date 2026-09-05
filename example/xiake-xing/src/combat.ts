@@ -14,7 +14,7 @@
  * 回合制语义：玩家下一回合（attack/逃），NPC 被打中后由 NpcRetaliateSystem
  * 自动还手一击（走同一内核）——攻守两向共用一套公式，平衡可推演。
  */
-import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
+import { defineCommand, defineSystem, Name, rich, yellow } from '@mud/ecs-engine';
 import type { Segment, SystemContext } from '@mud/ecs-engine';
 import { Attack, Died, Health, Position, Moved, displayName, injuryWarning } from '@mud/prefabs';
 import { Attacked, Fled, Strike } from './events';
@@ -55,11 +55,11 @@ function combatLine(
 ): Segment[] | string {
   const ATK = atk === '你' ? '你' : `「${atk}」`;
   const DEF = def === '你' ? '你' : `「${def}」`;
-  // xkx 惯例：每回合报招式名（自动选招的「直拳」也报——玩家知道自己在用什么）
-  const lead = moveName ? `一记「${moveName}」` : '';
-  if (result === 'hit') return `${ATK}${lead}命中${DEF}，造成 ${damage} 点伤害。`;
-  if (result === 'blocked') return `${ATK}${lead}全力出手，被${DEF}格挡，只造成 ${damage} 点伤害。`;
-  return `${ATK}${lead || '这一击'}落了空——${DEF}轻巧地闪过。`;
+  // xkx 惯例：每回合报招式名（黄色标注，rich 模板）
+  const lead = moveName ? rich`一记「${yellow(moveName)}」` : '';
+  if (result === 'hit') return rich`${ATK}${lead}命中${DEF}，造成 ${damage} 点伤害。`;
+  if (result === 'blocked') return rich`${ATK}${lead}全力出手，被${DEF}格挡，只造成 ${damage} 点伤害。`;
+  return rich`${ATK}${lead || '这一击'}落了空——${DEF}轻巧地闪过。`;
 }
 
 // ---------------------------------------------------------------- 系统 --

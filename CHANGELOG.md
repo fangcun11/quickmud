@@ -67,6 +67,18 @@
   （system 通道压灰；刻度一昼夜 4 分钟、天气每分钟轮换、各区域可不同天）；
   房间块内联插槽等引擎注入机制后迁入
 
+### 引擎：富文本模板标签与描述内联标记（0.14 增补）
+
+- **`rich` 模板标签 + 语义助手**：`rich`你来到了${bold(name)}，${yellow('北风')}正紧。``
+  ——插值段/段数组/普通值混排；助手（8 语义色/bold/italic/entity）可叠加；
+  只产语义名，色值仍由渲染端主题决定
+- **描述内联标记 `{{语义|文本}}`**：房间/NPC 描述是纯数据字符串，
+  模板标签够不着——xkx 的老路（LPC 内嵌颜色码）的极小化版本：
+  8 语义色/bold/italic/entity（简写 ent/b/i）+ `+` 组合（`{{red+b|…}}`）；
+  **fail-soft**（未知语义原样渲染，内容数据不让世界崩）；
+  DescriptionSystem 两处描述 emit 时解析，三个渲染器零改动获得高亮
+  （`{{ent|野狼}}` 让描述里的名字可点击）；+13 例
+
 ### 引擎/prefabs：help 自动归集（engine 0.15.0 breaking / prefabs 0.14 增补）
 
 - **`defineCommand` 新增必填 `describe`**（breaking，定义期 fail-fast）——
