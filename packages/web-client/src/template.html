@@ -1,16 +1,163 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="phosphor">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e0a">
   <title>MUD 文字游戏</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0e0a'/%3E%3Ctext x='3' y='12' font-family='monospace' font-size='11' fill='%237dffb0'%3E%26gt;%3C/text%3E%3C/svg%3E">
   <style>
+    /* ============================================================
+       quickmud web-client 主题（0.4）
+       - 语义：7 输出通道各一色，全部走 CSS 变量（引擎 OutputView 定约）
+       - 主题：磷光绿（默认）/ 琥珀——渲染器设 <html data-theme> 切换
+       - CRT 层：扫描线 + 辉光 + 暗角 + 极轻闪烁，纯 CSS 零依赖；
+         prefers-reduced-motion 时动效全关
+       ============================================================ */
+    [data-theme='phosphor'] {
+      --bg: #0a0e0a;
+      --fg: #c8ffd4;
+      --dim: #6b9c78;
+      --rule: #1c2b1f;
+      --c-title: #b6ffd0;
+      --c-error: #ff7a7a;
+      --c-system: #6b9c78;
+      --c-dialogue: #9fe8ff;
+      --c-status: #ffe08a;
+      --c-prompt: #7dffb0;
+      --c-entity: #7dffb0;
+      --warn: #ffd27d;
+      --danger: #ff7a7a;
+      --green: #7dffb0;
+      --blue: #7ab8ff;
+      --white: #eafff0;
+      --glow: rgba(125, 255, 176, 0.16);
+      --glow-strong: rgba(125, 255, 176, 0.38);
+    }
+    [data-theme='amber'] {
+      --bg: #0d0b07;
+      --fg: #ffd9a0;
+      --dim: #96784e;
+      --rule: #2b2114;
+      --c-title: #ffe2b0;
+      --c-error: #ff8080;
+      --c-system: #96784e;
+      --c-dialogue: #ffb08a;
+      --c-status: #ffe08a;
+      --c-prompt: #ffc46b;
+      --c-entity: #ffc46b;
+      --warn: #ffe08a;
+      --danger: #ff8080;
+      --green: #ffc46b;
+      --blue: #ffc46b;
+      --white: #fff3e0;
+      --glow: rgba(255, 196, 107, 0.15);
+      --glow-strong: rgba(255, 196, 107, 0.36);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; overflow: hidden; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); }
+
+    /* ---- CRT 质感层：扫描线 + 暗角（纯装饰，不拦截交互） ---- */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 9; pointer-events: none;
+      background: repeating-linear-gradient(0deg,
+        rgba(0, 0, 0, 0.15) 0 1px, transparent 1px 3px);
+    }
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 8; pointer-events: none;
+      background: radial-gradient(ellipse at center,
+        transparent 55%, rgba(0, 0, 0, 0.42) 100%);
+    }
+
+    .mud-root {
+      height: 100dvh;
+      display: flex; flex-direction: column;
+      background: var(--bg); color: var(--fg);
+      font-family: 'Cascadia Mono', 'JetBrains Mono', 'IBM Plex Mono',
+        Consolas, 'Courier New', monospace;
+      font-size: 15px; line-height: 1.5;
+      text-shadow: 0 0 8px var(--glow);
+    }
+
+    /* ---- 输出区（限宽居中，终端滚动感） ---- */
+    #output {
+      flex: 1; overflow-y: auto;
+      padding: 16px; width: 100%; max-width: 68em; margin: 0 auto;
+    }
+    #output::-webkit-scrollbar { width: 8px; }
+    #output::-webkit-scrollbar-track { background: transparent; }
+    #output::-webkit-scrollbar-thumb { background: var(--rule); }
+    .output-line { white-space: pre-wrap; }
+    .output-narrative { color: var(--fg); }
+    .output-title { color: var(--c-title); font-weight: bold; text-shadow: 0 0 10px var(--glow-strong); }
+    .output-system { color: var(--c-system); }
+    .output-error { color: var(--c-error); }
+    .output-dialogue { color: var(--c-dialogue); }
+    .output-status { color: var(--c-status); }
+    .output-prompt { color: var(--c-prompt); }
+    .mud-spacer { height: 0.55em; }
+
+    /* ---- Segment 语义样式（引擎 seg.style 的渲染映射） ---- */
+    .mud-bold { font-weight: bold; }
+    .mud-italic { font-style: italic; }
+    .mud-c-red { color: var(--danger); }
+    .mud-c-green { color: var(--green); }
+    .mud-c-yellow { color: var(--warn); }
+    .mud-c-blue { color: var(--blue); }
+    .mud-c-gray { color: var(--dim); }
+    .mud-c-white { color: var(--white); }
+    .mud-c-cyan { color: var(--c-prompt); }
+    .mud-c-magenta { color: var(--c-dialogue); }
+    .mud-entity {
+      color: var(--c-entity);
+      border-bottom: 1px dashed var(--c-entity);
+      cursor: pointer;
+    }
+
+    /* ---- 底部簇：命令建议条 + 输入行 ---- */
+    .mud-bottom { border-top: 1px solid var(--rule); }
+    #suggest-row {
+      display: none; flex-wrap: wrap; gap: 4px 14px;
+      padding: 6px 16px 0; width: 100%; max-width: 68em; margin: 0 auto;
+    }
+    .suggest-chip { cursor: pointer; user-select: none; color: var(--fg); }
+    .suggest-chip::before { content: '['; color: var(--dim); }
+    .suggest-chip::after { content: ']'; color: var(--dim); }
+    .suggest-chip.selected {
+      color: var(--bg); background: var(--c-prompt);
+      text-shadow: none; font-weight: bold;
+    }
+    .mud-input-row {
+      display: flex; padding: 8px 16px 10px;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom));
+      width: 100%; max-width: 68em; margin: 0 auto;
+    }
+    .mud-prompt { color: var(--c-prompt); font-weight: bold; align-self: center; }
+    #cmd-input {
+      flex: 1; background: transparent; border: none;
+      color: var(--fg); font-family: inherit; font-size: 16px;
+      line-height: 1.5; outline: none; caret-color: var(--c-prompt);
+    }
+
+    /* ---- 动效（reduced-motion 全关） ---- */
+    @media (prefers-reduced-motion: no-preference) {
+      .mud-root { animation: mud-flicker 9s infinite; }
+      .output-line { animation: mud-in 0.12s ease-out; }
+    }
+    @keyframes mud-flicker {
+      0%, 91%, 95%, 100% { opacity: 1; }
+      93% { opacity: 0.978; }
+    }
+    @keyframes mud-in {
+      from { opacity: 0; transform: translateY(2px); }
+      to { opacity: 1; transform: none; }
+    }
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app" class="mud-root"></div>
   <script>
     // === 引擎 + 内容 + 渲染器 将在这里注入 ===
     // __MUD_BUNDLE__

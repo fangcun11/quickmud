@@ -59,18 +59,18 @@ async function main() {
   } catch {
     // 如果模板不存在，使用内联模板
     html = `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="phosphor">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MUD 文字游戏</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; overflow: hidden; }
+    html, body { height: 100%; overflow: hidden; background: #0a0e0a; }
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app" style="height:100dvh;font-family:'Cascadia Mono','JetBrains Mono','IBM Plex Mono',Consolas,'Courier New',monospace;background:#0a0e0a;color:#c8ffd4;"></div>
   <script>
     // __MUD_BUNDLE__
   </script>

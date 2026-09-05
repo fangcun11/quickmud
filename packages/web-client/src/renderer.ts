@@ -84,6 +84,8 @@ export class WebRenderer {
      * 建议用 prefabs 的 createSuggester 生成。
      */
     suggest?: (input: string) => string[];
+    /** 主题（0.4）：磷光绿（默认）/ 琥珀——设 <html data-theme>，样式在模板 CSS 变量里 */
+    theme?: 'phosphor' | 'amber';
     /** 浏览器标签页标题（不传保持 HTML 模板默认） */
     title?: string;
     /** 存档接线（不传 = 无存档，刷新即重开） */
@@ -98,79 +100,37 @@ export class WebRenderer {
     if (config.title) {
       document.title = config.title;
     }
+    document.documentElement.dataset.theme = config.theme ?? 'phosphor';
 
-    // 清空容器
+    // 清空容器（样式全部在模板 CSS 里：.mud-root 及其后代）
     this.container.innerHTML = '';
-    this.container.style.cssText = `
-      font-family: 'Courier New', Courier, monospace;
-      background: #1a1a2e;
-      color: #e0e0e0;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      margin: 0;
-      padding: 0;
-    `;
+    this.container.classList.add('mud-root');
 
     // 输出区域（限宽居中：宽屏上一行拉满 1200px+ 没法读）
     this.outputEl = document.createElement('div');
     this.outputEl.id = 'output';
-    this.outputEl.style.cssText = `
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      line-height: 1.6;
-      width: 100%;
-      max-width: 68em;
-      margin: 0 auto;
-    `;
     this.container.appendChild(this.outputEl);
 
     // 底部簇：命令建议条（有候选时才出现）+ 输入行
     const bottomWrap = document.createElement('div');
-    bottomWrap.style.cssText = `
-      border-top: 1px solid #0f3460;
-      background: #16213e;
-    `;
+    bottomWrap.className = 'mud-bottom';
 
     this.suggestRowEl = document.createElement('div');
     this.suggestRowEl.id = 'suggest-row';
-    this.suggestRowEl.style.cssText = `
-      display: none;
-      flex-wrap: wrap;
-      gap: 6px;
-      padding: 6px 16px 0;
-      width: 100%;
-      max-width: 68em;
-      margin: 0 auto;
-    `;
     bottomWrap.appendChild(this.suggestRowEl);
 
     const inputArea = document.createElement('div');
-    inputArea.style.cssText = `
-      display: flex;
-      padding: 8px 16px;
-    `;
+    inputArea.className = 'mud-input-row';
 
     const prompt = document.createElement('span');
     prompt.textContent = '> ';
-    prompt.style.cssText = 'color: #53a8b6; font-weight: bold; line-height: 32px;';
+    prompt.className = 'mud-prompt';
     inputArea.appendChild(prompt);
 
     this.inputEl = document.createElement('input');
     this.inputEl.id = 'cmd-input';
     this.inputEl.type = 'text';
     this.inputEl.autocomplete = 'off';
-    this.inputEl.style.cssText = `
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: #e0e0e0;
-      font-family: inherit;
-      font-size: 16px;
-      outline: none;
-      caret-color: #53a8b6;
-    `;
     inputArea.appendChild(this.inputEl);
     bottomWrap.appendChild(inputArea);
     this.container.appendChild(bottomWrap);
@@ -303,7 +263,7 @@ export class WebRenderer {
   private echo(input: string): void {
     if (this.outputEl.childNodes.length > 0) {
       const spacer = document.createElement('div');
-      spacer.style.height = '0.55em';
+      spacer.className = 'mud-spacer';
       this.outputEl.appendChild(spacer);
     }
     this.appendOutput({
@@ -385,26 +345,15 @@ export class WebRenderer {
       this.hideSuggestions();
       return;
     }
-    tokens.forEach((token, i) => {
+    tokens.forEach((token) => {
       const chip = document.createElement('span');
       chip.textContent = token;
-      chip.style.cssText = `
-        border: 1px solid #34456b;
-        background: #20293f;
-        color: #c7d5e8;
-        border-radius: 4px;
-        padding: 1px 10px;
-        font-size: 13px;
-        line-height: 1.6;
-        cursor: pointer;
-        user-select: none;
-      `;
+      chip.className = 'suggest-chip';
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
         this.acceptSuggestion(token);
       });
       this.suggestRowEl.appendChild(chip);
-      if (i === this.suggestIndex) this.styleChip(chip, true);
     });
     this.suggestRowEl.style.display = 'flex';
   }
@@ -425,14 +374,8 @@ export class WebRenderer {
   private updateChipStyles(): void {
     const chips = this.suggestRowEl.children;
     for (let i = 0; i < chips.length; i++) {
-      this.styleChip(chips[i] as HTMLElement, i === this.suggestIndex);
+      (chips[i] as HTMLElement).classList.toggle('selected', i === this.suggestIndex);
     }
-  }
-
-  private styleChip(chip: HTMLElement, selected: boolean): void {
-    chip.style.borderColor = selected ? '#53a8b6' : '#34456b';
-    chip.style.color = selected ? '#ffffff' : '#c7d5e8';
-    chip.style.background = selected ? '#1b3a55' : '#20293f';
   }
 
   /** 把候选补进输入框（替换最后一个词）；不执行，Enter 仍由玩家敲 */
@@ -494,37 +437,13 @@ export class WebRenderer {
 
   /**
    * 渲染 OutputMessage 到 DOM
+   *
+   * 样式全部由 CSS 类承担（模板的 .output-{kind} / .mud-* 系列）——
+   * 主题切换只动 CSS 变量，渲染器不感知颜色值。
    */
   private appendOutput(msg: OutputMessage): void {
     const line = document.createElement('div');
     line.className = `output-line output-${msg.kind}`;
-    // 保留文本内换行（ASCII 地图/help 多行文案），长段落仍自动折行
-    line.style.whiteSpace = 'pre-wrap';
-
-    // 根据 kind 设置样式（语义与引擎 ANSI 渲染器同一套约定）
-    switch (msg.kind) {
-      case 'error':
-        line.style.color = '#e74c3c';
-        break;
-      case 'system':
-        line.style.color = '#a0a0a0';
-        break;
-      case 'title':
-        line.style.fontWeight = 'bold';
-        line.style.color = '#f39c12';
-        break;
-      case 'dialogue':
-        line.style.color = '#9b59b6';
-        break;
-      case 'status':
-        line.style.color = '#f1c40f';
-        break;
-      case 'prompt':
-        line.style.color = '#1abc9c';
-        break;
-      default:
-        line.style.color = '#e0e0e0';
-    }
 
     // 渲染 segments
     for (const seg of msg.segments) {
@@ -535,6 +454,9 @@ export class WebRenderer {
     this.outputEl.appendChild(line);
   }
 
+  /** 已知语义色集合：命中的走 CSS 类（随主题换色），其余按具体色值内联（兼容） */
+  private static KNOWN_COLORS = new Set(['red', 'green', 'yellow', 'blue', 'gray', 'white', 'cyan', 'magenta']);
+
   /**
    * 渲染单个 Segment
    */
@@ -543,32 +465,19 @@ export class WebRenderer {
     span.textContent = seg.text;
 
     if (seg.style) {
-      // 语义色映射
-      const colorMap: Record<string, string> = {
-        red: '#e74c3c',
-        green: '#2ecc71',
-        yellow: '#f1c40f',
-        blue: '#3498db',
-        gray: '#95a5a6',
-        white: '#ecf0f1',
-        cyan: '#1abc9c',
-        magenta: '#9b59b6',
-      };
-
       if (seg.style.color) {
-        span.style.color = colorMap[seg.style.color] ?? seg.style.color;
+        if (WebRenderer.KNOWN_COLORS.has(seg.style.color)) {
+          span.classList.add(`mud-c-${seg.style.color}`);
+        } else {
+          span.style.color = seg.style.color; // 内容直接给了色值
+        }
       }
-      if (seg.style.bold) {
-        span.style.fontWeight = 'bold';
-      }
-      if (seg.style.italic) {
-        span.style.fontStyle = 'italic';
-      }
+      if (seg.style.bold) span.classList.add('mud-bold');
+      if (seg.style.italic) span.classList.add('mud-italic');
 
       // 标签样式：实体名可点击（= look 该实体），不是假 affordance
       if (seg.style.tag === 'entity') {
-        span.style.borderBottom = '1px dashed #53a8b6';
-        span.style.cursor = 'pointer';
+        span.classList.add('mud-entity');
         span.addEventListener('click', (e) => {
           e.stopPropagation();
           const name = seg.text.trim();

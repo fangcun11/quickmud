@@ -119,12 +119,13 @@ describe('命令建议 · 键盘契约', () => {
     const { input, row } = mountRenderer({ suggest: () => ['at1', 'at2', 'at3'] });
     type(input, 'at');
     press(input, 'ArrowUp');
-    expect((row.children[2] as HTMLElement).style.borderColor).toBe('#53a8b6');
+    expect((row.children[2] as HTMLElement).classList.contains('selected')).toBe(true);
     press(input, 'ArrowUp');
-    expect((row.children[1] as HTMLElement).style.borderColor).toBe('#53a8b6');
+    expect((row.children[2] as HTMLElement).classList.contains('selected')).toBe(false);
+    expect((row.children[1] as HTMLElement).classList.contains('selected')).toBe(true);
     press(input, 'ArrowDown');
     press(input, 'ArrowDown'); // 1→2→越过最末回到未选中
-    expect((row.children[0] as HTMLElement).style.borderColor).not.toBe('#53a8b6');
+    expect((row.children[0] as HTMLElement).classList.contains('selected')).toBe(false);
   });
 
   it('Enter 永远执行当前输入——候选开着也不执行候选', async () => {

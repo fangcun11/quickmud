@@ -50,6 +50,22 @@
   找到自己的动词/缩写——加命令忘改 help 会先红（demo-adventure 同款，
   两包并入根 `pnpm test`）
 
+### web-client：MUD 质感主题化（@mud/web-client 0.4.0）
+
+- **样式系统搬家**：全部内联 `cssText` 迁到模板 `<style>` 的 **CSS 变量 + 类名**
+  （`.mud-root` / `.output-{kind}` / `.mud-c-*`），渲染器只设 `<html data-theme>`
+  和结构类名——换主题=换一组变量，语义通道与键盘契约不动
+- **磷光绿（默认）/ 琥珀双主题**：近黑底 + 荧光色文字，7 通道按主题取色；
+  构造参数 `theme` 选择，模板静态默认防白屏闪烁
+- **CRT 质感层（纯 CSS 零依赖）**：扫描线、文字辉光、暗角、极轻闪烁
+  （9s 一次 2% 抖动）、样式化滚动条——`prefers-reduced-motion` 下动效全关
+- **终端字体栈**：Cascadia Mono / JetBrains Mono / IBM Plex Mono / Consolas
+  就近取用（不引网络字体，零依赖不破；行高收紧 1.5）
+- **终端签名细节**：建议候选改**方括号字样式**（`[attack]`，中括号压暗、
+  选中反色）、输出行 120ms 淡入、回显压灰、安全区 padding、theme-color 与
+  favicon（data-URI）
+- DOM 测试跟进（chip 选中断言改 classList）；`build-html.js` 兜底模板同色系
+
 ### web-client：去顶部状态栏 + 命令建议（@mud/web-client 0.3.0，breaking）
 
 - **顶部状态栏移除（breaking）**：MUD 传统没有常驻 chrome——屏面就是
