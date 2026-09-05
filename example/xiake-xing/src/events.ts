@@ -59,3 +59,30 @@ export const ChannelRequested = defineEvent('channel_requested')<{
   entity: string;
   artId: string;
 }>();
+
+/** 装备意图（M3）：装备命令发出，EquipSystem 写槽位 */
+export const Equipped = defineEvent('equipped')<{
+  entity: string;
+  item: string;
+  slot: 'weapon' | 'armor' | 'trinket';
+}>();
+
+/** 卸下意图（M3）：卸下命令发出，EquipSystem 清槽位 */
+export const Unequipped = defineEvent('unequipped')<{
+  entity: string;
+  slot: 'weapon' | 'armor' | 'trinket';
+}>();
+
+/** 买入意图（M3）：买命令发出，ShopSystem 扣银并转移物品 */
+export const Bought = defineEvent('bought')<{
+  entity: string;
+  item: string;
+  price: number;
+}>();
+
+/** 卖出意图（M3）：卖命令发出，ShopSystem 给银并转移物品 */
+export const Sold = defineEvent('sold')<{
+  entity: string;
+  item: string;
+  price: number;
+}>();

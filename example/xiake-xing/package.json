@@ -1,6 +1,6 @@
 {
   "name": "xiake-xing",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "侠客行——武侠题材文字 RPG（M1 内功根基：打坐回气 + 纯公式战斗内核 + 野狼林，吃 @mud/ecs-engine 0.12 + @mud/prefabs 0.12）",

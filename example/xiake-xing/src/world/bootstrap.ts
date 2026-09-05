@@ -68,7 +68,11 @@ import {
   markVisited,
 } from '@mud/prefabs';
 import { HelpCommand, QuitHintCommand } from '../commands/help';
-import { Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag, Arsenal, Channeling, Scripture } from '../traits';
+import {
+  Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag,
+  Arsenal, Channeling, Scripture,
+  Purse, Equipment, Bonus, Gear, ForSale,
+} from '../traits';
 import {
   MeditateCommand,
   StopCommand,
@@ -91,6 +95,16 @@ import {
   ArtsCommand,
   MartialSystem,
 } from '../martial';
+import {
+  EquipCommand,
+  UnequipCommand,
+  EquipSystem,
+} from '../equipment';
+import {
+  BuyCommand,
+  SellCommand,
+  ShopSystem,
+} from '../shop';
 import { AtmosphereSystem } from '../atmosphere';
 import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
 
@@ -122,6 +136,8 @@ export function bootstrap(): BootstrapResult {
     BacktrackSystem,
     PresenceSystem,
     PlayerAwareDeathSystem,
+    EquipSystem,
+    ShopSystem,
     MartialSystem,
     MeditationSystem,
     AtmosphereSystem,
@@ -160,6 +176,10 @@ export function bootstrap(): BootstrapResult {
     VerboseCommand,
     MiniMapCommand,
     BackCommand,
+    EquipCommand,
+    UnequipCommand,
+    BuyCommand,
+    SellCommand,
     LearnCommand,
     UseCommand,
     ChannelCommand,
@@ -222,7 +242,16 @@ export function bootstrap(): BootstrapResult {
       description:
         '铺子里堆着干粮、火折子和粗布衣裳，掌柜的噼里啪啦打着算盘。往南回到青石街。',
       area: 'town',
-      exits: { south: 'street' },
+      exits: { south: 'street', north: 'smithy' },
+    }),
+    defineRoom({
+      id: 'smithy',
+      name: '铁匠铺',
+      description:
+        '炉火映着半墙，铁砧上的叮当声不紧不慢。墙上挂着几件成色不错的家伙，价目牌钉在柱子上——铁剑十五、皮甲十二、护身符十。掌柜的铁塔似的站在炉边。',
+      short: '炉火通红，叮当声不紧不慢。价目牌：铁剑十五、皮甲十二、护身符十。',
+      area: 'town',
+      exits: { south: 'grocery' },
     }),
     defineRoom({
       id: 'wuguan',
@@ -327,6 +356,8 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Arsenal, {
     arts: { kaishan_fist: { level: 1, exp: 0 } },
   });
+  world.addComponent(playerId, Purse, { silver: 10 }); // 兜里几枚碎银
+  world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
   markVisited(world, playerId); // seed 出生房间（初始位置没有 Moved 事件可订阅）
 
@@ -360,6 +391,55 @@ export function bootstrap(): BootstrapResult {
         },
       ],
     });
+  }
+
+  // ---- 铁匠铺（M3）：铁匠 + 在售商品 ----
+  const smith = world.entities.createWithId('blacksmith');
+  world.addComponent(smith, Name, { text: '铁匠', aliases: ['掌柜', '铁匠铺掌柜'] });
+  world.addComponent(smith, Description, {
+    text: '铁塔似的汉子，胳膊上的肌肉比砧子还硬。手里的锤子起起落落，火星四溅。',
+  });
+  world.addComponent(smith, Pose, { text: '手里的锤子起起落落，火星四溅' });
+  world.addComponent(smith, Position, { roomId: 'smithy' });
+
+  const shopItems = [
+    {
+      id: 'iron_sword',
+      name: '铁剑',
+      aliases: ['剑'],
+      slot: 'weapon' as const,
+      bonus: { atk: 3, def: 0, dodge: 0 },
+      price: 15,
+      desc: '一把分量十足的铁剑，剑刃在炉火下泛着青光。',
+    },
+    {
+      id: 'leather_armor',
+      name: '皮甲',
+      aliases: ['甲'],
+      slot: 'armor' as const,
+      bonus: { atk: 0, def: 2, dodge: 0 },
+      price: 12,
+      desc: '硝好的牛皮缝成的软甲，穿着利索，挡得住爪牙。',
+    },
+    {
+      id: 'amulet',
+      name: '护身符',
+      aliases: ['符'],
+      slot: 'trinket' as const,
+      bonus: { atk: 0, def: 0, dodge: 2 },
+      price: 10,
+      desc: '一枚铜符，刻着模糊的云纹。老人们说挂身上能躲灾。',
+    },
+  ];
+  for (const it of shopItems) {
+    const id = world.entities.createWithId(it.id);
+    world.addComponent(id, Name, { text: it.name, aliases: it.aliases });
+    world.addComponent(id, Description, { text: it.desc });
+    world.addComponent(id, Gear, { slot: it.slot });
+    world.addComponent(id, Bonus, { ...it.bonus });
+    world.addComponent(id, ForSale, { price: it.price });
+    world.addComponent(id, Portable);
+    world.addComponent(id, Located, { targets: ['smithy'] });
   }
 
   // ---- 武馆秘籍（M2）：学 剑谱 / 学 心法——学完即焚 ----

@@ -21,6 +21,7 @@ import { Attacked, Fled, Strike } from './events';
 import { Stats, Retaliate, Trail, PlayerTag, Arsenal, Energy } from './traits';
 import { ARTS } from './arts';
 import { foesInRoom, grantArtExp } from './martial';
+import { effectiveStats } from './equipment';
 
 // ---------------------------------------------------------------- 命令 --
 
@@ -129,9 +130,9 @@ export const WuxiaCombatSystem = defineSystem({
     const nightBoost = isNight(timestamp) && ctx.getComponent(attacker, Retaliate) ? 1 : 0;
     const areaId = ctx.getRelations(tgtPos.roomId, Area)[0] ?? tgtPos.roomId;
     const slippery = weatherOf(areaId, timestamp) === 'rain' ? 1 : 0;
-    const atkStats = ctx.getComponent(attacker, Stats);
-    const defStats = ctx.getComponent(target, Stats);
-    const diff = (atkStats?.dodge ?? 0) - slippery - (defStats?.dodge ?? 0);
+    const atkStats = effectiveStats(ctx, attacker);
+    const defStats = effectiveStats(ctx, target);
+    const diff = atkStats.dodge - slippery - defStats.dodge;
     const result = diff >= 2 ? 'hit' : diff >= -1 ? 'blocked' : 'dodged';
 
     const targetName = displayName(ctx, target);
@@ -147,8 +148,8 @@ export const WuxiaCombatSystem = defineSystem({
       return;
     }
 
-    const atkPower = (atkStats?.atk ?? 1) + nightBoost;
-    let damage = Math.max(1, Math.round(atkPower * mult - (defStats?.def ?? 0)));
+    const atkPower = atkStats.atk + nightBoost;
+    let damage = Math.max(1, Math.round(atkPower * mult - defStats.def));
     if (result === 'blocked') damage = Math.max(1, Math.round(damage * 0.7));
 
     const before = hp.current;

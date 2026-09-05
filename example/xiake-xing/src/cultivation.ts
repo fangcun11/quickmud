@@ -10,7 +10,7 @@
  */
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
 import { Health, Position, Moved, displayName } from '@mud/prefabs';
-import { Energy, Stats, Cultivating, Channeling } from './traits';
+import { Energy, Stats, Cultivating, Channeling, Purse } from './traits';
 import { ARTS } from './arts';
 import { grantArtExp } from './martial';
 import { Attacked, MeditateRequested, StopRequested } from './events';

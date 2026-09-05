@@ -11,7 +11,7 @@
 import { defineSystem } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 import { Died, Moved, Position, displayName, directionLabel } from '@mud/prefabs';
-import { PlayerTag, Energy, Cultivating, Trail } from './traits';
+import { PlayerTag, Energy, Cultivating, Trail, Purse } from './traits';
 import { Health, Backtrack } from '@mud/prefabs';
 
 const INN_ROOM_ID = 'inn';
@@ -75,6 +75,12 @@ export const PlayerAwareDeathSystem = defineSystem({
     if (backtrack) backtrack.rooms = [];
     const trail = ctx.getComponent(entity, Trail);
     if (trail) trail.roomId = INN_ROOM_ID;
+    const purse = ctx.getComponent(entity, Purse);
+    if (purse && purse.silver > 0) {
+      const lost = Math.max(1, Math.ceil(purse.silver * 0.1));
+      purse.silver -= lost;
+      ctx.output.narrative(`你摸了摸钱袋——碎了 ${lost} 碎银。`);
+    }
     const pos = ctx.getComponent(entity, Position)!;
     pos.roomId = INN_ROOM_ID as EntityId;
 

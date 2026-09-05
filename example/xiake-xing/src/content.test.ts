@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { World } from '@mud/ecs-engine';
+import { Health } from '@mud/prefabs';
 import { record, verifyReplay } from '@mud/ecs-engine';
 import { Position } from '@mud/prefabs';
 import { bootstrap } from './world/bootstrap';
@@ -143,11 +144,12 @@ describe('侠客行 M0 · 三区域骨架', () => {
 // 每用例独立世界（三态要按场景构造身法，不能共享状态）
 // ============================================================
 import { Name } from '@mud/ecs-engine';
-import { Health, itemsInContainer } from '@mud/prefabs';
+import { itemsInContainer } from '@mud/prefabs';
 import { Energy, Stats, Cultivating, Retaliate, Arsenal, Channeling } from './traits';
 import {
-  Area, Health, Wander, isNight, shichenOf, weatherLabel, weatherOf,
+  Area, Wander, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
+import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear } from './traits';
 
 function fresh(): void {
   const b = bootstrap();
@@ -568,5 +570,75 @@ describe('侠客行沉浸支线 · 世界活着', () => {
     expect(hp()).toBe(100);
     expect(energy().current).toBe(0);
     expect(await run('回')).toContain('没有来路'); // 来路已断
+  });
+});
+
+// ============================================================
+// M3 · 装备与买卖：碎银/铁匠铺/装备聚合/死亡惩罚
+// ============================================================
+
+describe('侠客行 M3 · 装备与买卖', () => {
+  it('铁匠铺：在售商品可见；碎银不够 → 明说；买铁剑扣 15', async () => {
+    fresh();
+    await run('东'); await run('北'); await run('北'); // 客栈→青石街→杂货铺→铁匠铺
+    expect(pos()).toBe('smithy');
+    expect(await run('look')).toContain('铁剑');
+    expect(world.getComponent(player, Purse)!.silver).toBe(10);
+    expect(await run('buy 铁剑')).toContain('碎银不够'); // 10 < 15
+    world.getComponent(player, Purse)!.silver = 20;
+    expect(await run('buy 铁剑')).toContain('付了 15 碎银');
+    expect(world.getComponent(player, Purse)!.silver).toBe(5);
+    // 商品进背包
+    expect(itemsInContainer(world, player).length).toBe(1);
+  });
+
+  it('装备聚合：铁剑 atk+3 → 直拳伤害 7；卸下回 4', async () => {
+    fresh();
+    world.getComponent(player, Purse)!.silver = 20;
+    await run('东'); await run('北'); await run('北');
+    await run('buy 铁剑');
+    await run('装备 铁剑');
+    expect(world.getComponent(player, Equipment)!.weapon).toBe('iron_sword');
+    // 铁匠铺→杂货铺→青石街→镇口→山道→松林→林缘→林口→密林
+    for (const dir of ['南', '南', '东', '南', '南', '南', '南', '南']) await run(dir);
+    expect(pos()).toBe('thicket');
+    world.getComponent(player, Stats)!.dodge = 4; // 身法差 +2 → 命中（排除格挡干扰）
+    const hit = await run('attack 野狼');
+    expect(hit).toContain('造成 7 点伤害'); // (5+3)−1 = 7
+    await run('卸下 武器');
+    expect(world.getComponent(player, Equipment)!.weapon).toBe('');
+    const hit2 = await run('attack 野狼');
+    expect(hit2).toContain('造成 4 点伤害'); // 5−1 = 4
+    void Stats;
+  });
+
+  it('卖狼皮：得了 2 碎银（折半），物品回铁匠铺', async () => {
+    fresh();
+    await gotoWolves();
+    for (let i = 0; i < 9; i++) await run('attack 野狼');
+    await run('take 狼皮');
+    expect(itemsInContainer(world, player).length).toBe(1);
+    // 原路返回：密林→林口→林缘→松林→山道→镇口→(西)青石街→杂货铺→铁匠铺
+    for (let i = 0; i < 5; i++) await run('北');
+    await run('北'); // gate
+    await run('西'); // 青石街
+    await run('北'); // 杂货铺
+    await run('北'); // 铁匠铺
+    expect(pos()).toBe('smithy');
+    const sell = await run('sell 狼皮');
+    expect(sell).toContain('得了 2 碎银'); // ceil(3/2) = 2
+    expect(itemsInContainer(world, player).length).toBe(0);
+  });
+
+  it('死亡扣碎银一成', async () => {
+    fresh();
+    world.getComponent(player, Purse)!.silver = 20;
+    await gotoWolves();
+    world.getComponent(player, Health)!.current = 6;
+    drain();
+    await run('attack 野狼');
+    await run('attack 野狼');
+    expect(pos()).toBe('inn');
+    expect(world.getComponent(player, Purse)!.silver).toBe(18); // 20 − ceil(2)
   });
 });

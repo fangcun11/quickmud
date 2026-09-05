@@ -66,3 +66,32 @@ export const Channeling = trait('channeling', () => ({
 export const Scripture = trait('scripture', () => ({
   artId: '',
 }));
+
+/** 钱袋（M3）：碎银计数（死亡惩罚扣一成） */
+export const Purse = trait('purse', () => ({
+  silver: 0,
+}));
+
+/** 装备加成（M3）：挂在装备品实体上——聚合函数在战斗时读取 */
+export const Bonus = trait('bonus', () => ({
+  atk: 0,
+  def: 0,
+  dodge: 0,
+}));
+
+/** 装备品槽位（M3）：weapon / armor / trinket */
+export const Gear = trait('gear', () => ({
+  slot: 'weapon' as 'weapon' | 'armor' | 'trinket',
+}));
+
+/** 已装备槽位（M3）：玩家身上三个槽位指向装备品实体（'' = 空） */
+export const Equipment = trait('equipment', () => ({
+  weapon: '',
+  armor: '',
+  trinket: '',
+}));
+
+/** 在售标记（M3）：挂在商品实体上——`买` 扣银、`卖` 按价折半回收 */
+export const ForSale = trait('for_sale', () => ({
+  price: 0,
+}));
