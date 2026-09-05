@@ -94,6 +94,13 @@ export const Consumable = trait('consumable', () => ({
 export const Wander = trait('wander', () => ({}));
 
 /**
+ * 游走钉住（0.18）：挂在"谁钉住了它"上的关系——被钉的 Wander 实体
+ * NpcWanderSystem 跳过不动。游戏层用它实现"接战的对手战斗中不许游走"
+ * （战斗是系统侧状态，系统改不了组件增删，只有关系可用）。
+ */
+export const WanderHold = relation('wander_hold');
+
+/**
  * 掉落条目（v0.6-A1）：**纯数据**描述一个掉落物
  *
  * 刻意用数据而非蓝图引用：组件数据必须可 JSON（引擎铁律，快照走 structuredClone），

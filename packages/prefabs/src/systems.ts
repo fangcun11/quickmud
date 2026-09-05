@@ -51,6 +51,7 @@ import {
   Health,
   Weapon,
   Wander,
+  WanderHold,
   Loot,
   Area,
   QuestGiver,
@@ -1024,6 +1025,9 @@ export const NpcWanderSystem = defineSystem({
     const round = Math.floor(time / interval);
 
     for (const npc of ctx.findByComponent(Wander)) {
+      // 被钉住的不动（0.18）：战斗中接战的对手不许游走出房——
+      // 否则持续战斗每息被"游走脱战"拆台
+      if (ctx.getRelations(npc, WanderHold).length > 0) continue;
       const pos = ctx.getComponent(npc, Position);
       if (!pos) continue; // 无位置 → 不动
       const exits = ctx.getComponent(pos.roomId as EntityId, Exits);

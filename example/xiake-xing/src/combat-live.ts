@@ -11,27 +11,32 @@
  * - 脱战：对手倒下 / 逃跑 / 移动出房 / 停战——清 foe 即可。
  */
 import { defineCommand, defineSystem } from '@mud/ecs-engine';
-import type { ComponentDefinition, EntityId } from '@mud/ecs-engine';
-import { Attack, Health, Position, displayName } from '@mud/prefabs';
+import type { SystemContext, EntityId } from '@mud/ecs-engine';
+import { Attack, Health, Position, displayName, WanderHold } from '@mud/prefabs';
 import { PlayerTag, Combat, Aggressive } from './traits';
+import { Disengaged } from './events';
 
 /** 进入战斗（设 foe；幂等——已在战则换对手） */
-export function enterCombat(
-  ctx: { getComponent: <T>(id: EntityId, c: ComponentDefinition<T>) => T | undefined },
-  entity: EntityId,
-  foe: EntityId,
-): void {
+export function enterCombat(ctx: SystemContext, entity: EntityId, foe: EntityId): void {
   const combat = ctx.getComponent(entity, Combat);
-  if (combat) combat.foe = foe;
+  if (!combat) return;
+  // 换对手时先放开旧的（WanderHold 关系，见下）
+  if (combat.foe && combat.foe !== foe && ctx.getEntity(combat.foe as EntityId)) {
+    ctx.removeRelation(combat.foe as EntityId, WanderHold, entity);
+  }
+  combat.foe = foe;
+  // 钉住接战的对手：战斗中不许游走出房（NpcWanderSystem 尊重 WanderHold）
+  // ——否则"持续战斗"每息都被游走脱战拆台
+  ctx.addRelation(foe, WanderHold, entity);
 }
 
-/** 脱战（清 foe） */
-export function exitCombat(
-  ctx: { getComponent: <T>(id: EntityId, c: ComponentDefinition<T>) => T | undefined },
-  entity: EntityId,
-): void {
+/** 脱战（清 foe + 解除对手的游走钉住） */
+export function exitCombat(ctx: SystemContext, entity: EntityId): void {
   const combat = ctx.getComponent(entity, Combat);
-  if (combat) combat.foe = '';
+  if (!combat) return;
+  const foe = combat.foe as EntityId;
+  if (foe && ctx.getEntity(foe)) ctx.removeRelation(foe, WanderHold, entity);
+  combat.foe = '';
 }
 
 /**
@@ -44,8 +49,14 @@ export function exitCombat(
 export const CombatRoundSystem = defineSystem({
   name: 'xk.combat-round',
   every: 1000,
+  on: [Disengaged],
   handle(payload, ctx) {
-    const time = payload.data.time;
+    // 停战事实：解除对手的游走钉住（命令侧关系只读，写走本系统）
+    if (payload.token === Disengaged.token) {
+      exitCombat(ctx, (payload.data as { entity: EntityId }).entity);
+      return;
+    }
+    const time = (payload.data as unknown as { time: number }).time;
 
     for (const id of ctx.findByComponent(Combat)) {
       const combat = ctx.getComponent(id, Combat)!;
@@ -57,8 +68,11 @@ export const CombatRoundSystem = defineSystem({
       const foeHp = ctx.getComponent(combat.foe as EntityId, Health);
       const foePos = ctx.getComponent(combat.foe as EntityId, Position);
 
-      // 对手死了 / 不在同房 → 脱战
+      // 对手死了 / 不在同房 → 脱战（同时解除游走钉住）
       if (!foeHp || foeHp.current <= 0 || !foePos || !pos || foePos.roomId !== pos.roomId) {
+        if (ctx.getEntity(combat.foe as EntityId)) {
+          ctx.removeRelation(combat.foe as EntityId, WanderHold, id);
+        }
         combat.foe = '';
         continue;
       }
@@ -80,14 +94,14 @@ export const CombatRoundSystem = defineSystem({
       const npcHp = ctx.getComponent(npc, Health);
       if (!npcPos || npcPos.roomId !== playerPos.roomId) continue;
       if (!npcHp || npcHp.current <= 0) continue;
-      playerCombat.foe = npc;
+      enterCombat(ctx, player, npc);
       ctx.output.narrative(`「${displayName(ctx, npc)}」呲着牙向你扑来！`);
       break;
     }
   },
 });
 
-/** 停战命令：停战/脱离（清 foe；Aggressive 对手下息会再接敌） */
+/** 停战命令：停战/脱离（emit 事实；解钉走系统——命令侧关系只读） */
 export const DisengageCommand = defineCommand({
   verbs: ['停战', '脱离'],
   describe: '脱离当前战斗（对手还在的话，Aggressive 会再接敌）',
@@ -98,7 +112,7 @@ export const DisengageCommand = defineCommand({
       return null;
     }
     const foeName = displayName(world, combat.foe as EntityId);
-    combat.foe = '';
+    world.emit(Disengaged, { entity: player });
     output.narrative(`你脱离了与「${foeName}」的战斗。`);
     return null;
   },

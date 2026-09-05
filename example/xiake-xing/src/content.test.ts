@@ -147,7 +147,7 @@ import { Name } from '@mud/ecs-engine';
 import { itemsInContainer } from '@mud/prefabs';
 import { Energy, Stats, Cultivating, Retaliate, Channeling } from './traits';
 import {
-  Area, Wander, isNight, shichenOf, weatherLabel, weatherOf,
+  Area, Wander, WanderHold, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
 import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed } from './traits';
 
@@ -453,21 +453,33 @@ function drainText(): string {
 }
 
 describe('侠客行沉浸支线 · 世界活着', () => {
-  it('狼巡逻：沿狼林三房轮换，不出界；进出玩家房间有播报', async () => {
+  it('接战的狼钉在原地不游走；脱战解钉恢复三房轮换（不出界）', async () => {
     fresh();
     await gotoWolves(); // 玩家在 thicket，狼-1 也在 thicket
     expect(world.getComponent('wolf-1', Position)!.roomId).toBe('thicket');
     drain();
-    // wander every:3000 → 网格首触在第 3 个 tick（round1,dir=south）：狼 thicket→den（玩家房离开）
-    world.tick();
-    world.tick();
-    world.tick();
-    expect(drainText()).toContain('往南离开了');
-    expect(world.getComponent('wolf-1', Position)!.roomId).toBe('den');
-    for (let i = 0; i < 6; i++) world.tick();
+    world.tick(); // CombatRound：同房 Aggressive 自动接敌
+    expect(drainText()).toContain('呲着牙');
+    for (let i = 0; i < 3; i++) world.tick(); // 已越过 wander 网格
     drain();
-    // bounded：狼不出狼林三房
-    expect(['woodsgate', 'thicket', 'den']).toContain(world.getComponent('wolf-1', Position)!.roomId);
+    // 0.18：接战的对手被 WanderHold 钉住——不再"游走脱战"拆台持续战斗
+    expect(world.getComponent('wolf-1', Position)!.roomId).toBe('thicket');
+
+    // 玩家离开（直接改位置模拟走远）→ 脱战解钉 → 恢复巡逻
+    world.getComponent(player, Position)!.roomId = 'inn';
+    for (let i = 0; i < 3; i++) world.tick();
+    drain();
+    // 逐 tick 采样狼-1 位置：解钉后必然动过（逐格轮换），且始终不出狼林三房
+    const seen = new Set<string>();
+    for (let i = 0; i < 8; i++) {
+      world.tick();
+      drain();
+      seen.add(world.getComponent('wolf-1', Position)!.roomId);
+      expect(['woodsgate', 'thicket', 'den']).toContain(
+        world.getComponent('wolf-1', Position)!.roomId,
+      );
+    }
+    expect(seen.size).toBeGreaterThan(1);
   });
 
   it('狼回到玩家房间 → 「从北面走了进来」', async () => {
@@ -801,5 +813,47 @@ describe('侠客行 M5 · 铁匠任务与山神庙祈祷', () => {
 
     expect(await run('祈祷')).toContain('不再回应');
     expect(hp()).toBe(70); // 未再回血
+  });
+});
+
+
+// ============================================================
+// 0.18 修复回归：刷怪全局计数 + 游走钉住（WanderHold）
+// ============================================================
+
+describe('侠客行沉浸支线 · 刷怪与游走钉住', () => {
+  it('刷怪按全局狼口计数：狼全游走出区域房间也不会越刷越多', async () => {
+    fresh();
+    // 复现旧 bug 场景：三只狼全部离开 zone 房间（thicket/den 看起来"空了"）
+    for (const w of ['wolf-1', 'wolf-2', 'wolf-3']) {
+      world.getComponent(w, Position)!.roomId = 'shrine';
+      world.removeComponent(w, Aggressive); // 别凑到玩家身边打扰断言
+      world.removeComponent(w, Wander);
+    }
+    for (let i = 0; i < 32; i++) world.tick(); // 越过 30 息刷怪网格
+    drain();
+    const wolves = world.findByComponent(Retaliate).filter(
+      (id) => (world.getComponent(id, Health)?.current ?? 0) > 0,
+    );
+    expect(wolves.length).toBe(3); // 修复前：zone 按房计数 → 每网格越刷越多
+  });
+
+  it('停战 → WanderHold 解除；Aggressive 下息再接敌 → 重新钉住', async () => {
+    fresh();
+    await gotoWolves();
+    drain();
+    await run('attack 野狼');
+    drain();
+    const wolf = world.getComponent(player, Combat)!.foe;
+    expect(world.getRelations(wolf, WanderHold).length).toBeGreaterThan(0);
+
+    await run('停战');
+    expect(world.getRelations(wolf, WanderHold)).toHaveLength(0); // 解除
+
+    world.tick(); // Aggressive 再接敌
+    drain();
+    expect(world.getComponent(player, Combat)!.foe).toBeTruthy();
+    const foe2 = world.getComponent(player, Combat)!.foe;
+    expect(world.getRelations(foe2, WanderHold).length).toBeGreaterThan(0); // 重新钉住
   });
 });

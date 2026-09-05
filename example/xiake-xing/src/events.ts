@@ -86,3 +86,8 @@ export const Sold = defineEvent('sold')<{
   item: string;
   price: number;
 }>();
+
+/** 脱战事实（0.18）：停战命令发出，CombatRoundSystem 解除对手的游走钉住 */
+export const Disengaged = defineEvent('disengaged')<{
+  entity: string;
+}>();

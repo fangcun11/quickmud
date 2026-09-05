@@ -19,6 +19,9 @@ const WOLF_ZONES: Array<{ roomId: EntityId; expected: number }> = [
 
 let spawnCounter = 0;
 
+/** 全局狼口上限：狼会游走出区域房间，按房间计数必然失真（越刷越多） */
+const TOTAL_WOLVES = WOLF_ZONES.reduce((n, z) => n + z.expected, 0);
+
 /** 狼蓝图（与 bootstrap 手动创建的狼同款组件集） */
 function wolfBlueprint(roomId: EntityId, _seq: number) {
   const components: BlueprintComponentInput[] = [
@@ -40,18 +43,19 @@ export const WolfSpawnSystem = defineSystem({
   name: 'xk.wolf-spawn',
   every: 30_000,
   handle(payload, ctx) {
-    for (const zone of WOLF_ZONES) {
-      const alive = ctx.findByComponent(Retaliate).filter((id) => {
-        const p = ctx.getComponent(id, Position);
-        return p?.roomId === zone.roomId;
-      });
-      if (alive.length >= zone.expected) continue;
-      // 不足 → 重生一只
-      spawnCounter++;
-      const id = ctx.spawn(wolfBlueprint(zone.roomId, spawnCounter)) as EntityId;
-      // 给予 Health（blueprint 未含——Health 默认值即 25/25，由内容层 addComponent 更可控）
-      // 注意：blueprint 方式 Position 已在蓝图内设置
-      void id;
-    }
+    // 全局存活狼数（狼会游走，按"区域房间里的狼数"补会越刷越多——0.18 修复）
+    const alive = ctx.findByComponent(Retaliate).filter((id) => {
+      return (ctx.getComponent(id, Health)?.current ?? 0) > 0;
+    });
+    if (alive.length >= TOTAL_WOLVES) return;
+
+    // 补进狼最少的区域房间（缺几只也只补一只——30 息一补，温和回升）
+    const zone = [...WOLF_ZONES].sort(
+      (a, b) =>
+        alive.filter((id) => ctx.getComponent(id, Position)?.roomId === a.roomId).length -
+        alive.filter((id) => ctx.getComponent(id, Position)?.roomId === b.roomId).length,
+    )[0]!;
+    spawnCounter++;
+    ctx.spawn(wolfBlueprint(zone.roomId, spawnCounter)) as EntityId;
   },
 });
