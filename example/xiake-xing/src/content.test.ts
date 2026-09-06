@@ -356,13 +356,13 @@ describe('侠客行 M2 · 武学与秘籍', () => {
     fresh();
     await gotoWuguan();
     expect(await run('look')).toContain('基础剑法');
-    expect(await run('take 剑谱')).toContain('拿起了');
-    expect(await run('learn 剑谱')).toContain('学会了');
+    expect(await run('take jianfa')).toContain('拿起了');
+    expect(await run('learn jianfa')).toContain('学会了');
     const arsenal = world.getComponent(player, Arsenal)!.arts;
     expect(arsenal.basic_sword).toEqual({ level: 1, exp: 0 });
     // 秘籍即焚：背包空了，再学一次会明说
     expect(itemsInContainer(world, player)).toHaveLength(0);
-    expect(await run('learn 剑谱')).toContain('背包里没有');
+    expect(await run('learn jianfa')).toContain('背包里没有');
   });
 
   it('武学一览与运转心法（打坐内力翻倍 + 心法熟练度每息增长）', async () => {
@@ -859,7 +859,7 @@ describe('侠客行沉浸支线 · 刷怪与游走钉住', () => {
     // 模拟旧 bug 攒出来的 9 只狼（额外 6 只散在狼林各处）
     for (let i = 0; i < 6; i++) {
       const id = world.entities.createWithId(`bloated-wolf-${i}`);
-      world.addComponent(id, Name, { text: '野狼', aliases: ['狼'] });
+      world.addComponent(id, Name, { text: '野狼', aliases: ['wolf'] });
       world.addComponent(id, Position, { roomId: 'woodsgate' });
       world.addComponent(id, Health, { current: 25, max: 25 });
       world.addComponent(id, Retaliate, {});

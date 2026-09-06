@@ -405,7 +405,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Purse, { silver: 10 }); // 兜里几枚碎银
   // 新手引导道具：柜台上放一个粗布包袱（引导第 2 步的拾取目标）
   const pack = world.entities.createWithId('novice-pack');
-  world.addComponent(pack, Name, { text: '粗布包袱', aliases: ['包袱', 'baofu'] });
+  world.addComponent(pack, Name, { text: '粗布包袱', aliases: ['baofu'] });
   world.addComponent(pack, Description, { text: '一个鼓鼓囊囊的粗布包袱，像是店里哪位客人落下的。' });
   world.addComponent(pack, Portable, {});
   world.addComponent(pack, Located, { targets: ['inn'] });
@@ -429,7 +429,7 @@ export function bootstrap(): BootstrapResult {
   ];
   for (const w of wolves) {
     const id = world.entities.createWithId(w.id);
-    world.addComponent(id, Name, { text: '野狼', aliases: ['狼', 'wolf'] });
+    world.addComponent(id, Name, { text: '野狼', aliases: ['wolf'] });
     world.addComponent(id, Description, {
       text: '一头精瘦的灰狼，绿油油的眼睛盯着你，喉咙里滚出低低的呜声。',
     });
@@ -446,7 +446,7 @@ export function bootstrap(): BootstrapResult {
       drops: [
         {
           name: '狼皮',
-          aliases: ['皮', 'pelt', 'wolf skin'],
+          aliases: ['pelt'],
           description: '一张带腥味的狼皮，毛色油亮。杂货铺掌柜说过这玩意能换碎银。',
         },
       ],
@@ -455,7 +455,7 @@ export function bootstrap(): BootstrapResult {
 
   // ---- 铁匠铺（M3）：铁匠 + 在售商品 ----
   const smith = world.entities.createWithId('blacksmith');
-  world.addComponent(smith, Name, { text: '铁匠', aliases: ['掌柜', '铁匠铺掌柜', 'smith', 'tiejiang'] });
+  world.addComponent(smith, Name, { text: '铁匠', aliases: ['tiejiang', 'smith'] });
   world.addComponent(smith, Description, {
     text: '铁塔似的汉子，胳膊上的肌肉比砧子还硬。手里的锤子起起落落，火星四溅。',
   });
@@ -474,7 +474,7 @@ export function bootstrap(): BootstrapResult {
     {
       id: 'iron_sword',
       name: '铁剑',
-      aliases: ['剑', 'jian', 'sword'],
+      aliases: ['jian', 'sword'],
       slot: 'weapon' as const,
       bonus: { atk: 3, def: 0, dodge: 0 },
       price: 15,
@@ -483,7 +483,7 @@ export function bootstrap(): BootstrapResult {
     {
       id: 'leather_armor',
       name: '皮甲',
-      aliases: ['甲', 'jia', 'armor'],
+      aliases: ['jia', 'armor'],
       slot: 'armor' as const,
       bonus: { atk: 0, def: 2, dodge: 0 },
       price: 12,
@@ -492,7 +492,7 @@ export function bootstrap(): BootstrapResult {
     {
       id: 'amulet',
       name: '护身符',
-      aliases: ['符', 'fu', 'amulet'],
+      aliases: ['fu', 'amulet'],
       slot: 'trinket' as const,
       bonus: { atk: 0, def: 0, dodge: 2 },
       price: 10,
@@ -512,8 +512,8 @@ export function bootstrap(): BootstrapResult {
 
   // ---- 杂货铺消耗品（M4）：馒头/金创药 ----
   const consumables = [
-    { id: 'baozi', name: '馒头', aliases: ['包子', 'mantou'], hp: 30, energy: 0, price: 2, desc: '热腾腾的白面馒头，咬一口满嘴麦香。' },
-    { id: 'jinchuang', name: '金创药', aliases: ['药', '金创', 'yao', 'jinchuangyao'], hp: 0, energy: 50, price: 5, desc: '小瓷瓶装的药粉，洒在伤口上刀枪痕都能收。' },
+    { id: 'baozi', name: '馒头', aliases: ['mantou'], hp: 30, energy: 0, price: 2, desc: '热腾腾的白面馒头，咬一口满嘴麦香。' },
+    { id: 'jinchuang', name: '金创药', aliases: ['yao', 'jinchuangyao'], hp: 0, energy: 50, price: 5, desc: '小瓷瓶装的药粉，洒在伤口上刀枪痕都能收。' },
   ];
   for (const c of consumables) {
     const id = world.entities.createWithId(c.id);
@@ -527,8 +527,8 @@ export function bootstrap(): BootstrapResult {
 
   // ---- 武馆秘籍（M2）：学 剑谱 / 学 心法——学完即焚 ----
   const scriptures = [
-    { id: 'scripture_sword', name: '基础剑法', aliases: ['剑谱', '剑法', '秘籍', 'jianfa'], artId: 'basic_sword' },
-    { id: 'scripture_tuna', name: '吐纳术', aliases: ['心法', '吐纳', '秘籍', 'tuna'], artId: 'tuna' },
+    { id: 'scripture_sword', name: '基础剑法', aliases: ['jianfa'], artId: 'basic_sword' },
+    { id: 'scripture_tuna', name: '吐纳术', aliases: ['tuna'], artId: 'tuna' },
   ];
   for (const sc of scriptures) {
     const id = world.entities.createWithId(sc.id);

@@ -46,7 +46,7 @@ const RULES: SuggestionRule[] = [
       if (!pos) return false;
       return itemsInContainer(w, p).some((id) => w.getComponent(id, Scripture));
     },
-    tip: '包里有秘籍没读——去武馆「学」了它（学 秘籍）',
+    tip: '包里有秘籍没读——去武馆「学」了它（learn jianfa）',
   },
   {
     when: (w, p) => {

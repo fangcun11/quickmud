@@ -17,7 +17,7 @@ import { PlayerTag, Purse, Tutorial } from './traits';
 /** 每步的下一步指引（步进后立刻告知）；建议命令复用同一份 */
 export const STEP_HINTS = [
   '先观察四周——敲 look',
-  '把柜台上的粗布包袱捡起来——敲 take 包袱',
+  '把柜台上的粗布包袱捡起来——敲 take baofu',
   '盘膝打坐回复内力——敲 打坐',
   '去杂货铺买个馒头尝尝——出客栈往东到青石街再往北，敲 buy 馒头',
   '出镇口一直往南进野狼林，打一只野狼——敲 attack 野狼',
@@ -49,7 +49,7 @@ export const TutorialSystem = defineSystem({
         if (purse) purse.silver += 5;
         const med = blueprint({
           components: [
-            [Name, { text: '金创药', aliases: ['药', '金创', 'yao', 'jinchuangyao'] }],
+            [Name, { text: '金创药', aliases: ['yao', 'jinchuangyao'] }],
             [Description, { text: '小瓷瓶装的药粉，洒在伤口上刀枪痕都能收。' }],
             [Consumable, { hp: 0, energy: 50, empty: false }],
             [Portable, {}],
