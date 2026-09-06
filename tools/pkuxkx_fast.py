@@ -47,17 +47,17 @@ wait_for(r'英文名字', 10)
 buf = ''
 send('new')
 # 须知 yes → 姓名（提示序列紧凑应答）
-if wait_for(r'yes\)', 15): send('yes')
+if wait_for(r'yes\)', 6): send('yes')
 wait_for(r'英文姓?名', 10); send(NAME)
 wait_for(r'密码', 10); send(PASSWORD)
 wait_for(r'密码|确认', 10); send(PASSWORD)
 # 性别 → m；中文名 → 青石散人；之后提示尽量答
-wait_for(r'男性\(m\)|女性\(f\)|性别', 10); send('m')
-wait_for(r'中文名', 8); send(CN_NAME)
+wait_for(r'男性\(m\)|女性\(f\)|性别', 6); send('m')
+wait_for(r'中文名', 6); send(CN_NAME)
 # 剩余提示：确认/继续/回车类统一回车，观察 60 秒
-for pat in [r'确认', r'继续|按回车']:
+for pat in [r'确认', r'继续|按回车', r'名字', r'yes\)']:
     if wait_for(pat, 6): send('')
-pump(45)
+pump(30)
 
 print('===== TAIL =====')
 print(strip_ansi(buf)[-1600:])
