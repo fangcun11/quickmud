@@ -197,10 +197,12 @@ describe('中文 IME 与既有行为', () => {
     });
     await renderer.runCommand('x');
     // 圈定本用例容器——前面用例的输出行还挂在 body 上
-    const tag = container.querySelector('.output-line span') as HTMLElement;
+    const tag = container.querySelector('.mud-entity') as HTMLElement;
     tag.click();
     await flush();
-    expect(execute).toHaveBeenLastCalledWith('look 野狼', 'player-1');
+    // 0.18 调整：实体点击 = 预填 look 命令（不再直发）
+    const input0 = container.querySelector('#cmd-input') as HTMLInputElement;
+    expect(input0.value).toBe('look 野狼');
   });
 });
 
@@ -219,7 +221,10 @@ describe('点击策略表（交互标注②：tag→命令分发 + 危险预填�
     expect(dir.title).toBe('往北走');
     dir.click();
     await flush();
-    expect(execute).toHaveBeenLastCalledWith('go north', 'player-1');
+    // 0.18 调整：点击一律预填输入框，不再替玩家按键
+    const inputRow = container.querySelector('#cmd-input') as HTMLInputElement;
+    expect(inputRow.value).toBe('go north');
+    expect(execute).toHaveBeenCalledTimes(1); // 仅初始 runCommand('x')
   });
 
   it('危险动词 mode:prefill → 只预填输入框不执行，回车才走', async () => {
@@ -258,27 +263,29 @@ describe('语境动作条与输入行收起（0.18 ③）', () => {
       actions: () => [{ text: '状态', hint: '一览' }, '打坐'],
     });
     const inputRow = container.querySelector('.mud-input-row') as HTMLElement;
-    expect(inputRow.style.display).toBe('none'); // 无常驻输入框
+    expect(inputRow.style.display).not.toBe('none'); // 0.18：输入行常驻
     const chips = container.querySelectorAll('.mud-action-chip');
     expect(chips.length).toBe(3); // ⌨ + 状态 + 打坐
     const statusChip = chips[1] as HTMLElement;
     expect(statusChip.title).toBe('一览');
     statusChip.click();
     await flush();
-    expect(execute).toHaveBeenLastCalledWith('状态', 'player-1');
-    void input;
+    // 预填而非直发
+    expect(input.value).toBe('状态');
+    expect(execute).not.toHaveBeenCalled();
   });
 
-  it('⌨ 唤出输入行，Esc 收起；/ 快捷键也能唤出', () => {
+  it('输入行常驻；Esc 可收起，⌨ 与 / 可唤出', () => {
     const { container, input } = mountRenderer({ actions: () => [] });
     const inputRow = container.querySelector('.mud-input-row') as HTMLElement;
-    const kbd = container.querySelector('.mud-kbd-toggle') as HTMLElement;
-    kbd.click();
-    expect(inputRow.style.display).toBe('flex');
+    expect(inputRow.style.display).not.toBe('none'); // 默认常驻
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     expect(inputRow.style.display).toBe('none');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }));
     expect(inputRow.style.display).toBe('flex');
+    const kbd = container.querySelector('.mud-kbd-toggle') as HTMLElement;
+    kbd.click(); // 再收起
+    expect(inputRow.style.display).toBe('none');
   });
 
   it('动作条随语境刷新：战斗芯片在提示符刷新后出现', async () => {
@@ -297,7 +304,7 @@ describe('语境动作条与输入行收起（0.18 ③）', () => {
 describe('影子补全与候选说明（0.5 快速选择）', () => {
   it('影子补全：输入 at → ghost 余段 tack；选中变化随之更新', () => {
     const { input, row, container } = mountRenderer({ suggest: () => ['attack', 'attach'] });
-    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click(); // 输入行收起中，先唤出
+    input.focus();
     type(input, 'at');
     const ghostText = () => input.parentElement!.querySelector('.mud-ghost')!.textContent;
     expect(ghostText()).toBe('at' + 'tack'); // 首个候选 attack → 余段 tack（hidden 值段占位）
@@ -307,7 +314,7 @@ describe('影子补全与候选说明（0.5 快速选择）', () => {
 
   it('→ 在行尾时等同 Tab：接受影子补全', () => {
     const { input, container, execute } = mountRenderer({ suggest: () => ['attack'] });
-    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click(); // 输入行收起中，先唤出
+    input.focus();
     type(input, 'at');
     input.setSelectionRange(input.value.length, input.value.length);
     press(input, 'ArrowRight');

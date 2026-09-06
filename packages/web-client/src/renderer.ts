@@ -198,8 +198,8 @@ export class WebRenderer {
     this.inputAreaEl = inputArea;
     bottomWrap.appendChild(inputArea);
     this.container.appendChild(bottomWrap);
-    // 输入行默认收起：无常驻输入框（点 ⌨ 或按 / 唤出）
-    inputArea.style.display = 'none';
+    // 输入行常驻（0.18 体验调整：回归命令输入为主）；⌨ 仍可临时收起
+    this.inputOpen = true;
 
     // ⌨ 唤出/收起输入行（动作条首位，专属样式）
     const kbdBtn = document.createElement('span');
@@ -262,7 +262,7 @@ export class WebRenderer {
       }
     });
 
-    // 点击容器聚焦输入（输入收起时不打扰——正文即链接，点空不该弹键盘）
+    // 点击容器聚焦输入
     this.container.addEventListener('click', () => {
       if (this.inputOpen) this.inputEl.focus();
     });
@@ -512,7 +512,10 @@ export class WebRenderer {
       if (hint) chip.title = hint;
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        void this.runCommand(text);
+        // 预填而非直发（0.18 体验调整）：命令过玩家的手再执行
+        this.inputEl.value = text;
+        if (!this.inputOpen) this.setInputOpen(true);
+        this.inputEl.focus();
       });
       this.actionsEl.appendChild(chip);
     }
@@ -732,17 +735,13 @@ export class WebRenderer {
       if (seg.style?.tag === 'entity') span.classList.add('mud-entity');
       else if (seg.style?.tag === 'direction') span.classList.add('mud-direction');
       span.title = action.hint ?? action.command;
+      // 0.18 体验调整：点击一律**预填输入框**（不再替玩家按键）——
+      // 每次操作都过玩家的手，回车才执行。直发模式字段保留，日后可切回。
       span.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (action.mode === 'prefill') {
-          // 危险动词：只预填，等玩家按回车确认（输入行收起时自动唤出）
-          if (!this.inputOpen) this.setInputOpen(true);
-          this.inputEl.value = action.command;
-          this.inputEl.focus();
-          return;
-        }
+        if (!this.inputOpen) this.setInputOpen(true);
+        this.inputEl.value = action.command;
         this.inputEl.focus();
-        void this.runCommand(action.command);
       });
     }
 
