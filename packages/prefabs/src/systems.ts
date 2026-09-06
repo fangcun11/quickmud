@@ -222,11 +222,11 @@ function emitOccupantLines(ctx: SystemContext, ids: EntityId[]): void {
     // 北侠 ID 形态（0.19）：逐实例一行，括号内是**唯一可敲 id**——name 展示、id 指向
     for (let i = 0; i < group.ids.length; i++) {
       const id = group.ids[i]!;
-      const alias = i === 0 && group.aliases.length > 0 ? `(${group.aliases.join('、')})` : '';
+      // 北侠形态：括号里只放**唯一 id**——别名仍可敲（解析层支持），但不重复展示
       ctx.output.narrative([
         { text: '「' },
         { text: name, style: { tag: 'entity' }, entityRef: id },
-        { text: `」(${id})${alias}${group.pose}。` },
+        { text: `」(${id})${group.pose}。` },
       ]);
     }
   }
