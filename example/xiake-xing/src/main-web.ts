@@ -13,7 +13,7 @@
  * 传统移除，属性看「状态」命令。
  */
 import { bootstrap } from './world/bootstrap';
-import { WebRenderer } from '@mud/web-client';
+import { WebRenderer, CrtRenderer } from '@mud/web-client';
 import type { SnapshotData } from '@mud/ecs-engine';
 import { createSuggester } from '@mud/prefabs';
 import { createClickPolicy } from './click';
@@ -33,7 +33,22 @@ function main() {
     return;
   }
 
-  const renderer = new WebRenderer({
+  // 渲染器切换（阶段一）：?ui=crt 走 canvas 渲染器（WebGL 后处理的管线基座），默认 DOM
+  const useCrt = new URLSearchParams(location.search).get('ui') === 'crt';
+  const renderer = useCrt
+    ? new CrtRenderer({
+        container: app,
+        world,
+        playerId,
+        title: '侠客行',
+        click: createClickPolicy(world, playerId),
+        persistence: {
+          key: 'save:xiake-xing:m5',
+          capture: () => world.createSnapshot(),
+          restore: (snapshot: unknown) => world.rollbackWorld(snapshot as SnapshotData),
+        },
+      })
+    : new WebRenderer({
     container: app,
     world,
     playerId,
@@ -41,13 +56,13 @@ function main() {
     suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
     // 点击策略（交互标注②）：出口=走、商品=买、地上物=拿、敌怪=预填攻击
     click: createClickPolicy(world, playerId),
-    persistence: {
-      // :m5 后缀作废旧档——刷怪 bug 的旧档里攒着超额狼群，直接重开不做迁移
-      key: 'save:xiake-xing:m5',
-      capture: () => world.createSnapshot(),
-      restore: (snapshot) => world.rollbackWorld(snapshot as SnapshotData),
-    },
-  });
+      persistence: {
+        // :m5 后缀作废旧档——刷怪 bug 的旧档里攒着超额狼群，直接重开不做迁移
+        key: 'save:xiake-xing:m5',
+        capture: () => world.createSnapshot(),
+        restore: (snapshot) => world.rollbackWorld(snapshot as SnapshotData),
+      },
+    });
 
   renderer.showWelcome({
     title: '侠客行',
