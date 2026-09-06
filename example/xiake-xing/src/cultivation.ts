@@ -10,7 +10,7 @@
  */
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
 import { Health, Position, Moved, displayName } from '@mud/prefabs';
-import { Energy, Stats, Cultivating, Channeling, Purse } from './traits';
+import { Energy, Stats, Cultivating, Channeling, Purse, Combat, Arsenal } from './traits';
 import { Consumable as ItemConsumable } from '@mud/prefabs';
 import { Consumed } from '@mud/prefabs';
 import { ARTS } from './arts';
@@ -54,27 +54,48 @@ export const StopCommand = defineCommand({
   },
 });
 
-/** 状态/stats：生命/内力/三围一览（替换 prefabs ScoreCommand 的注册位） */
+/** 状态/stats：北侠式一屏全知面板（B2 沉浸感方案） */
 export const StatusCommand = defineCommand({
   verbs: ['stats', '状态', '属性'],
-  describe: '生命/内力/三围/位置一览',
+  describe: '个人状态：气血/内力/武学/银两/所在，一屏全知',
   handle({ player, world }) {
     const hp = world.getComponent(player, Health);
     const energy = world.getComponent(player, Energy);
     const stats = world.getComponent(player, Stats);
     const pos = world.getComponent(player, Position);
     const roomName = pos ? world.getComponent(pos.roomId, Name) : undefined;
+    const purse = world.getComponent(player, Purse);
+    const combat = world.getComponent(player, Combat);
+    const cultivating = world.getComponent(player, Cultivating);
+    const channel = world.getComponent(player, Channeling);
+    const arsenal = world.getComponent(player, Arsenal);
 
-    const lines: string[] = [];
-    if (hp) lines.push(`生命：${hp.current}/${hp.max}`);
-    if (energy) {
-      lines.push(
-        `内力：${energy.current}/${energy.max}${world.getComponent(player, Cultivating)?.on ? '（打坐中）' : ''}`,
-      );
+    // 气血条：8 格，1 格以上保底可见（0 = 全空）
+    const bar = (cur: number, max: number) => {
+      const filled = max > 0 ? Math.max(cur > 0 ? 1 : 0, Math.round((cur / max) * 8)) : 0;
+      return '█'.repeat(filled) + '░'.repeat(8 - filled);
+    };
+
+    const lines: string[] = ['┌───个人状态──────────────────────┐'];
+    if (hp) lines.push(`│ 气血  ${hp.current}/${hp.max}   ${bar(hp.current, hp.max)}`);
+    if (energy) lines.push(`│ 内力  ${energy.current}/${energy.max}   ${bar(energy.current, energy.max)}`);
+    if (stats) lines.push(`│ 三围  攻 ${stats.atk} · 防 ${stats.def} · 身法 ${stats.dodge}`);
+    if (purse) lines.push(`│ 银两  ${purse.silver} 碎银`);
+    if (arsenal) {
+      const arts = Object.entries(arsenal.arts)
+        .map(([id, p]) => `${ARTS[id]?.name ?? id}(${p.level}层)`)
+        .join(' · ');
+      if (arts) lines.push(`│ 武学  ${arts}`);
+      if (channel?.artId) lines.push(`│ 心法  运转中：${ARTS[channel.artId]?.name ?? channel.artId}`);
     }
-    if (stats) lines.push(`攻击 ${stats.atk} · 防御 ${stats.def} · 身法 ${stats.dodge}`);
-    if (roomName) lines.push(`位置：${roomName.text}`);
-    return lines.join('\n') || '你还没有任何属性。';
+    const flags: string[] = [];
+    if (cultivating?.on) flags.push('打坐中');
+    if (combat?.foe) flags.push('交战中');
+    if (flags.length === 0) flags.push('无事一身轻');
+    lines.push(`│ 状态  ${flags.join(' · ')}`);
+    if (roomName) lines.push(`│ 所在  ${roomName.text}`);
+    lines.push('└──────────────────────────────┘');
+    return lines.join('\n');
   },
 });
 

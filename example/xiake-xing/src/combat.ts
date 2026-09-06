@@ -110,7 +110,7 @@ export const WuxiaCombatSystem = defineSystem({
         return;
       }
       if (!energy || energy.current < move.cost) {
-        ctx.output.error('内力不济，使不出这一招。');
+        ctx.output.error('你内力枯竭，招式使到一半就软了——先打坐回气吧。');
         return;
       }
       energy.current -= move.cost;

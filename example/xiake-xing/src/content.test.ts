@@ -217,10 +217,11 @@ describe('侠客行 M1 · 内功根基', () => {
   it('状态命令：生命/内力/三围/位置一览（替换 ScoreCommand）', async () => {
     fresh();
     const out = await run('状态');
-    expect(out).toContain('生命：100/100');
-    expect(out).toContain('内力：20/100');
-    expect(out).toContain('攻击 5 · 防御 2 · 身法 2');
-    expect(out).toContain('位置：悦来客栈');
+    expect(out).toContain('气血  100/100');
+    expect(out).toContain('内力  20/100');
+    expect(out).toContain('攻 5 · 防 2 · 身法 2');
+    expect(out).toContain('银两  10 碎银');
+    expect(out).toContain('所在  悦来客栈');
   });
 
   it('战斗三态（纯公式）：身法差决定 命中/格挡/闪避', async () => {
