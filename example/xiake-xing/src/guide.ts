@@ -13,8 +13,9 @@ import type { EntityId, ComponentDefinition } from '@mud/ecs-engine';
 /** 只读最小接口（CommandContext.world 与 SystemContext 都满足） */
 
 import { Located, Position, displayName, itemsInContainer, type WorldQuery } from '@mud/prefabs';
-import { Purse } from './traits';
+import { Purse, Tutorial } from './traits';
 import { Combat, Cultivating, Energy, Scripture } from './traits';
+import { STEP_HINTS } from './tutorial';
 
 // ---------------------------------------------------------------- 建议 --
 
@@ -24,6 +25,14 @@ interface SuggestionRule {
 }
 
 const RULES: SuggestionRule[] = [
+  {
+    // 引导未完成时永远第一优先（新手 5 分钟上手）
+    when: (w, p) => {
+      const tut = w.getComponent(p, Tutorial);
+      return !!tut && !tut.done;
+    },
+    tip: '', // 运行时按当前步填充（SuggestCommand 尾部处理）
+  },
   {
     when: (w, p) => {
       const combat = w.getComponent(p, Combat);
@@ -73,8 +82,11 @@ export const SuggestCommand = defineCommand({
         // 规则自身异常按不适用处理
       }
     }
-    if (tips.length === 0) return '一切随心——江湖之大，去走走看看吧。';
-    return ['你现在可以：', ...tips.map((t, i) => `${i + 1}. ${t}`)].join('\n');
+    // 引导占位条目按当前步填充
+    const tut = world.getComponent(player, Tutorial);
+    const filled = tips.map((t) => (t === '' && tut && !tut.done ? `新手引导：${STEP_HINTS[tut.step]}（照做即可）` : t));
+    if (filled.length === 0) return '一切随心——江湖之大，去走走看看吧。';
+    return ['你现在可以：', ...filled.map((t, i) => `${i + 1}. ${t}`)].join('\n');
   },
 });
 

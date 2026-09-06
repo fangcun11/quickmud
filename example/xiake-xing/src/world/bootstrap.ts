@@ -76,7 +76,7 @@ import {
   Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag,
   Arsenal, Channeling, Scripture,
   Purse, Equipment, Bonus, Gear, ForSale,
-  Combat, Aggressive, Prayed, WildWolf,
+  Combat, Aggressive, Prayed, WildWolf, Tutorial,
 } from '../traits';
 import {
   MeditateCommand,
@@ -120,6 +120,7 @@ import { CombatRoundSystem, DisengageCommand, AttackCommand } from '../combat-li
 import { PrayCommand } from '../pray';
 import { SuggestCommand, HelpmeCommand } from '../guide';
 import { SafetyNetSystem, AmbienceSystem } from '../ambience';
+import { TutorialSystem, STEP_HINTS } from '../tutorial';
 
 export interface BootstrapResult {
   world: World;
@@ -172,6 +173,7 @@ export function bootstrap(): BootstrapResult {
     TrailSystem,
     SafetyNetSystem,
     AmbienceSystem,
+    TutorialSystem,
   );
   // RoomEventSystem / RoomTickSystem 由 buildRoomBehaviors 幂等注册
 
@@ -400,9 +402,17 @@ export function bootstrap(): BootstrapResult {
     arts: { kaishan_fist: { level: 1, exp: 0 } },
   });
   world.addComponent(playerId, Purse, { silver: 10 }); // 兜里几枚碎银
+  // 新手引导道具：柜台上放一个粗布包袱（引导第 2 步的拾取目标）
+  const pack = world.entities.createWithId('novice-pack');
+  world.addComponent(pack, Name, { text: '粗布包袱', aliases: ['包袱'] });
+  world.addComponent(pack, Description, { text: '一个鼓鼓囊囊的粗布包袱，像是店里哪位客人落下的。' });
+  world.addComponent(pack, Portable, {});
+  world.addComponent(pack, Located, { targets: ['inn'] });
   world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
   world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0 });
   world.addComponent(playerId, QuestLog, { active: {}, completed: [], turnedIn: [] });
+  world.addComponent(playerId, Tutorial, { step: 0, done: false });
+  world.output.narrative([{ text: `「引导」欢迎来到江湖——${STEP_HINTS[0]}` }]);
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
   world.addComponent(playerId, Prayed, { done: false });
 

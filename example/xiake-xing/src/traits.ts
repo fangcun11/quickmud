@@ -112,6 +112,15 @@ export const Aggressive = trait('aggressive', () => ({}));
 /** 狼群标记（0.18）：刷怪系统的狼口统计口径——Retaliate 是通用战斗标记，不能当种族用 */
 export const WildWolf = trait('wild_wolf', () => ({}));
 
+/**
+ * 新手引导进度（0.18 引导任务串）：挂玩家，step 为当前步索引。
+ * 步进由 TutorialSystem 按事件驱动；完成（done=true）后不再触发。
+ */
+export const Tutorial = trait('tutorial', () => ({
+  step: 0,
+  done: false,
+}));
+
 /** 祈祷追踪（0.17 M5）：山神庙祈祷一次后有奇效（死亡重生时重置） */
 export const Prayed = trait('prayed', () => ({
   done: false,

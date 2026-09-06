@@ -995,3 +995,43 @@ describe('侠客行 B5 · 安全网与闲聊', () => {
     expect(pick(text)).toBe(pick(again));
   });
 });
+
+
+// ============================================================
+// 新手引导任务串：五步步进 + 奖励 + 建议联动
+// ============================================================
+
+describe('侠客行 · 新手引导任务串', () => {
+  it('开场即有引导；look → take → 打坐 → 买馒头 → 打狼，完成有出师奖励', async () => {
+    fresh();
+    drain(); // 开场引导行已被 fresh 清掉（web 端不清理，进游戏即见）
+    expect(await run('look')).toContain('下一步：把柜台上的粗布包袱捡起来');
+
+    // 第 2 步：拾取包袱
+    expect(await run('take 包袱')).toContain('下一步：盘膝打坐');
+    // 第 3 步：打坐
+    expect(await run('打坐')).toContain('下一步：去杂货铺买个馒头');
+    // 第 4 步：买馒头（客栈→青石街→杂货铺）
+    await run('e'); await run('n');
+    expect(await run('buy 馒头')).toContain('下一步：出镇口一直往南');
+    // 第 5 步：打狼（回客栈再用助手走标准狼林路线）
+    await run('s'); await run('w'); await run('w');
+    await gotoWolves();
+    const stats = world.getComponent(player, Stats)!;
+    stats.atk = 25; stats.dodge = 4;
+    const final = (await run('attack 野狼')) + (await run('attack 野狼'));
+    expect(final).toContain('出师了');
+    // 奖励：碎银 +5、金创药进背包
+    expect(world.getComponent(player, Purse)!.silver).toBe(13); // 10 −2 馒头 +5
+    const inv = itemsInContainer(world, player);
+    expect(inv.some((id) => world.getComponent(id, Name)!.text === '金创药')).toBe(true);
+  });
+
+  it('建议命令在引导期间第一优先指路；完成后不再出现', async () => {
+    fresh();
+    drain();
+    const early = await run('建议');
+    expect(early).toContain('新手引导');
+    expect(early).toContain('look');
+  });
+});
