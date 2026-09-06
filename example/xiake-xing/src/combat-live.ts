@@ -83,13 +83,12 @@ export const CombatRoundSystem = defineSystem({
         continue;
       }
 
-      // 0.19 手动/自动战斗：默认手动——每息**敌方**出手，玩家自行动手
-      // （attack/use 续打、崩拳、吃喝、逃跑都是回合中的应手）；
-      // 敲 自动 开启后系统代打（走正常管线，还手链照旧）
+      // 0.19 回合制（玩家提案）：**回合由玩家命令推进**——
+      // 手动模式下 tick 不产生任何攻击；你的每条战斗命令（attack/use）
+      // 结算你的一击 + 对手的还手，然后回合交回你手上。
+      // 敲 自动 才交给系统按息代打（刷怪 convenience，显式选择）。
       if (ctx.getComponent(id, AutoFight)?.on) {
         ctx.emit(Attack, { attacker: id, target: combat.foe as EntityId });
-      } else {
-        ctx.emit(Attack, { attacker: combat.foe as EntityId, target: id });
       }
     }
 
@@ -108,6 +107,8 @@ export const CombatRoundSystem = defineSystem({
       if (!npcHp || npcHp.current <= 0) continue;
       enterCombat(ctx, player, npc);
       ctx.output.narrative(`「${displayName(ctx, npc)}」呲着牙向你扑来！`);
+      // 先后手（0.19 回合制）：野怪主动接敌 → 它先手一击，回合交到玩家手上
+      ctx.emit(Attack, { attacker: npc, target: player });
       break;
     }
   },

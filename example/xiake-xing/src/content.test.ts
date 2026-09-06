@@ -654,12 +654,13 @@ describe('侠客行 M3 · 装备与买卖', () => {
 // ============================================================
 
 describe('侠客行沉浸支线 · 持续战斗', () => {
-  it('进入战斗后每息自动交手（不敲 attack 也在打）', async () => {
+  it('自动模式下每息系统代打（不敲 attack 也在打）', async () => {
     fresh();
     await gotoWolves();
     drain();
-    // 敲一拳进入战斗（穿 CombatRoundSystem 每息自动 attack）
+    // 敲一拳进入战斗，再开自动（0.19 回合制：手动模式回合由玩家命令推进）
     await run('attack 野狼');
+    await run('自动');
     drain();
     const hpBefore = hp();
     world.tick();
@@ -1064,28 +1065,25 @@ describe('侠客行 · 新手引导任务串', () => {
 // ============================================================
 
 describe('侠客行 · 手动/自动战斗', () => {
-  it('默认手动：不敲命令狼每息咬你，你不反击；敲 自动 后系统代打', async () => {
+  it('回合制：手动模式下 tick 不产生攻击，命令才推进回合', async () => {
     fresh();
     await gotoWolves();
     drain();
-    await run('attack 野狼'); // 发起战斗（第一轮手动）
+    await run('attack 野狼'); // 发起：狼先手一击 + 你的一击在同一命令里结算
     drain();
     const foe = world.getComponent(player, Combat)!.foe;
     const foeHpBefore = world.getComponent(foe, Health)!.current;
-    const myHpBefore = hp();
 
-    world.tick(); // 手动模式：狼出手，玩家不动
-    const t = drain();
-    const foeHpAfter = world.getComponent(foe, Health)!.current;
-    expect(hp()).toBeLessThan(myHpBefore); // 狼咬了你
-    expect(foeHpAfter).toBe(foeHpBefore); // 你没还手
-    expect(t).not.toContain('你击败了');
+    world.tick(); // 手动模式：什么都不发生——回合停在你手上
+    expect(drain()).not.toContain('点伤害');
+    expect(world.getComponent(foe, Health)!.current).toBe(foeHpBefore);
 
-    await run('自动'); // 开自动
-    world.tick(); // 自动模式：玩家出手
-    const t2 = drain();
-    expect(world.getComponent(foe, Health)!.current).toBeLessThan(foeHpAfter);
-    void t2;
+    await run('attack 野狼'); // 你的命令推进一回合：你出手 + 狼还手
+    expect(world.getComponent(foe, Health)!.current).toBeLessThan(foeHpBefore);
+
+    await run('自动'); // 开自动后 tick 代打
+    world.tick();
+    expect(world.getComponent(foe, Health)!.current).toBeLessThan(foeHpBefore);
   });
 
   it('自动 命令切换开关并有叙事反馈', async () => {
