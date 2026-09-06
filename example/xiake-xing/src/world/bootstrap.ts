@@ -119,6 +119,7 @@ import { WolfSpawnSystem } from '../spawn';
 import { CombatRoundSystem, DisengageCommand, AttackCommand } from '../combat-live';
 import { PrayCommand } from '../pray';
 import { SuggestCommand, HelpmeCommand } from '../guide';
+import { SafetyNetSystem, AmbienceSystem } from '../ambience';
 
 export interface BootstrapResult {
   world: World;
@@ -169,6 +170,8 @@ export function bootstrap(): BootstrapResult {
     NpcRetaliateSystem,
     FleeSystem,
     TrailSystem,
+    SafetyNetSystem,
+    AmbienceSystem,
   );
   // RoomEventSystem / RoomTickSystem 由 buildRoomBehaviors 幂等注册
 

@@ -956,3 +956,42 @@ describe('侠客行 B4 · look 明示与前辈留言', () => {
     expect(await run('look 塑像')).toContain('一双眼睛像还醒着');
   });
 });
+
+
+// ============================================================
+// B5 世界兜底与闲聊人味
+// ============================================================
+
+describe('侠客行 B5 · 安全网与闲聊', () => {
+  it('房间不存在时叙事式回收：天旋地转回到客栈', async () => {
+    fresh();
+    world.getComponent(player, Position)!.roomId = 'ghost-room';
+    for (let i = 0; i < 3; i++) world.tick();
+    const out = drain();
+    expect(out).toContain('天旋地转');
+    expect(out).toContain('悦来客栈');
+    expect(world.getComponent(player, Position)!.roomId).toBe('inn');
+  });
+
+  it('闲聊人味：dialogue 通道低频轮换，确定性', async () => {
+    fresh();
+    world.tick();
+    drain();
+    for (let i = 0; i < 22; i++) world.tick(); // 越过 21 息闲聊网格
+    const text = drain();
+    expect(text).toContain('【闲聊】');
+    // 确定性：同刻度同内容
+    const again = (() => {
+      fresh();
+      world.tick();
+      drain();
+      for (let i = 0; i < 22; i++) world.tick();
+      return drain();
+    })();
+    const pick = (t: string) => {
+      const m = t.match(/【闲聊】[^\n]*/);
+      return m ? m[0] : '';
+    };
+    expect(pick(text)).toBe(pick(again));
+  });
+});
