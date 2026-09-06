@@ -37,6 +37,7 @@ export function exitCombat(ctx: SystemContext, entity: EntityId): void {
   const foe = combat.foe as EntityId;
   if (foe && ctx.getEntity(foe)) ctx.removeRelation(foe, WanderHold, entity);
   combat.foe = '';
+  combat.alerted = false;
 }
 
 /**
@@ -78,6 +79,7 @@ export const CombatRoundSystem = defineSystem({
           ctx.output.narrative(`「${displayName(ctx, combat.foe as EntityId)}」脱离了你的攻击范围，你收回了攻势。`);
         }
         combat.foe = '';
+        combat.alerted = false;
         continue;
       }
 

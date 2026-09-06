@@ -493,24 +493,25 @@ describe('侠客行沉浸支线 · 世界活着', () => {
     expect(seen.size).toBeGreaterThan(1);
   });
 
-  it('狼回到玩家房间 → 「从北面走了进来」', async () => {
+  it('战斗中折返的狼 → 一次警戒文案（B 方案：进出降噪）', async () => {
     fresh();
     await gotoWolves();
     drain();
-    world.tick(); // 狼去 woodsgate（r0 north）
-    drain();
-    world.tick(); // r0 仍 north?——exits 顺序轮换按 round;woodsgate round0 north→fringe 越界原地
+    // 首个 tick：同房 Aggressive 接敌（玩家进入战斗）
     world.tick();
-    drain();
-    world.tick();
-    drain();
-    // 轮换推进后狼总会折返 thicket;找到回场播报
-    let seen = drainText();
-    for (let i = 0; i < 8 && !seen.includes('走了进来'); i++) {
+    expect(drainText()).toContain('呲着牙');
+    // 另一只狼折返 thicket：不再播"走了进来"，只播一次警戒
+    let seen = '';
+    for (let i = 0; i < 10; i++) {
       world.tick();
       seen = drainText();
+      if (seen.includes('停下脚步')) break;
     }
-    expect(seen).toContain('走了进来');
+    expect(seen).toContain('停下脚步');
+    expect(seen).toContain('没有扑上来');
+    // 之后狼群再进出 → 警戒只播一次，保持安静
+    for (let i = 0; i < 6; i++) world.tick();
+    expect(drainText()).not.toContain('走了进来');
   });
 
   it('夜间狼更凶：伤害 3 → 4', async () => {

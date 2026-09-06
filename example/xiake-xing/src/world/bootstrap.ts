@@ -409,7 +409,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(pack, Portable, {});
   world.addComponent(pack, Located, { targets: ['inn'] });
   world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
-  world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0 });
+  world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0, alerted: false });
   world.addComponent(playerId, QuestLog, { active: {}, completed: [], turnedIn: [] });
   world.addComponent(playerId, Progress, { exp: 100, pot: 0 });
   world.addComponent(playerId, Tutorial, { step: 0, done: false });

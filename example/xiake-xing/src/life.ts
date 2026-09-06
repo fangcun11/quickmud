@@ -11,7 +11,7 @@
 import { defineSystem } from '@mud/ecs-engine';
 import type { EntityId } from '@mud/ecs-engine';
 import { Died, Moved, Position, displayName, directionLabel } from '@mud/prefabs';
-import { PlayerTag, Energy, Cultivating, Trail, Purse, Combat as CombatLive } from './traits';
+import { PlayerTag, Energy, Cultivating, Trail, Purse, Combat, Combat as CombatLive } from './traits';
 import { Health, Backtrack } from '@mud/prefabs';
 
 const INN_ROOM_ID = 'inn';
@@ -38,6 +38,19 @@ export const PresenceSystem = defineSystem({
     const name = displayName(ctx, entity);
 
     const dir = direction ?? '';
+    // 战斗中降噪（0.19 B 方案）：非交战对象的进出不刷屏——
+    // 进场只播一次警戒文案（Combat.alerted），离场不播
+    const combat = ctx.getComponent(player, Combat as never) as { foe: string; alerted: boolean } | undefined;
+    if (combat?.foe && entity !== combat.foe) {
+      if (to === pos.roomId && !combat.alerted) {
+        combat.alerted = true;
+        const nm = displayName(ctx, entity);
+        ctx.output.narrative(
+          `${nm}停下脚步，压低了身体，绿莹莹的眼睛盯着这团打斗——它没有扑上来，但也没走开。`,
+        );
+      }
+      return;
+    }
     // 进出场姿态池（B1 文案规范）：确定性轮换，禁止单句永久复读
     const postures = ['', '一路小跑，', '踩着碎步，'];
     const posture = postures[Math.abs((event.timestamp + entity.length * 31) % postures.length)]!;

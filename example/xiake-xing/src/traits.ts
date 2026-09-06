@@ -104,6 +104,8 @@ export const ForSale = trait('for_sale', () => ({
 export const Combat = trait('combat', () => ({
   foe: '' as string,
   lastRoundAt: 0,
+  /** 战斗中非交战狼的警戒提示已播（0.19 B 方案：进出降噪，只播一次） */
+  alerted: false,
 }));
 
 /** 主动攻击标记（0.14）：挂 NPC——同房有玩家则自动接敌（AggroSystem） */
