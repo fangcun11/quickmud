@@ -335,6 +335,11 @@ export class CrtRenderer {
       for (const seg of line.segs) {
         ctx.fillStyle = seg.color;
         ctx.font = `${seg.italic ? 'italic ' : ''}${seg.bold ? 'bold ' : ''}${FONT}`;
+        // 磷光辉光（对标 typed-crt 每行辉光）：同色 shadow 双次绘制
+        ctx.shadowColor = seg.color;
+        ctx.shadowBlur = 9;
+        ctx.fillText(seg.text, PAD + seg.x, y);
+        ctx.shadowBlur = 0;
         ctx.fillText(seg.text, PAD + seg.x, y);
       }
     }
