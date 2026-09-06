@@ -49,7 +49,7 @@ export const TutorialSystem = defineSystem({
         if (purse) purse.silver += 5;
         const med = blueprint({
           components: [
-            [Name, { text: '金创药', aliases: ['药', '金创'] }],
+            [Name, { text: '金创药', aliases: ['药', '金创', 'yao', 'jinchuangyao'] }],
             [Description, { text: '小瓷瓶装的药粉，洒在伤口上刀枪痕都能收。' }],
             [Consumable, { hp: 0, energy: 50, empty: false }],
             [Portable, {}],

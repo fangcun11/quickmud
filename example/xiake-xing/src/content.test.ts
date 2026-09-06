@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type { World } from '@mud/ecs-engine';
 import { Health, QuestLog } from '@mud/prefabs';
 import { record, verifyReplay } from '@mud/ecs-engine';
-import { Position } from '@mud/prefabs';
+import { Exits, Name, Position } from '@mud/prefabs';
 import { hashStr } from './combat';
 import { bootstrap } from './world/bootstrap';
 
@@ -155,7 +155,7 @@ import { Energy, Stats, Cultivating, Retaliate, Channeling } from './traits';
 import {
   Area, Wander, WanderHold, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
-import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed, WildWolf, Progress } from './traits';
+import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed, WildWolf, Progress, PlayerTag } from './traits';
 
 function fresh(): void {
   const b = bootstrap();
@@ -1090,5 +1090,26 @@ describe('侠客行 · 手动/自动战斗', () => {
     fresh();
     expect(await run('自动')).toContain('自动战斗已开启');
     expect(await run('自动')).toContain('自动战斗已关闭');
+  });
+});
+
+
+// ============================================================
+// 0.19 别名纪律：每个可交互实体（非房间）至少一个 ASCII 别名
+// 对标北侠「忆雪(Nol)」的 ID 机制——玩家可以纯字母流敲命令，不切输入法
+// ============================================================
+
+describe('侠客行 · 别名纪律（北侠 ID 机制）', () => {
+  it('所有非房间实体都有至少一个 ASCII 别名（字母流可敲）', async () => {
+    fresh();
+    const offenders: string[] = [];
+    for (const id of world.findByComponent(Name)) {
+      if (world.getComponent(id, Exits)) continue; // 房间不是命令目标
+      if (world.getComponent(id, PlayerTag)) continue; // 玩家自己（单机无人对其敲命令）
+      const nc = world.getComponent(id, Name)!;
+      const all = [nc.text, ...(nc.aliases ?? [])];
+      if (!all.some((n) => /^[a-zA-Z][a-zA-Z ]*$/.test(n))) offenders.push(`${id}(${nc.text})`);
+    }
+    expect(offenders).toEqual([]);
   });
 });
