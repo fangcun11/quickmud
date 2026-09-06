@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="phosphor">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>侠客行 · 北侠灵感原型</title>
+<style>
+  /* ============================================================
+     北侠灵感原型 —— 把 pkuxkx 的四语义色（青/白/黄/红）、
+     状态卡、node 引导、helpme 攻略、前辈留言，落进 quickmud 的
+     单屏文字流 + 点击交互。纯静态展示，无逻辑。
+     ============================================================ */
+  :root {
+    --bg: #000;
+    --fg: #d0d0d0;
+    --cyan: #00e5e5;   /* 标题 / 导航（北侠站名色） */
+    --yellow: #ffd75f; /* 重要 / 收益 */
+    --red: #ff5f5f;    /* 危险 / 警示 */
+    --gray: #7a8a7a;   /* 弱化 / 前辈留言 */
+    --green: #33ff66;  /* 我方增益 */
+    --rule: #1d3326;
+    --panel: #0a0f0a;
+    --entity: #ffd75f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: "Cascadia Mono", Consolas, "Noto Sans Mono CJK SC", "Microsoft YaHei", monospace;
+    font-size: 15px; line-height: 1.75;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 20px 18px 90px; }
+
+  /* ---- 顶部状态卡（北侠：进任何页面先报状态） ---- */
+  .status-card {
+    border: 1px solid var(--rule); background: var(--panel);
+    padding: 8px 14px; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 4px 18px;
+  }
+  .status-card .k { color: var(--gray); }
+  .status-card .v { color: var(--fg); }
+  .status-card .v.hp { color: var(--green); }
+  .status-card .v.combat { color: var(--red); }
+
+  /* ---- 输出流 ---- */
+  .line { white-space: pre-wrap; word-break: break-all; }
+  .title { color: var(--cyan); font-weight: bold; letter-spacing: 1px; }
+  .sys { color: var(--gray); }
+  .impt { color: var(--yellow); }
+  .warn { color: var(--red); }
+  .gain { color: var(--green); }
+  .e { color: var(--entity); border-bottom: 1px dashed var(--entity); cursor: pointer; }
+  .d { color: var(--cyan); border-bottom: 1px dashed transparent; cursor: pointer; }
+  .e:hover, .d:hover { text-shadow: 0 0 8px var(--entity); }
+
+  /* ---- 前辈留言（对标 MOTD） ---- */
+  .motd {
+    border: 1px dashed #2a4a8a; background: #060a14;
+    color: #9fb8e8; padding: 10px 16px; margin: 10px 0; font-size: 14px;
+  }
+  .motd .by { text-align: right; color: var(--red); }
+
+  /* ---- "下一步"引导卡（对标 jobquery） ---- */
+  .next-steps {
+    border: 1px solid var(--rule); background: var(--panel);
+    padding: 8px 14px; margin: 10px 0;
+  }
+  .next-steps h4 { color: var(--cyan); font-size: 13px; margin-bottom: 4px; letter-spacing: 2px; }
+  .next-steps a { color: var(--yellow); text-decoration: underline; cursor: pointer; }
+  .next-steps .why { color: var(--gray); }
+
+  /* ---- helpme 攻略（对标大高手） ---- */
+  .helpme { color: var(--gray); }
+  .helpme .q { color: var(--cyan); }
+  .helpme .a { color: var(--fg); }
+  .helpme .by { color: var(--red); }
+
+  /* ---- 底部固定导航（北侠：每页同一排入口） ---- */
+  .navbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.92); border-top: 1px solid var(--rule);
+    padding: 6px 14px; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: center;
+  }
+  .navbar span { color: var(--cyan); cursor: pointer; }
+  .navbar span:hover { text-shadow: 0 0 8px var(--cyan); }
+  .navbar .dim { color: var(--gray); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 状态卡：对标北侠"进页先报状态" -->
+  <div class="status-card">
+    <span><span class="k">姓名 </span><span class="v">忆雪</span></span>
+    <span><span class="k">经验 </span><span class="v">1,284</span></span>
+    <span><span class="k">武功 </span><span class="v">直拳(2层)</span></span>
+    <span><span class="k">气血 </span><span class="v hp">94/100</span></span>
+    <span><span class="k">内力 </span><span class="v hp">60/100</span></span>
+    <span><span class="k">碎银 </span><span class="v">20</span></span>
+    <span><span class="k">交战 </span><span class="v combat">野狼 19/25</span></span>
+  </div>
+
+  <div class="line title">【青石街】</div>
+  <div class="line">　　长街铺着青石，两侧是杂货铺与铁匠铺。街口的老槐树上钉着一块木牌。</div>
+  <div class="line">    ┌─────────┐</div>
+  <div class="line">    │  林缘 │</div>
+  <div class="line">    │    │</div>
+  <div class="line">    │  <span style="color:#ff5f5f">青石街</span> │</div>
+  <div class="line">    │    │</div>
+  <div class="line">    └─────────┘</div>
+  <div class="line">你可以看到：<span class="e">馒头</span>(包子)、<span class="e">金创药</span>(药、金创)。</div>
+  <div class="line">「<span class="e">店小二</span>」笑吟吟地招呼着过往客人。</div>
+  <div class="line sys">时值酉时，天色晴朗。</div>
+
+  <!-- 前辈留言：对标北侠 MOTD 署名文化 -->
+  <div class="motd">
+    <div>墙角刻着一行小字：「三年前我在这条街上被野狼咬掉了半袋碎银——买把铁剑再进林子。」</div>
+    <div class="by">—— by 无名剑客 @青石街</div>
+  </div>
+
+  <!-- 战斗输出：气血随被击行 -->
+  <div class="line">你一记「直拳」全力出手，命中「<span class="e">野狼</span>」，造成 4 点伤害。<span class="sys">（气血：15/25）</span></div>
+  <div class="line">「野狼」全力出手，被你格挡，只造成 3 点伤害。<span class="sys">（气血：91/100）</span></div>
+  <div class="line impt">你击败了「野狼」！</div>
+  <div class="line gain">野狼倒下，掉了狼皮。你得了 12 点经验，直拳熟练 +3。</div>
+
+  <!-- "下一步"引导：对标 jobquery -->
+  <div class="next-steps">
+    <h4>＞ 你现在可以：</h4>
+    <div>· <a>捡起狼皮</a> <span class="why">（杂货铺掌柜收，约值 2 碎银）</span></div>
+    <div>· <a>向铁匠拜师</a> <span class="why">（经验已够学「基础剑法」）</span></div>
+    <div>· <a>接下山任务</a> <span class="why">（山神庙的香客在求人抄经，1 分钟约 1 碎银）</span></div>
+  </div>
+
+  <!-- helpme 攻略：对标大高手系统 -->
+  <div class="line helpme"><span class="q">【求助】</span>你向老槐树下的说书人打听「野狼」。</div>
+  <div class="line helpme"><span class="q">【说书人】</span>野狼出没野狼林，身法差你两级就能打到；皮子能换碎银，<span class="a">夜里更凶，带盏灯再去</span>。<span class="by">[忆雪前辈提供]</span></div>
+
+  <br>
+  <div class="line sys">—— 以下为对照：北侠原版登录画面要素（示意）——</div>
+  <div class="line title">────====　北 大 侠 客 行　====────</div>
+  <div class="line"><span class="sys">帐号说明</span> https://pkuxkx.net/wiki/pkuxkx/account</div>
+  <div class="line"><span class="sys">入门导读</span> https://pkuxkx.net/wiki/pkuxkx/guide</div>
+  <div class="line"><span class="impt">北大侠客行已经执行了六天二十一小时四十九分十七秒。</span></div>
+  <div class="line"><span class="impt">目前共有 520 位玩家在线上。</span></div>
+  <div class="line warn">您的英文名字（要注册新人物请输入new。）：_</div>
+
+</div>
+
+<!-- 底部固定导航：北侠每页同款 -->
+<div class="navbar">
+  <span>〔状态〕</span><span>〔背包〕</span><span>〔任务〕</span><span>〔地图〕</span>
+  <span>〔打坐〕</span><span>〔helpme 求助〕</span><span class="dim">⌨ 输入命令 (/)</span>
+</div>
+</body>
+</html>
