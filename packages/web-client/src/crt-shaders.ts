@@ -23,6 +23,7 @@ uniform sampler2D uTex;
 uniform vec2 uRes;
 uniform float uTime;
 uniform float uMotion;
+uniform float uEffect; // 效果总强度 0-1（密集小字可读性旋钮）
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -34,7 +35,7 @@ void main() {
   // 桶形弯曲（typed-crt 常量：水平 0.115 / 垂直 0.165）
   vec2 cuv = uv * 2.0 - 1.0;
   vec2 off = abs(cuv.yx);
-  cuv += cuv * off * vec2(0.115, 0.165);
+  cuv += cuv * off * uEffect * vec2(0.115, 0.165);
   uv = cuv * 0.5 + 0.5;
 
   // 屏幕外的"房间"底色 + 磷光溢出（CRT 的光洒在墙上）
@@ -53,32 +54,32 @@ void main() {
   // 径向色差：R/B 通道随离心距反向偏移（0.0016 + 0.012*d²）
   vec2 dir = uv - 0.5;
   float d2 = dot(dir, dir);
-  vec2 caOff = dir * (0.0016 + 0.012 * d2);
+  vec2 caOff = dir * uEffect * (0.0004 + 0.004 * d2);
   col.r = texture2D(uTex, uv + caOff).r;
   col.b = texture2D(uTex, uv - caOff).b;
 
   // 扫描线：0.92 倍屏高线频，亮度下压到 70%
   float s = sin(uv.y * uRes.y * 0.92);
-  col *= mix(0.70, 1.0, s * s);
+  col *= mix(1.0 - 0.12 * uEffect, 1.0, s * s);
 
   // RGB 荫罩：每 3 像素一周期余弦遮罩，1.34 增益补偿
   float px = uv.x * uRes.x;
-  vec3 mask = 0.66 + 0.34 * cos(6.28318530718 * (px / 3.0) + vec3(0.0, 2.0943951, 4.1887902));
-  col *= mask * 1.34;
+  vec3 mask = (1.0 - 0.10 * uEffect) + 0.10 * uEffect * cos(6.28318530718 * (px / 3.0) + vec3(0.0, 2.0943951, 4.1887902));
+  col *= mask;
 
   // 滚动亮带：0.07 周期/秒，强度 0.045
   float band = fract(uv.y * 0.5 - uTime * 0.07 * uMotion);
-  col *= 1.0 - 0.045 * band;
+  col *= 1.0 - 0.022 * uEffect * band;
 
   // 暗角：角部亮度降至 42%
   float vig = smoothstep(0.98, 0.30, length((uv - 0.5) * vec2(1.05, 1.0)));
   col *= mix(0.42, 1.0, vig);
 
   // 闪烁：2.8% 幅度
-  col *= 1.0 - 0.028 * uMotion * sin(uTime * 8.0);
+  col *= 1.0 - 0.014 * uEffect * uMotion * sin(uTime * 8.0);
 
   // 动态噪点：±1.1%
-  col += (hash(uv * fract(uTime * 0.37) * 100.0) - 0.5) * 0.022;
+  col += (hash(uv * fract(uTime * 0.37) * 100.0) - 0.5) * 0.011 * uEffect;
 
   // 磷光底色：永不纯黑，暗部带微绿
   col = max(col, vec3(0.004, 0.010, 0.008));

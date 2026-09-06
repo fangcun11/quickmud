@@ -56,6 +56,7 @@ export class CrtRenderer {
   private uTex: WebGLUniformLocation | null = null;
   private uRes: WebGLUniformLocation | null = null;
   private uTime: WebGLUniformLocation | null = null;
+  private uEffect: WebGLUniformLocation | null = null;
 
   private buffer: TermBuffer;
   private scrollLines = 0;
@@ -64,6 +65,8 @@ export class CrtRenderer {
   private restoredOk = false;
   private history: string[] = [];
   private historyIndex = -1;
+  /** 效果总强度（?fx=0..1，默认 0.7——密集小字的可读性旋钮） */
+  private fx: number;
   private inputEl: HTMLInputElement;
 
   constructor(config: {
@@ -79,6 +82,8 @@ export class CrtRenderer {
     this.playerId = config.playerId;
     this.persistence = config.persistence;
     this.clickPolicy = config.click;
+    const fxParam = parseFloat(new URLSearchParams(location.search).get('fx') ?? '');
+    this.fx = Number.isFinite(fxParam) ? Math.min(1, Math.max(0, fxParam)) : 0.7;
     if (config.title) document.title = config.title;
     document.documentElement.dataset.theme = config.theme ?? 'phosphor';
 
@@ -382,6 +387,7 @@ export class CrtRenderer {
     this.uTex = gl.getUniformLocation(prog, 'uTex');
     this.uRes = gl.getUniformLocation(prog, 'uRes');
     this.uTime = gl.getUniformLocation(prog, 'uTime');
+    this.uEffect = gl.getUniformLocation(prog, 'uEffect');
     if (this.uTex) gl.uniform1i(this.uTex, 0);
     return true;
   }
@@ -398,6 +404,7 @@ export class CrtRenderer {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.src);
       gl.uniform2f(this.uRes, w, h);
       gl.uniform1f(this.uTime, timeSec);
+      gl.uniform1f(this.uEffect, this.fx);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     } else if (this.viewCtx) {
       this.viewCtx.clearRect(0, 0, w, h);
