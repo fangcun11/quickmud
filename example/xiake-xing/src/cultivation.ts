@@ -10,7 +10,7 @@
  */
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
 import { Health, Position, Moved, displayName } from '@mud/prefabs';
-import { Energy, Stats, Cultivating, Channeling, Purse, Combat, Arsenal } from './traits';
+import { Energy, Stats, Cultivating, Channeling, Purse, Combat, Arsenal, Progress } from './traits';
 import { Consumable as ItemConsumable } from '@mud/prefabs';
 import { Consumed } from '@mud/prefabs';
 import { ARTS } from './arts';
@@ -81,6 +81,10 @@ export const StatusCommand = defineCommand({
     if (energy) lines.push(`│ 内力  ${energy.current}/${energy.max}   ${bar(energy.current, energy.max)}`);
     if (stats) lines.push(`│ 三围  攻 ${stats.atk} · 防 ${stats.def} · 身法 ${stats.dodge}`);
     if (purse) lines.push(`│ 银两  ${purse.silver} 碎银`);
+    if (world.getComponent(player, Progress)) {
+      const pr = world.getComponent(player, Progress)!;
+      lines.push(`│ 成长  经验 ${pr.exp} · 潜能 ${pr.pot}`);
+    }
     if (arsenal) {
       const arts = Object.entries(arsenal.arts)
         .map(([id, p]) => `${ARTS[id]?.name ?? id}(${p.level}层)`)

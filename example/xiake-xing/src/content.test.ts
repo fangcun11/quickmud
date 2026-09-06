@@ -10,6 +10,7 @@ import type { World } from '@mud/ecs-engine';
 import { Health, QuestLog } from '@mud/prefabs';
 import { record, verifyReplay } from '@mud/ecs-engine';
 import { Position } from '@mud/prefabs';
+import { hashStr } from './combat';
 import { bootstrap } from './world/bootstrap';
 
 let world: World;
@@ -29,6 +30,11 @@ function drain(): string {
 async function run(cmd: string): Promise<string> {
   const result = await world.execute(cmd, player);
   return [result ?? '', drain()].filter(Boolean).join('\n');
+}
+
+/** 战斗伤害抖动（与 combat.ts 的 0.19 公式一致）：测试计算期望值用 */
+function jitterOf(attacker: string, target: string): number {
+  return hashStr(`${attacker}:${target}:0`) % 3 - 1;
 }
 
 function pos(): string {
@@ -149,7 +155,7 @@ import { Energy, Stats, Cultivating, Retaliate, Channeling } from './traits';
 import {
   Area, Wander, WanderHold, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
-import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed, WildWolf } from './traits';
+import { Arsenal, Equipment, Purse, ForSale, Bonus, Gear, Combat, Aggressive, Prayed, WildWolf, Progress } from './traits';
 
 function fresh(): void {
   const b = bootstrap();
@@ -230,27 +236,28 @@ describe('侠客行 M1 · 内功根基', () => {
     await gotoWolves();
     world.getComponent(player, Stats)!.dodge = 4;
     const hit = await run('attack 野狼');
-    expect(hit).toContain('命中「野狼」'); // 招式名随回合报出（M2：自动选招直拳）
-    expect(hit).toContain('一记「直拳」');
-    expect(hit).toContain('造成 4 点伤害');
+    expect(hit).toContain('一记「直拳」'); // 招式名随回合报出（M2：自动选招直拳）
+    const jitter = hashStr(`${player}:wolf-1:0`) % 3 - 1; // 0.19 伤害抖动（±1）
+    expect(hit).toContain(`${4 + jitter} 点伤害`);
 
-    // 差 0 → 格挡：round(4 × 0.7) = 3 伤；狼还手同样被格挡（3 伤，被动视角）
+    // 差 0 → 格挡：round(4 × 0.7) = 3 ±1 伤；狼还手同样被格挡（被动视角）
     fresh();
     await gotoWolves();
     const blocked = await run('attack 野狼');
-    expect(blocked).toContain('格挡');
-    expect(blocked).toContain('只造成 3 点伤害');
+    expect(blocked).toContain('封开'); // 句式池第 3 变体（确定性地命中此条）
+    expect(blocked).toContain(`只造成 ${3 + jitter} 点伤害`);
     // P4 句式定约：句首永远是攻击者——狼还手的句子以「野狼」开头
-    expect(blocked).toContain('「野狼」全力出手，被你格挡');
-    expect(hp()).toBe(97); // 100 − 3
+    expect(blocked).toContain('「野狼」');
+    const jitterWolf = hashStr(`wolf-1:${player}:0`) % 3 - 1;
+    expect(hp()).toBe(100 - (3 + jitterWolf));
 
-    // 差 −2 → 被闪避：零伤；但狼察觉攻击仍会反咬（差 +2 → 咬实 4 伤）
+    // 差 −2 → 被闪避：零伤；但狼察觉攻击仍会反咬（咬实 4 ±1 伤）
     fresh();
     await gotoWolves();
     world.getComponent(player, Stats)!.dodge = 0;
     const dodged = await run('attack 野狼');
-    expect(dodged).toContain('闪过');
-    expect(hp()).toBe(96);
+    expect(dodged).toContain(['打了个空', '攻势落空', '擦了过去'][jitter + 1]!); // 句式池同源轮换
+    expect(hp()).toBe(100 - (4 + jitterWolf));
   });
 
   it('NPC 还手：打狼一拳，狼自动咬回来（走同一结算内核）', async () => {
@@ -384,14 +391,17 @@ describe('侠客行 M2 · 武学与秘籍', () => {
     await gotoWolves();
     // level 1 时崩拳（tier 2）未解锁 → 明说
     expect(await run('使 崩拳 野狼')).toContain('没练成');
-    // 直拳（自动选招）：身法差 0 → 全被格挡，每击 3 伤；命中 +1/击
+    // 直拳（自动选招）：身法差 0 → 全被格挡，每击 3±1 伤（time=0 确定为 4）；命中 +1/击
+    world.getComponent('wolf-1', Health)!.max = 40; // 加厚血量：8 击练满熟练度后还有余量给崩拳收尾
+    world.getComponent('wolf-1', Health)!.current = 40;
     const outs: string[] = [];
-    for (let i = 0; i < 8; i++) outs.push(await run('attack 野狼')); // 8 击 24 伤，+8 熟练 → 第 8 击后升 2 层
-    outs.push(await run('attack 野狼')); // 第 9 击（此时自动选招已是崩拳）：狼倒地；击杀 +3
+    for (let i = 0; i < 8; i++) outs.push(await run('attack 野狼')); // 8 击 32 伤，+8 熟练 → 第 8 击后升 2 层
+    outs.push(await run('attack 野狼')); // 第 9 击（自动选招已是崩拳，内力 20 够 8）
+    outs.push(await run('attack 野狼')); // 第 10 击：崩拳 6±1 伤 → 狼倒地；击杀 +3
     const all = outs.join('\n');
     expect(all).toContain('悟出了新招式「崩拳」'); // 第 8 击后升 2 层解锁
     expect(all).toContain('轰然倒地');
-    expect(all).toContain('一记「崩拳」'); // 击杀那击自动用了崩拳（内力够、系数最高）
+    expect(all).toContain('一记「崩拳」'); // 收尾那击自动用了崩拳（内力够、系数最高）
     expect(world.getComponent(player, Arsenal)!.arts.kaishan_fist.level).toBe(2);
   });
 
@@ -404,8 +414,8 @@ describe('侠客行 M2 · 武学与秘籍', () => {
     const before = energy().current; // 20
     const hit = await run('使 崩拳 野狼');
     expect(hit).toContain('一记「崩拳」');
-    // 身法差 0 → 被格挡：round(round(5×1.7−1)×0.7) = 6
-    expect(hit).toContain('只造成 6 点伤害');
+    // 身法差 0 → 被格挡：round(round(5×1.7−1)×0.7) = 6，±1 抖动
+    expect(hit).toContain(`只造成 ${6 + jitterOf(player, 'wolf-2')} 点伤害`);
     expect(energy().current).toBe(before - 8);
   });
 
@@ -514,8 +524,10 @@ describe('侠客行沉浸支线 · 世界活着', () => {
     world.addComponent(wolf, Position, { roomId: 'inn' });
     for (let i = 0; i < 140; i++) world.tick(); // t=140s → 戌时(夜)
     const hit = await run('attack 灰狼');
-    // 玩家直拳:(5−2)×0.7 → 2;狼的**还手**带夜加成:(6+1−2)×0.7 → 4
-    expect(hit).toContain('「灰狼」全力出手，被你格挡，只造成 4 点伤害');
+    // 玩家直拳:(5−2)×0.7 → 2;狼的**还手**带夜加成:(6+1−2)×0.7 → 4（含 ±1 抖动）
+    const jitter = hashStr(`test-wolf:${player}:140000`) % 3 - 1;
+    expect(hit).toContain(`「灰狼」`);
+    expect(hit).toContain(`只造成 ${4 + jitter} 点伤害`);
   });
 
   it('雪盲：大雪时活体名单隐去', async () => {
@@ -597,11 +609,11 @@ describe('侠客行 M3 · 装备与买卖', () => {
     expect(pos()).toBe('thicket');
     world.getComponent(player, Stats)!.dodge = 4; // 身法差 +2 → 命中（排除格挡干扰）
     const hit = await run('attack 野狼');
-    expect(hit).toContain('造成 7 点伤害'); // (5+3)−1 = 7
+    expect(hit).toContain(`${7 + jitterOf(player, 'wolf-1')} 点伤害`); // (5+3)−1 = 7，±1 抖动
     await run('卸下 武器');
     expect(world.getComponent(player, Equipment)!.weapon).toBe('');
     const hit2 = await run('attack 野狼');
-    expect(hit2).toContain('造成 4 点伤害'); // 5−1 = 4
+    expect(hit2).toContain(`${4 + jitterOf(player, 'wolf-1')} 点伤害`); // 5−1 = 4，±1 抖动
     void Stats;
   });
 
@@ -663,7 +675,7 @@ describe('侠客行沉浸支线 · 持续战斗', () => {
     fresh();
     await gotoWolves();
     world.getComponent(player, Stats)!.dodge = 4; // 命中
-    world.getComponent(player, Stats)!.atk = 25; // 一击 24 伤,两击倒
+    world.getComponent(player, Stats)!.atk = 20; // 一击 19±1 伤（不到 25，留两击）
     drain();
     await run('attack 野狼'); // 进入战斗
     expect(world.getComponent(player, Combat)!.foe).toBeTruthy();
@@ -889,9 +901,9 @@ describe('侠客行沉浸支线 · 战斗可读性', () => {
     await gotoWolves();
     drain();
     const out = await run('attack 野狼');
-    // 你打狼一句带狼的血，狼还手一句带你的血
-    expect(out).toContain('只造成 3 点伤害。（气血：22/25）');
-    expect(out).toContain('被你格挡，只造成 3 点伤害。（气血：97/100）');
+    // 你打狼一句带狼的血，狼还手一句带你的血（数值含 ±1 抖动）
+    expect(out).toContain(`只造成 ${3 + jitterOf(player, 'wolf-1')} 点伤害。（气血：${25 - (3 + jitterOf(player, 'wolf-1'))}/25）`);
+    expect(out).toContain(`（气血：${100 - (3 + jitterOf('wolf-1', player))}/100）`);
   });
 
   it('战斗中 attack 不带目标 = 续打当前对手', async () => {
@@ -913,6 +925,14 @@ describe('侠客行沉浸支线 · 战斗可读性', () => {
     drain();
     const out = (await run('attack 野狼')) + (await run('attack 野狼'));
     expect(out).toContain('你击败了「野狼」！');
+    expect(out).toContain('你得了 10 点经验、3 点潜能。');
+    expect(world.getComponent(player, Progress)!.exp).toBe(110);
+    expect(world.getComponent(player, Progress)!.pot).toBe(3);
+  });
+
+  it('状态面板含成长行（经验/潜能）', async () => {
+    fresh();
+    expect(await run('状态')).toContain('经验 100 · 潜能 0');
   });
 });
 

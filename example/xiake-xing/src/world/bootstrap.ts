@@ -76,7 +76,7 @@ import {
   Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag,
   Arsenal, Channeling, Scripture,
   Purse, Equipment, Bonus, Gear, ForSale,
-  Combat, Aggressive, Prayed, WildWolf, Tutorial,
+  Combat, Aggressive, Prayed, WildWolf, Tutorial, Progress,
 } from '../traits';
 import {
   MeditateCommand,
@@ -411,6 +411,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Equipment, { weapon: '', armor: '', trinket: '' });
   world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0 });
   world.addComponent(playerId, QuestLog, { active: {}, completed: [], turnedIn: [] });
+  world.addComponent(playerId, Progress, { exp: 100, pot: 0 });
   world.addComponent(playerId, Tutorial, { step: 0, done: false });
   world.output.narrative([{ text: `「引导」欢迎来到江湖——${STEP_HINTS[0]}` }]);
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });

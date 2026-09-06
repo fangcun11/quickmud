@@ -23,6 +23,7 @@ import { ARTS } from './arts';
 import { foesInRoom, grantArtExp } from './martial';
 import { effectiveStats } from './equipment';
 import { enterCombat, exitCombat } from './combat-live';
+import { Progress } from './traits';
 
 // ---------------------------------------------------------------- 命令 --
 
@@ -48,20 +49,48 @@ export const FleeCommand = defineCommand({
  * 多方混战时扫一眼句首就知道谁在出手；玩家视角一律「你」。
  * 玩家不在场（NPC 互殴）时双方全名第三人称。
  */
+const HIT_LINES = [
+  (a: string, d: string, dmg: number, lead: Segment[]) => rich`${a}${lead}命中${d}，造成 ${dmg} 点伤害。`,
+  (a: string, d: string, dmg: number, lead: Segment[]) => rich`${a}${lead}正中${d}要害，造成 ${dmg} 点伤害。`,
+  (a: string, d: string, dmg: number, lead: Segment[]) => rich`${a}${lead}攻势如虹，${d}吃了 ${dmg} 点伤害。`,
+];
+const BLOCK_LINES = [
+  (a: string, d: string, dmg: number, lead: Segment[]) => rich`${a}${lead}全力出手，被${d}格挡，只造成 ${dmg} 点伤害。`,
+  (a: string, d: string, dmg: number, lead: Segment[]) => rich`${a}${lead}势大力沉，仍被${d}架住，只造成 ${dmg} 点伤害。`,
+  (a: string, d: string, dmg: number, lead: Segment[]) => rich`${a}${lead}连连抢攻，被${d}封开，只造成 ${dmg} 点伤害。`,
+];
+const DODGE_LINES = [
+  (a: string, d: string) => rich`${a}打了个空——${d}轻巧地闪过。`,
+  (a: string, d: string) => rich`${a}攻势落空，${d}早一步让了开去。`,
+  (a: string, d: string) => rich`${a}劈风斩月，却从${d}衣襟旁擦了过去。`,
+];
+
 function combatLine(
   atk: string,
   def: string,
   result: 'hit' | 'blocked' | 'dodged',
   damage: number,
   moveName?: string,
+  seed = 0,
 ): Segment[] {
   const ATK = atk === '你' ? '你' : `「${atk}」`;
   const DEF = def === '你' ? '你' : `「${def}」`;
-  // xkx 惯例：每回合报招式名（黄色标注，rich 模板）
-  const lead = moveName ? rich`一记「${yellow(moveName)}」` : '';
-  if (result === 'hit') return rich`${ATK}${lead}命中${DEF}，造成 ${damage} 点伤害。`;
-  if (result === 'blocked') return rich`${ATK}${lead}全力出手，被${DEF}格挡，只造成 ${damage} 点伤害。`;
-  return rich`${ATK}${lead || '这一击'}落了空——${DEF}轻巧地闪过。`;
+  // xkx 惯例：每回合报招式名（黄色标注）
+  const lead: Segment[] = moveName ? rich`一记「${yellow(moveName)}」` : [];
+  const pick = <T,>(pool: T[]) => pool[seed % pool.length]!;
+  if (result === 'hit') return pick(HIT_LINES)(ATK, DEF, damage, lead);
+  if (result === 'blocked') return pick(BLOCK_LINES)(ATK, DEF, damage, lead);
+  return pick(DODGE_LINES)(ATK, DEF);
+}
+
+/** 确定性字符串哈希（FNV-1a）：战斗抖动与句式轮换用，重放一致 */
+export function hashStr(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 // ---------------------------------------------------------------- 系统 --
@@ -137,6 +166,8 @@ export const WuxiaCombatSystem = defineSystem({
     const atkStats = effectiveStats(ctx, attacker);
     const defStats = effectiveStats(ctx, target);
     const diff = atkStats.dodge - slippery - defStats.dodge;
+    // 伤害抖动种子（0.19）：确定性哈希，重放一致；档位判定保持纯公式
+    const judgeSeed = hashStr(`${attacker}:${target}:${timestamp}`);
     const result = diff >= 2 ? 'hit' : diff >= -1 ? 'blocked' : 'dodged';
 
     const targetName = displayName(ctx, target);
@@ -147,7 +178,7 @@ export const WuxiaCombatSystem = defineSystem({
     const defLabel = defIsPlayer ? '你' : targetName;
 
     if (result === 'dodged') {
-      const line = combatLine(atkLabel, defLabel, 'dodged', 0, moveName);
+      const line = combatLine(atkLabel, defLabel, 'dodged', 0, moveName, judgeSeed);
       line.push({ text: `（气血：${hp.current}/${hp.max}）`, style: { color: 'gray' } });
       ctx.output.narrative(line);
       ctx.emit(Attacked, { attacker, target, damage: 0, result });
@@ -157,11 +188,12 @@ export const WuxiaCombatSystem = defineSystem({
     const atkPower = atkStats.atk + nightBoost;
     let damage = Math.max(1, Math.round(atkPower * mult - defStats.def));
     if (result === 'blocked') damage = Math.max(1, Math.round(damage * 0.7));
+    damage = Math.max(1, damage + (judgeSeed % 3) - 1); // 伤害 ±1 抖动（档位判定保持纯公式）
 
     const before = hp.current;
     hp.current = Math.max(0, hp.current - damage);
     // 气血随被击者走（0.18 战斗可读性）：谁掉血，谁的余量跟在句尾
-    const line = combatLine(atkLabel, defLabel, result, damage, moveName);
+    const line = combatLine(atkLabel, defLabel, result, damage, moveName, judgeSeed);
     line.push({ text: `（气血：${hp.current}/${hp.max}）`, style: { color: 'gray' } });
     ctx.output.narrative(line);
 
@@ -188,6 +220,15 @@ export const WuxiaCombatSystem = defineSystem({
         ctx.output.narrative([
           { text: `你击败了「${targetName}」！`, style: { color: 'yellow', bold: true } },
         ]);
+        // 击杀收益（0.19 成长闭环）：经验/潜能结算行（绿色收益）
+        const progress = ctx.getComponent(attacker, Progress);
+        if (progress) {
+          progress.exp += 10;
+          progress.pot += 3;
+          ctx.output.narrative([
+            { text: `你得了 10 点经验、3 点潜能。`, style: { color: 'green' } },
+          ]);
+        }
       }
       // 击杀 → 玩家脱战（对方倒了）
       if (defIsPlayer === false) exitCombat(ctx, attacker);
