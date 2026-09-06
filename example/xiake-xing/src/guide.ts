@@ -38,7 +38,7 @@ const RULES: SuggestionRule[] = [
       const combat = w.getComponent(p, Combat);
       return !!combat?.foe;
     },
-    tip: '正在交战——专心应敌（attack 续打 / 停战 脱离 / 逃跑 撤退）',
+    tip: '正在交战——attack 续打 / use 崩拳 抢攻 / 逃跑 撤退；嫌手动敲 自动 交给本能',
   },
   {
     when: (w, p) => {

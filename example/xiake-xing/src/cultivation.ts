@@ -10,7 +10,7 @@
  */
 import { defineCommand, defineSystem, Name } from '@mud/ecs-engine';
 import { Health, Position, Moved, displayName } from '@mud/prefabs';
-import { Energy, Stats, Cultivating, Channeling, Purse, Combat, Arsenal, Progress } from './traits';
+import { Energy, Stats, Cultivating, Channeling, Purse, Combat, Arsenal, Progress, AutoFight } from './traits';
 import { Consumable as ItemConsumable } from '@mud/prefabs';
 import { Consumed } from '@mud/prefabs';
 import { ARTS } from './arts';
@@ -94,7 +94,7 @@ export const StatusCommand = defineCommand({
     }
     const flags: string[] = [];
     if (cultivating?.on) flags.push('打坐中');
-    if (combat?.foe) flags.push('交战中');
+    if (combat?.foe) flags.push(world.getComponent(player, AutoFight)?.on ? '自动战斗中' : '交战中');
     if (flags.length === 0) flags.push('无事一身轻');
     lines.push(`│ 状态  ${flags.join(' · ')}`);
     if (roomName) lines.push(`│ 所在  ${roomName.text}`);

@@ -680,6 +680,7 @@ describe('侠客行沉浸支线 · 持续战斗', () => {
     drain();
     await run('attack 野狼'); // 进入战斗
     expect(world.getComponent(player, Combat)!.foe).toBeTruthy();
+    await run('自动'); // 本测试验证"自动战斗打到死"的旧行为
     for (let i = 0; i < 5; i++) world.tick(); // 自动交手打死
     drain();
     // wolf-1 已被销毁（Aggressive 系统会切到下一只狼——这是正确行为）
@@ -1054,5 +1055,42 @@ describe('侠客行 · 新手引导任务串', () => {
     const early = await run('建议');
     expect(early).toContain('新手引导');
     expect(early).toContain('look');
+  });
+});
+
+
+// ============================================================
+// 0.19 手动/自动战斗
+// ============================================================
+
+describe('侠客行 · 手动/自动战斗', () => {
+  it('默认手动：不敲命令狼每息咬你，你不反击；敲 自动 后系统代打', async () => {
+    fresh();
+    await gotoWolves();
+    drain();
+    await run('attack 野狼'); // 发起战斗（第一轮手动）
+    drain();
+    const foe = world.getComponent(player, Combat)!.foe;
+    const foeHpBefore = world.getComponent(foe, Health)!.current;
+    const myHpBefore = hp();
+
+    world.tick(); // 手动模式：狼出手，玩家不动
+    const t = drain();
+    const foeHpAfter = world.getComponent(foe, Health)!.current;
+    expect(hp()).toBeLessThan(myHpBefore); // 狼咬了你
+    expect(foeHpAfter).toBe(foeHpBefore); // 你没还手
+    expect(t).not.toContain('你击败了');
+
+    await run('自动'); // 开自动
+    world.tick(); // 自动模式：玩家出手
+    const t2 = drain();
+    expect(world.getComponent(foe, Health)!.current).toBeLessThan(foeHpAfter);
+    void t2;
+  });
+
+  it('自动 命令切换开关并有叙事反馈', async () => {
+    fresh();
+    expect(await run('自动')).toContain('自动战斗已开启');
+    expect(await run('自动')).toContain('自动战斗已关闭');
   });
 });

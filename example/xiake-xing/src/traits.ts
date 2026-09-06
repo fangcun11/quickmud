@@ -118,6 +118,11 @@ export const WildWolf = trait('wild_wolf', () => ({}));
  * 新手引导进度（0.18 引导任务串）：挂玩家，step 为当前步索引。
  * 步进由 TutorialSystem 按事件驱动；完成（done=true）后不再触发。
  */
+/** 自动战斗开关（0.19）：默认手动——每息都是玩家的回合，敲 自动 交给系统 */
+export const AutoFight = trait('auto_fight', () => ({
+  on: false,
+}));
+
 /** 成长进度（0.19）：经验/潜能——击杀与任务结算的真金白银（成长闭环第一环） */
 export const Progress = trait('progress', () => ({
   exp: 100,

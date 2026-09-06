@@ -13,7 +13,7 @@
 import { defineCommand, defineSystem } from '@mud/ecs-engine';
 import type { SystemContext, EntityId } from '@mud/ecs-engine';
 import { Attack, Health, Position, displayName, WanderHold, resolveOccupantIn } from '@mud/prefabs';
-import { PlayerTag, Combat, Aggressive } from './traits';
+import { PlayerTag, Combat, Aggressive, AutoFight } from './traits';
 import { Disengaged } from './events';
 
 /** 进入战斗（设 foe；幂等——已在战则换对手） */
@@ -83,9 +83,14 @@ export const CombatRoundSystem = defineSystem({
         continue;
       }
 
-      // 自动出招（走正常管线——招式选择/伤势/击杀/升层全由 WuxiaCombatSystem 处理）
-      // 气血直接跟在被击行的句尾（combat.ts），不再单开状态行
-      ctx.emit(Attack, { attacker: id, target: combat.foe as EntityId });
+      // 0.19 手动/自动战斗：默认手动——每息**敌方**出手，玩家自行动手
+      // （attack/use 续打、崩拳、吃喝、逃跑都是回合中的应手）；
+      // 敲 自动 开启后系统代打（走正常管线，还手链照旧）
+      if (ctx.getComponent(id, AutoFight)?.on) {
+        ctx.emit(Attack, { attacker: id, target: combat.foe as EntityId });
+      } else {
+        ctx.emit(Attack, { attacker: combat.foe as EntityId, target: id });
+      }
     }
 
     // ---- Aggressive 接敌：同房的 Aggressive NPC → 自动进战斗 ----
@@ -105,6 +110,22 @@ export const CombatRoundSystem = defineSystem({
       ctx.output.narrative(`「${displayName(ctx, npc)}」呲着牙向你扑来！`);
       break;
     }
+  },
+});
+
+/** 自动战斗命令：自动/手动（切换 AutoFight 开关；默认手动） */
+export const AutoFightCommand = defineCommand({
+  verbs: ['自动', 'autofight'],
+  describe: '切换自动战斗：开着系统代打，关着每息自己动手',
+  handle({ output, player, world }) {
+    const auto = world.getComponent(player, AutoFight);
+    if (!auto) {
+      output.error('这个世界的玩家没有自动战斗开关。');
+      return null;
+    }
+    auto.on = !auto.on;
+    output.narrative(auto.on ? '你双手一分，摆开架势——「接下来交给本能吧。」（自动战斗已开启）' : '你收回招式，凝神静气——「我的战斗，我自己来。」（自动战斗已关闭）');
+    return null;
   },
 });
 

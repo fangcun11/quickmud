@@ -76,7 +76,7 @@ import {
   Energy, Stats, Cultivating, Retaliate, Trail, PlayerTag,
   Arsenal, Channeling, Scripture,
   Purse, Equipment, Bonus, Gear, ForSale,
-  Combat, Aggressive, Prayed, WildWolf, Tutorial, Progress,
+  Combat, Aggressive, Prayed, WildWolf, Tutorial, Progress, AutoFight,
 } from '../traits';
 import {
   MeditateCommand,
@@ -116,7 +116,7 @@ import {
 import { AtmosphereSystem } from '../atmosphere';
 import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
 import { WolfSpawnSystem } from '../spawn';
-import { CombatRoundSystem, DisengageCommand, AttackCommand } from '../combat-live';
+import { CombatRoundSystem, DisengageCommand, AttackCommand, AutoFightCommand } from '../combat-live';
 import { PrayCommand } from '../pray';
 import { SuggestCommand, HelpmeCommand } from '../guide';
 import { SafetyNetSystem, AmbienceSystem } from '../ambience';
@@ -209,6 +209,7 @@ export function bootstrap(): BootstrapResult {
     BuyCommand,
     SellCommand,
     DisengageCommand,
+    AutoFightCommand,
     PrayCommand,
     SuggestCommand,
     HelpmeCommand,
@@ -412,6 +413,7 @@ export function bootstrap(): BootstrapResult {
   world.addComponent(playerId, Combat, { foe: '', lastRoundAt: 0, alerted: false });
   world.addComponent(playerId, QuestLog, { active: {}, completed: [], turnedIn: [] });
   world.addComponent(playerId, Progress, { exp: 100, pot: 0 });
+  world.addComponent(playerId, AutoFight, { on: false }); // 战斗默认手动（自动 命令开）
   world.addComponent(playerId, Tutorial, { step: 0, done: false });
   world.output.narrative([{ text: `「引导」欢迎来到江湖——${STEP_HINTS[0]}` }]);
   world.addComponent(playerId, Channeling, { artId: '', lastTickedAt: 0 });
