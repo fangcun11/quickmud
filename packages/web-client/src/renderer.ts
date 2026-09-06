@@ -311,6 +311,33 @@ export class WebRenderer {
     }
   }
 
+  /** 手动存档（存档 命令）：失败返回 false（玩家侧给明确反馈） */
+  private saveNow(): boolean {
+    const p = this.persistence;
+    if (!p) return false;
+    try {
+      localStorage.setItem(p.key, JSON.stringify(p.capture()));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 读档（读档 命令）：把最近一次存档回滚到当前世界；返回玩家可读结果 */
+  private restoreLast(): string {
+    const p = this.persistence;
+    if (!p) return '这个页面没有存档系统。';
+    try {
+      const raw = localStorage.getItem(p.key);
+      if (!raw) return '还没有任何存档——先玩一会儿，或用「存档」手动存一个。';
+      p.restore(JSON.parse(raw));
+      this.updatePrompt();
+      return '已读档——你回到了上一次存档的那一刻。';
+    } catch {
+      return '存档读不出来了（可能已损坏）——用「重开」从头开始吧。';
+    }
+  }
+
   /** 清档重开（两段式确认的第二段） */
   private restart(): void {
     const p = this.persistence;
@@ -334,7 +361,7 @@ export class WebRenderer {
     if (!input) return;
 
     // 重开：两段式确认（误触清档的代价太大）
-    const restartVerbs = this.persistence?.restartVerbs ?? ['重开', '重新开始'];
+    const restartVerbs = this.persistence?.restartVerbs ?? ['重开', '重新开始', '清档'];
     if (this.persistence && restartVerbs.includes(input)) {
       if (this.restartArmed) {
         this.restart();
@@ -348,6 +375,34 @@ export class WebRenderer {
         segments: [{ text: '这会清除当前进度并从头开始——再输入一次「重开」确认（输别的取消）。' }],
       });
       this.scrollToBottom();
+      return;
+    }
+
+    // 存档操作（0.18：显式命令化——操作 localStorage，不进游戏命令层/录像）
+    if (this.persistence && input === '存档') {
+      this.echo(input);
+      this.inputEl.value = '';
+      const ok = this.saveNow();
+      this.appendOutput({
+        kind: 'system',
+        segments: [{ text: ok ? `已存档。（${new Date().toLocaleString()}）随时可用「读档」回到这一刻。` : '存档失败（浏览器存储不可用？）。' }],
+      });
+      this.scrollToBottom();
+      return;
+    }
+    if (this.persistence && input === '读档') {
+      this.echo(input);
+      this.inputEl.value = '';
+      const note = this.restoreLast();
+      this.appendOutput({
+        kind: 'system',
+        segments: [{ text: note }],
+      });
+      this.scrollToBottom();
+      if (note.startsWith('已读档')) {
+        // 世界已经回滚——重看一眼周围
+        await this.runCommand('look');
+      }
       return;
     }
     this.restartArmed = false;

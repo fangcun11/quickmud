@@ -25,6 +25,7 @@ function mountRenderer(opts?: {
   prompt?: (playerId: string) => string | undefined;
   click?: (seg: { text: string; style?: { tag?: string }; entityRef?: string }) => { command: string; mode?: 'run' | 'prefill'; hint?: string } | null;
   actions?: () => Array<string | { text: string; hint?: string }>;
+  persistence?: { key: string; capture: () => unknown; restore: (s: unknown) => void };
 }): { renderer: WebRenderer; container: HTMLElement; execute: FakeWorld['execute']; row: HTMLElement; input: HTMLInputElement; status: HTMLElement } {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -43,6 +44,7 @@ function mountRenderer(opts?: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     click: opts?.click as any,
     actions: opts?.actions,
+    persistence: opts?.persistence,
   });
   const row = container.querySelector('#suggest-row') as HTMLElement;
   const input = container.querySelector('#cmd-input') as HTMLInputElement;
@@ -336,5 +338,56 @@ describe('提示符状态（0.6,xkx prompt 惯例）', () => {
     await flush();
     expect(status.style.display).toBe('none');
     void execute;
+  });
+});
+
+
+describe('存档命令（0.18：显式命令化）', () => {
+  it('存档 → 手动写入；读档 → 回滚世界并重看周围', async () => {
+    const calls = { capture: 0, restore: 0 };
+    const { container, execute, input } = mountRenderer({
+      persistence: {
+        key: 'test-save',
+        capture: () => { calls.capture++; return { n: calls.capture }; },
+        restore: () => { calls.restore++; },
+      },
+    });
+    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click(); // 唤出输入行
+    type(input, '存档');
+    press(input, 'Enter');
+    await flush();
+    expect(calls.capture).toBeGreaterThan(0);
+    expect(container.textContent).toContain('已存档');
+
+    type(input, '读档');
+    press(input, 'Enter');
+    await flush();
+    expect(calls.restore).toBe(1);
+    expect(container.textContent).toContain('已读档');
+    // 读档后自动 look 重看周围
+    expect(execute).toHaveBeenLastCalledWith('look', 'player-1');
+  });
+
+  it('无存档时读档 → 明说', async () => {
+    const { container, input } = mountRenderer({
+      persistence: { key: 'empty-save', capture: () => ({}), restore: () => {} },
+    });
+    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click();
+    type(input, '读档');
+    press(input, 'Enter');
+    await flush();
+    expect(container.textContent).toContain('还没有任何存档');
+  });
+
+  it('清档 是 重开 的别名（两段式确认保留）', async () => {
+    const { container, input } = mountRenderer({
+      persistence: { key: 'k', capture: () => ({}), restore: () => {} },
+    });
+    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click();
+    type(input, '清档');
+    press(input, 'Enter');
+    await flush();
+    expect(container.textContent).toContain('从头开始');
+    void container;
   });
 });
