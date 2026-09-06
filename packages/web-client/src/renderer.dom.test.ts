@@ -24,9 +24,8 @@ function mountRenderer(opts?: {
   messages?: OutputMessage[];
   prompt?: (playerId: string) => string | undefined;
   click?: (seg: { text: string; style?: { tag?: string }; entityRef?: string }) => { command: string; mode?: 'run' | 'prefill'; hint?: string } | null;
-  actions?: () => Array<string | { text: string; hint?: string }>;
   persistence?: { key: string; capture: () => unknown; restore: (s: unknown) => void };
-}): { renderer: WebRenderer; container: HTMLElement; execute: FakeWorld['execute']; row: HTMLElement; input: HTMLInputElement; status: HTMLElement } {
+}): { renderer: WebRenderer; container: HTMLElement; execute: FakeWorld['execute']; row: HTMLElement; input: HTMLInputElement } {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const execute = vi.fn(async () => null);
@@ -40,16 +39,13 @@ function mountRenderer(opts?: {
     world,
     playerId: 'player-1',
     suggest: opts?.suggest,
-    prompt: opts?.prompt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     click: opts?.click as any,
-    actions: opts?.actions,
     persistence: opts?.persistence,
   });
   const row = container.querySelector('#suggest-row') as HTMLElement;
   const input = container.querySelector('#cmd-input') as HTMLInputElement;
-  const status = container.querySelector('.mud-status-strip') as HTMLElement;
-  return { renderer, container, execute, row, input, status };
+  return { renderer, container, execute, row, input };
 }
 
 const press = (input: HTMLInputElement, key: string, init: KeyboardEventInit = {}) =>
@@ -257,47 +253,15 @@ describe('点击策略表（交互标注②：tag→命令分发 + 危险预填�
   });
 });
 
-describe('语境动作条与输入行收起（0.18 ③）', () => {
-  it('输入行默认收起；动作条芯片点击 = 直接执行命令', async () => {
-    const { container, execute, input } = mountRenderer({
-      actions: () => [{ text: '状态', hint: '一览' }, '打坐'],
-    });
+describe('输入行常驻与收起（0.18 调整后）', () => {
+  it('输入行常驻；Esc 可收起，/ 可唤出', () => {
+    const { container, input } = mountRenderer();
     const inputRow = container.querySelector('.mud-input-row') as HTMLElement;
-    expect(inputRow.style.display).not.toBe('none'); // 0.18：输入行常驻
-    const chips = container.querySelectorAll('.mud-action-chip');
-    expect(chips.length).toBe(3); // ⌨ + 状态 + 打坐
-    const statusChip = chips[1] as HTMLElement;
-    expect(statusChip.title).toBe('一览');
-    statusChip.click();
-    await flush();
-    // 预填而非直发
-    expect(input.value).toBe('状态');
-    expect(execute).not.toHaveBeenCalled();
-  });
-
-  it('输入行常驻；Esc 可收起，⌨ 与 / 可唤出', () => {
-    const { container, input } = mountRenderer({ actions: () => [] });
-    const inputRow = container.querySelector('.mud-input-row') as HTMLElement;
-    expect(inputRow.style.display).not.toBe('none'); // 默认常驻
+    expect(inputRow.style.display).not.toBe('none');
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     expect(inputRow.style.display).toBe('none');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }));
     expect(inputRow.style.display).toBe('flex');
-    const kbd = container.querySelector('.mud-kbd-toggle') as HTMLElement;
-    kbd.click(); // 再收起
-    expect(inputRow.style.display).toBe('none');
-  });
-
-  it('动作条随语境刷新：战斗芯片在提示符刷新后出现', async () => {
-    let inCombat = false;
-    const { renderer, container, execute } = mountRenderer({
-      actions: () => (inCombat ? ['停战'] : ['打坐']),
-    });
-    expect(container.textContent).toContain('打坐');
-    inCombat = true;
-    await renderer.runCommand('attack 野狼'); // 每条命令后重画动作条
-    expect(container.textContent).toContain('停战');
-    void execute;
   });
 });
 
@@ -330,24 +294,6 @@ describe('影子补全与候选说明（0.5 快速选择）', () => {
   });
 });
 
-describe('提示符状态（0.6,xkx prompt 惯例）', () => {
-  it('命令执行后刷新状态条;undefined 隐藏', async () => {
-    let text: string | undefined = '气血 82 · 内力 20';
-    const { input, status, execute } = mountRenderer({ prompt: () => text });
-    expect(status.style.display).toBe('block'); // 构造即求值（有文本）
-    type(input, 'look');
-    press(input, 'Enter');
-    await flush();
-    expect(status.textContent).toBe('气血 82 · 内力 20');
-    text = undefined;
-    type(input, 'look');
-    press(input, 'Enter');
-    await flush();
-    expect(status.style.display).toBe('none');
-    void execute;
-  });
-});
-
 
 describe('存档命令（0.18：显式命令化）', () => {
   it('存档 → 手动写入；读档 → 回滚世界并重看周围', async () => {
@@ -359,7 +305,7 @@ describe('存档命令（0.18：显式命令化）', () => {
         restore: () => { calls.restore++; },
       },
     });
-    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click(); // 唤出输入行
+    input.focus();
     type(input, '存档');
     press(input, 'Enter');
     await flush();
@@ -379,7 +325,7 @@ describe('存档命令（0.18：显式命令化）', () => {
     const { container, input } = mountRenderer({
       persistence: { key: 'empty-save', capture: () => ({}), restore: () => {} },
     });
-    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click();
+    input.focus();
     type(input, '读档');
     press(input, 'Enter');
     await flush();
@@ -390,7 +336,7 @@ describe('存档命令（0.18：显式命令化）', () => {
     const { container, input } = mountRenderer({
       persistence: { key: 'k', capture: () => ({}), restore: () => {} },
     });
-    (container.querySelector('.mud-kbd-toggle') as HTMLElement).click();
+    input.focus();
     type(input, '清档');
     press(input, 'Enter');
     await flush();

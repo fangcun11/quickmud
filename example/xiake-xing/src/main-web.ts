@@ -15,10 +15,8 @@
 import { bootstrap } from './world/bootstrap';
 import { WebRenderer } from '@mud/web-client';
 import type { SnapshotData } from '@mud/ecs-engine';
-import { Health } from '@mud/prefabs';
 import { createSuggester } from '@mud/prefabs';
-import { createClickPolicy, createActionProvider } from './click';
-import { Combat, Energy, Purse } from './traits';
+import { createClickPolicy } from './click';
 
 function main() {
   const { world, playerId, commands, directionWords } = bootstrap();
@@ -43,26 +41,6 @@ function main() {
     suggest: createSuggester({ commands, query: world, playerId, directions: directionWords }),
     // 点击策略（交互标注②）：出口=走、商品=买、地上物=拿、敌怪=预填攻击
     click: createClickPolicy(world, playerId),
-    // 语境动作条（交互标注③）：输入框收起后的常用操作入口
-    actions: () => createActionProvider(world, playerId),
-    // 提示符状态（xkx prompt 惯例）：输入行上方常驻气血/内力；战斗中加对手血量
-    prompt: (pid) => {
-      const hp = world.getComponent(pid, Health);
-      const en = world.getComponent(pid, Energy);
-      if (!hp && !en) return undefined;
-      const purse = world.getComponent(pid, Purse);
-      const parts: string[] = [];
-      if (hp) parts.push(`气血 ${hp.current}/${hp.max}`);
-      if (en) parts.push(`内力 ${en.current}/${en.max}`);
-      if (purse) parts.push(`碎银 ${purse.silver}`);
-      // 交战对手一眼可见（0.18 战斗可读性）
-      const combat = world.getComponent(pid, Combat);
-      if (combat?.foe) {
-        const foe = world.getComponent(combat.foe, Health);
-        if (foe) parts.push(`⚔${foe.current}/${foe.max}`);
-      }
-      return parts.join(' · ');
-    },
     persistence: {
       // :m5 后缀作废旧档——刷怪 bug 的旧档里攒着超额狼群，直接重开不做迁移
       key: 'save:xiake-xing:m5',
@@ -76,7 +54,7 @@ function main() {
     lines: [
       '终南山下，青石镇。你是个初出茅庐的少年，兜里几枚碎银，一腔江湖梦。',
       '听说武馆在收学徒，山里的野狼近来伤了好几个人——习武之路，就从这里开始。',
-      '（点带下划线的文字会把命令填进输入框，回车执行；底部动作条同理；敲 help 查命令，helpme ask 野狼 问攻略）',
+      '（点带下划线的文字会把命令填进输入框，回车执行；敲 help 查命令，helpme ask 野狼 问攻略，敲 状态 看自己）',
       '（存档命令：存档 / 读档 / 重开——重开清档重来需输两次确认）',
     ],
   });

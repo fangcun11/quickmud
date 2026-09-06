@@ -71,12 +71,8 @@ export class WebRenderer {
   private world: RendererWorld;
   private playerId: string;
   private suggestProvider?: (input: string) => Array<string | { text: string; hint?: string }>;
-  private promptProvider?: (playerId: string) => string | undefined;
   private clickPolicy?: (seg: Segment) => ClickAction | null;
-  private statusEl: HTMLElement;
   private persistence?: RendererPersistence;
-  private actionsProvider?: () => Array<string | { text: string; hint?: string }>;
-  private actionsEl: HTMLElement;
   private inputAreaEl: HTMLElement;
   /** 输入行默认收起（0.18 ③）：无常驻输入框，⌨ 或 / 唤出 */
   private inputOpen = false;
@@ -107,24 +103,12 @@ export class WebRenderer {
      * 建议用 prefabs 的 createSuggester 生成。
      */
     suggest?: (input: string) => Array<string | { text: string; hint?: string }>;
-    /**
-     * 提示符状态（0.6，xkx prompt 惯例）：每次提示符出现时求值——
-     * 返回一行精简状态（如 `气血 82 · 内力 20`）渲染在输入行上方；
-     * 返回 undefined 则隐藏。非世界状态，只是玩家一览。
-     */
-    prompt?: (playerId: string) => string | undefined;
     /** 主题（0.4）：磷光绿（默认）/ 琥珀——设 <html data-theme>，样式在模板 CSS 变量里 */
     theme?: 'phosphor' | 'amber';
     /** 浏览器标签页标题（不传保持 HTML 模板默认） */
     title?: string;
     /** 存档接线（不传 = 无存档，刷新即重开） */
     persistence?: RendererPersistence;
-    /**
-     * 语境动作条（0.18 ③，可选，游戏侧注入）：每次提示符刷新时求值，
-     * 返回当前语境下的常用操作（如 状态/背包/打坐/停战）。点击芯片
-     * 直接执行该命令（与打字同管线）——输入框收起后的主力入口。
-     */
-    actions?: () => Array<string | { text: string; hint?: string }>;
     /**
      * 点击策略（可选，游戏侧注入）：tag→命令 的分发表。入参是输出段，
      * 返回 `{ command, mode?, hint? }` 或 null（不可点）。
@@ -138,9 +122,7 @@ export class WebRenderer {
     this.world = config.world;
     this.playerId = config.playerId;
     this.suggestProvider = config.suggest;
-    this.promptProvider = config.prompt;
     this.clickPolicy = config.click;
-    this.actionsProvider = config.actions;
     this.persistence = config.persistence;
 
     if (config.title) {
@@ -160,14 +142,6 @@ export class WebRenderer {
     // 底部簇：动作条 + 状态条 + 命令建议条（有候选时才出现）+ 输入行（默认收起）
     const bottomWrap = document.createElement('div');
     bottomWrap.className = 'mud-bottom';
-
-    this.actionsEl = document.createElement('div');
-    this.actionsEl.className = 'mud-actions';
-    bottomWrap.appendChild(this.actionsEl);
-
-    this.statusEl = document.createElement('div');
-    this.statusEl.className = 'mud-status-strip';
-    bottomWrap.appendChild(this.statusEl);
 
     this.suggestRowEl = document.createElement('div');
     this.suggestRowEl.id = 'suggest-row';
@@ -201,16 +175,6 @@ export class WebRenderer {
     // 输入行常驻（0.18 体验调整：回归命令输入为主）；⌨ 仍可临时收起
     this.inputOpen = true;
 
-    // ⌨ 唤出/收起输入行（动作条首位，专属样式）
-    const kbdBtn = document.createElement('span');
-    kbdBtn.className = 'mud-action-chip mud-kbd-toggle';
-    kbdBtn.textContent = '⌨ 输入';
-    kbdBtn.title = '唤出/收起命令输入（快捷键 /）';
-    kbdBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.setInputOpen(!this.inputOpen);
-    });
-    this.actionsEl.appendChild(kbdBtn);
 
     // 绑定事件
     this.inputEl.addEventListener('keydown', (e) => {
@@ -268,7 +232,6 @@ export class WebRenderer {
     });
 
     // 初始聚焦 + 状态条求值
-    this.updatePrompt();
 
     // 存档：启动时尝试读档（构造即恢复，世界随后就是"上次的样子"）
     if (this.persistence) {
@@ -331,8 +294,7 @@ export class WebRenderer {
       const raw = localStorage.getItem(p.key);
       if (!raw) return '还没有任何存档——先玩一会儿，或用「存档」手动存一个。';
       p.restore(JSON.parse(raw));
-      this.updatePrompt();
-      return '已读档——你回到了上一次存档的那一刻。';
+        return '已读档——你回到了上一次存档的那一刻。';
     } catch {
       return '存档读不出来了（可能已损坏）——用「重开」从头开始吧。';
     }
@@ -480,48 +442,6 @@ export class WebRenderer {
       : '';
   }
 
-  /** 提示符状态刷新（prompt 回调求值；undefined 隐藏） */
-  private updatePrompt(): void {
-    const text = this.promptProvider?.(this.playerId);
-    if (text === undefined) {
-      this.statusEl.style.display = 'none';
-    } else {
-      this.statusEl.textContent = text;
-      this.statusEl.style.display = 'block';
-    }
-    this.updateActions();
-  }
-
-  /**
-   * 语境动作条刷新（0.18 ③）：actions 提供器求值并重画芯片。
-   * 点击 = 直接执行该命令（与打字同管线）；hint 进 hover 提示。
-   * ⌨ 切换按钮是常驻首位，这里只重画其后的语境芯片。
-   */
-  private updateActions(): void {
-    while (this.actionsEl.lastChild) {
-      const last = this.actionsEl.lastChild as HTMLElement;
-      if (last.classList?.contains('mud-kbd-toggle')) break;
-      this.actionsEl.removeChild(last);
-    }
-    const items = this.actionsProvider?.() ?? [];
-    for (const item of items) {
-      const { text, hint } = typeof item === 'string' ? { text: item, hint: undefined } : item;
-      const chip = document.createElement('span');
-      chip.className = 'mud-action-chip';
-      chip.textContent = text;
-      if (hint) chip.title = hint;
-      chip.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // 预填而非直发（0.18 体验调整）：命令过玩家的手再执行
-        this.inputEl.value = text;
-        if (!this.inputOpen) this.setInputOpen(true);
-        this.inputEl.focus();
-      });
-      this.actionsEl.appendChild(chip);
-    }
-    if (items.length === 0) this.actionsEl.classList.add('mud-actions-empty');
-    else this.actionsEl.classList.remove('mud-actions-empty');
-  }
 
   /** 唤出/收起命令输入行（⌨ 或 /）；收起时一并清掉建议与残影 */
   private setInputOpen(open: boolean): void {
@@ -678,7 +598,6 @@ export class WebRenderer {
     this.world.output.clear();
 
     // 提示符状态 + 存档 + 滚动
-    this.updatePrompt();
     this.autosave();
     this.scrollToBottom();
   }
@@ -788,6 +707,5 @@ export class WebRenderer {
       kind: 'narrative',
       segments: [{ text: '' }],
     });
-    this.updatePrompt();
   }
 }
