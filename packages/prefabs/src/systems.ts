@@ -52,6 +52,8 @@ import {
   Weapon,
   Wander,
   WanderHold,
+  Details,
+  Notes,
   Loot,
   Area,
   QuestGiver,
@@ -227,6 +229,16 @@ function emitOccupantLines(ctx: SystemContext, ids: EntityId[]): void {
   }
 }
 
+/** 确定性字符串哈希（FNV-1a）：留言/文案轮换用，快照重放安全 */
+function hashStr(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
 /** 描述缩进（xkx 惯例：全角两格） */
 const INDENT = '　　';
 
@@ -269,6 +281,8 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId, t
     ctx.output.narrative([
       { text: '你可以看到：' },
       ...entityListSegments(ctx, objects, (groupIds) => {
+        // 空消耗品优先标注（0.18 M4 物品状态诚实）
+        if (groupIds.some((id) => ctx.getComponent(id, Consumable)?.empty)) return '（空）';
         const portable = groupIds.every((id) => ctx.getComponent(id, Portable) !== undefined);
         return portable ? '' : '（拿不动）';
       }),
@@ -280,6 +294,24 @@ function emitRoomBlock(ctx: SystemContext, roomId: EntityId, viewer: EntityId, t
   // 暴雪（0.14 玩法钩子）：雪盲——视线被雪遮住，只给氛围不给名单
   const others = occupantsIn(ctx, roomId).filter((id) => id !== viewer);
   const occupants = [...others, ...stationaryPersons];
+  // 明示交互点（0.18 沉浸感方案 M2）：房间 details 键列出，look <键> 可查看
+  const details = ctx.getComponent(roomId, Details)?.map ?? {};
+  const detailKeys = Object.keys(details);
+  if (detailKeys.length > 0) {
+    ctx.output.narrative(`    你可以看看(look): ${detailKeys.join('，')}。`);
+  }
+
+  // 前辈留言（0.18 沉浸感方案 M5，对标北侠 MOTD）：按房间+时段哈希稳定展示一条
+  const notes = ctx.getComponent(roomId, Notes)?.list ?? [];
+  if (notes.length > 0) {
+    const note = notes[Math.abs(hashStr(String(roomId) + ':' + Math.floor(timestamp / 60_000))) % notes.length]!;
+    const [body, by] = note.split('|');
+    ctx.output.narrative([
+      { text: `    墙角刻着一行小字：「${body ?? note}」`, style: { color: 'gray', italic: true } },
+      { text: by ? `　—— by ${by}` : '', style: { color: 'red' } },
+    ]);
+  }
+
   if (occupants.length > 0) {
     if (weatherOf(areaIdOf(ctx, roomId), timestamp) === 'snow') {
       ctx.output.system('大雪纷飞，你几乎看不清周围的动静。');
@@ -1068,6 +1100,8 @@ export const ConsumableSystem = defineSystem({
         if (gained > 0) ctx.output.narrative(`你使用了${displayName(ctx, item)}，恢复了 ${gained} 点气血。`);
       }
     }
-    ctx.destroy(item);
+    // 物品状态诚实（0.18 沉浸感方案 M4）：用尽的消耗品**留在原地**（标 empty），
+    // 世界里留下"被人用过"的痕迹，而不是从世界上消失
+    consumable.empty = true;
   },
 });

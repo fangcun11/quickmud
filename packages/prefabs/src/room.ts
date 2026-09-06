@@ -15,7 +15,7 @@
  */
 import type { World, EntityId } from '@mud/ecs-engine';
 import { Name } from '@mud/ecs-engine';
-import { Exits, Description, Short, Coordinates, Position, Visited, Area, areaEntityId } from './traits.js';
+import { Exits, Description, Short, Coordinates, Position, Visited, Area, areaEntityId, Details, Notes } from './traits.js';
 import type { RoomDef } from './behavior.js';
 
 
@@ -325,6 +325,12 @@ export function buildRooms(world: World, layout: { rooms: LayoutRoom[] }): void 
     if (room.area) {
       // Area 是关系（v0.10）：直写 targets，引擎自动维护反查索引
       world.addComponent(id, Area, { targets: [areaEntityId(room.area)] });
+    }
+    if (room.details && Object.keys(room.details).length > 0) {
+      world.addComponent(id, Details, { map: { ...room.details } });
+    }
+    if (room.notes && room.notes.length > 0) {
+      world.addComponent(id, Notes, { list: [...room.notes] });
     }
   }
 }

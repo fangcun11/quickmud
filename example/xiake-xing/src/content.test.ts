@@ -716,8 +716,8 @@ describe('侠客行 M4 · 消耗品（杂货铺）', () => {
     expect(eat).toContain('恢复了 30 点气血');
     expect(hp()).toBe(90);
 
-    // 馒头已消耗：再吃 → 明说背包里没有
-    expect(await run('吃馒头')).toContain('背包里没有');
+    // 物品状态诚实（M4）：馒头吃完不消失，变成空馒头留在背包
+    expect(await run('吃馒头')).toContain('已经见了底');
   });
 
   it('金创药回内力（游戏层 energy 由侠客行系统结算）', async () => {
@@ -913,5 +913,46 @@ describe('侠客行沉浸支线 · 战斗可读性', () => {
     drain();
     const out = (await run('attack 野狼')) + (await run('attack 野狼'));
     expect(out).toContain('你击败了「野狼」！');
+  });
+});
+
+
+// ============================================================
+// B3 引导：建议面板 + helpme 攻略库
+// ============================================================
+
+describe('侠客行 B3 · 建议与求助', () => {
+  it('建议命令：命令级指路，永远有答案', async () => {
+    fresh();
+    const out = await run('建议');
+    expect(out).toContain('你现在可以');
+    expect(out).toContain('野狼林'); // 默认兜底：去历练
+  });
+
+  it('helpme：条目命中给攻略并署名；未命中给体面的不知道', async () => {
+    fresh();
+    const wolf = await run('helpme ask 野狼');
+    expect(wolf).toContain('说书人');
+    expect(wolf).toContain('野狼林');
+    expect(wolf).toContain('前辈');
+    const miss = await run('helpmeask 外星人');
+    expect(miss + (await run('helpme 外星人'))).toContain('说不清');
+  });
+});
+
+
+// ============================================================
+// B4 世界质感：look 明示交互点 + 前辈留言
+// ============================================================
+
+describe('侠客行 B4 · look 明示与前辈留言', () => {
+  it('房间块列出明示交互点；look <键> 返回短文', async () => {
+    fresh();
+    for (const dir of ['e', 'e', 's', 's', 'e']) await run(dir); // 客栈 → 山神庙
+    const look = await run('look');
+    expect(look).toContain('你可以看看(look): 香案，塑像。');
+    expect(look).toContain('墙角刻着一行小字'); // 前辈留言（M5）
+    expect(await run('look 香案')).toContain('拜一拜');
+    expect(await run('look 塑像')).toContain('一双眼睛像还醒着');
   });
 });

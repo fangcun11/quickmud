@@ -118,6 +118,7 @@ import { PresenceSystem, PlayerAwareDeathSystem } from '../life';
 import { WolfSpawnSystem } from '../spawn';
 import { CombatRoundSystem, DisengageCommand, AttackCommand } from '../combat-live';
 import { PrayCommand } from '../pray';
+import { SuggestCommand, HelpmeCommand } from '../guide';
 
 export interface BootstrapResult {
   world: World;
@@ -204,6 +205,8 @@ export function bootstrap(): BootstrapResult {
     SellCommand,
     DisengageCommand,
     PrayCommand,
+    SuggestCommand,
+    HelpmeCommand,
     LearnCommand,
     UseCommand,
     ChannelCommand,
@@ -278,6 +281,11 @@ export function bootstrap(): BootstrapResult {
       short: '炉火通红，叮当声不紧不慢。价目牌：铁剑十五、皮甲十二、护身符十。',
       area: 'town',
       exits: { south: 'grocery' },
+      details: {
+        价目牌: '价目牌上字迹浓黑：铁剑十五、皮甲十二、护身符十。童叟无欺，概不赊账。',
+        炉火: '炉膛里的火烧得正旺，映得半屋子通红。',
+      },
+      notes: ['三年前我在这条街上被野狼咬掉半袋碎银——买把铁剑再进林子。|无名剑客'],
     }),
     defineRoom({
       id: 'wuguan',
@@ -322,6 +330,11 @@ export function bootstrap(): BootstrapResult {
       short: '香炉积灰，塑像蒙尘。',
       area: 'road',
       exits: { west: 'pines' },
+      details: {
+        香案: '香案上的香炉积着厚厚的香灰——想求点什么，拜一拜便是。',
+        塑像: '山神爷的塑像落满了尘，眉毛胡子都看不清了，唯独一双眼睛像还醒着。',
+      },
+      notes: ['许愿要还愿。山神爷记性很好。|扫庙的老头'],
     }),
     defineRoom({
       id: 'fringe',
@@ -490,7 +503,7 @@ export function bootstrap(): BootstrapResult {
     const id = world.entities.createWithId(c.id);
     world.addComponent(id, Name, { text: c.name, aliases: c.aliases });
     world.addComponent(id, Description, { text: c.desc });
-    world.addComponent(id, Consumable, { hp: c.hp, energy: c.energy });
+    world.addComponent(id, Consumable, { hp: c.hp, energy: c.energy, empty: false });
     world.addComponent(id, Portable);
     world.addComponent(id, ForSale, { price: c.price });
     world.addComponent(id, Located, { targets: ['grocery'] });

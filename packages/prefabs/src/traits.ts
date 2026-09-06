@@ -88,6 +88,8 @@ export const Weapon = trait('weapon', () => ({
 export const Consumable = trait('consumable', () => ({
   hp: 0,
   energy: 0,
+  /** 已用尽（0.18 沉浸感方案 M4：空瓶/空葫芦留在原地，状态诚实呈现） */
+  empty: false,
 }));
 
 /** 巡逻标记组件：带它 + Position 的实体由 NpcWanderSystem 驱动漫游 */
@@ -99,6 +101,19 @@ export const Wander = trait('wander', () => ({}));
  * （战斗是系统侧状态，系统改不了组件增删，只有关系可用）。
  */
 export const WanderHold = relation('wander_hold');
+
+/**
+ * 房间明示交互点（0.18 沉浸感方案 M2）：键 = look 关键词，值 = 短文。
+ * 房间块会列出"你可以看看(look): river，path"，look <键> 返回对应短文——
+ * 把"藏在描述里的东西"明示出来，探索有了抓手。
+ */
+export const Details = trait('details', () => ({ map: {} as Record<string, string> }));
+
+/**
+ * 前辈留言（0.18 沉浸感方案 M5，对标北侠 MOTD）：房间可选留言池，
+ * 每条格式 `内容|署名`。进房/look 时按（房间+时段）哈希确定性地展示一条。
+ */
+export const Notes = trait('notes', () => ({ list: [] as string[] }));
 
 /**
  * 掉落条目（v0.6-A1）：**纯数据**描述一个掉落物

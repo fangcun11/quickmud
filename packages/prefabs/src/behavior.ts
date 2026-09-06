@@ -64,6 +64,16 @@ export interface RoomDef {
   area?: string;
   /** 可选：显式钉住坐标（非欧空间 escape hatch），必须与推断一致 */
   coords?: { x: number; y: number };
+  /**
+   * 可选：明示交互点（0.18 沉浸感方案 M2）——键 = look 关键词，值 = 短文。
+   * 房间块追加"你可以看看(look): k1，k2"；look <键> 返回对应短文。
+   */
+  details?: Record<string, string>;
+  /**
+   * 可选：前辈留言（0.18 沉浸感方案 M5，对标北侠 MOTD）——每条 `内容|署名`。
+   * 进房/look 时按（房间+时段）哈希确定性地展示一条。
+   */
+  notes?: string[];
 }
 
 /** 只读查询面（系统上下文与命令上下文都满足它） */

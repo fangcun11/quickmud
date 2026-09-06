@@ -4,6 +4,7 @@
  * 命令只翻译输入并 emit 事件，状态改动由对应系统完成（三条铁律）。
  */
 import { defineCommand, Name } from '@mud/ecs-engine';
+import type { EntityId } from '@mud/ecs-engine';
 import type { AnyCommand, Segment } from '@mud/ecs-engine';
 import {
   MoveRequested,
@@ -18,6 +19,7 @@ import {
 } from './events.js';
 import {
   Position,
+  Details,
   Health,
   QuestGiver,
   QuestLog,
@@ -97,7 +99,21 @@ export const LookCommand = defineCommand({
     target: { type: 'optional_entity' },
   },
   handle({ args, player, world }) {
-    world.emit(Look, { entity: player, target: args.target ?? undefined });
+    // 明示交互点直查（0.18 沉浸感方案 M2）：目标不是实体而是房间 details 键
+    // （前缀匹配，river/小溪 都能命中）→ 直接返回短文，不发 Look 事件
+    const target = args.target;
+    if (target) {
+      const pos = world.getComponent(player, Position);
+      const roomId = pos?.roomId as EntityId | undefined;
+      const details = roomId ? world.getComponent(roomId, Details)?.map : undefined;
+      if (details) {
+        const key = Object.keys(details).find(
+          (k) => k === target || k.startsWith(target) || target.startsWith(k),
+        );
+        if (key) return details[key]!;
+      }
+    }
+    world.emit(Look, { entity: player, target: target ?? undefined });
     return null;
   },
 });
@@ -474,6 +490,10 @@ export const ConsumeCommand = defineCommand({
     const consumable = world.getComponent(itemId, Consumable);
     if (!consumable) {
       output.error(`「${args.item}」不是能吃喝的东西。`);
+      return null;
+    }
+    if (consumable.empty) {
+      output.error(`「${args.item}」已经见了底。`);
       return null;
     }
     world.emit(Consumed, { entity: player, item: itemId });
