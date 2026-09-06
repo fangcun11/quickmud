@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type { World } from '@mud/ecs-engine';
 import { Health, QuestLog } from '@mud/prefabs';
 import { record, verifyReplay } from '@mud/ecs-engine';
-import { Exits, Name, Position } from '@mud/prefabs';
+import { Exits, Position } from '@mud/prefabs';
 import { hashStr } from './combat';
 import { bootstrap } from './world/bootstrap';
 

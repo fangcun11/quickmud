@@ -19,7 +19,7 @@ describe('侠客行点击策略', () => {
     world.getComponent(playerId, Position)!.roomId = 'thicket';
     const wolfSeg: Segment = { text: '野狼', style: { tag: 'entity' }, entityRef: 'wolf-1' };
     const wolf = policy(wolfSeg);
-    expect(wolf?.command).toBe('attack 野狼');
+    expect(wolf?.command).toBe('attack wolf-1'); // 精确指向唯一 id
     expect(wolf?.mode).toBe('prefill');
 
     // 商品：玩家去杂货铺

@@ -71,7 +71,8 @@ export function createClickPolicy(
         world.getComponent(id, Dialogue) !== undefined ||
         world.getComponent(id, QuestGiver) !== undefined;
       if (!isNpc && world.getComponent(id, Health) !== undefined) {
-        return { command: `attack ${text}`, mode: 'prefill', hint: `攻击「${text}」（回车确认）` };
+        // 精确指向（0.19 ID 机制）：预填**唯一 id** 而非名字——同名多狼不误伤
+        return { command: `attack ${id}`, mode: 'prefill', hint: `攻击「${text}」（回车确认）` };
       }
       if (world.getComponent(id, Portable) !== undefined) {
         return { command: `take ${text}`, hint: `捡起「${text}」` };

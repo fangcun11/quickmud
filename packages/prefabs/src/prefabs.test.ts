@@ -652,7 +652,7 @@ describe('进房信息呈现（xkx 长短双描述,0.14）', () => {
     const lines = textOf(w.output.getAll(), 'narrative');
     expect(lines).toContain('　　甲房的长描述。');
     expect(lines).toContain('你可以看到：金币、石像（拿不动）。');
-    expect(lines).toContain('「野狼」(狼)压低前身，喉咙里滚出低低的呜声。');
+    expect(lines.some((l) => l.startsWith('「野狼」(wolf-') && l.includes('压低前身'))).toBe(true); // 北侠 ID 形态：逐实例唯一 id
   });
 });
 

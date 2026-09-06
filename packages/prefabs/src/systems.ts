@@ -219,13 +219,16 @@ function emitOccupantLines(ctx: SystemContext, ids: EntityId[]): void {
     groups.set(name, group);
   }
   for (const [name, group] of groups) {
-    const alias = group.aliases.length > 0 ? `(${group.aliases.join('、')})` : '';
-    const count = group.ids.length > 1 ? `×${group.ids.length}` : '';
-    ctx.output.narrative([
-      { text: '「' },
-      { text: name, style: { tag: 'entity' }, entityRef: group.ids[0] },
-      { text: `」${alias}${count}${group.pose}。` },
-    ]);
+    // 北侠 ID 形态（0.19）：逐实例一行，括号内是**唯一可敲 id**——name 展示、id 指向
+    for (let i = 0; i < group.ids.length; i++) {
+      const id = group.ids[i]!;
+      const alias = i === 0 && group.aliases.length > 0 ? `(${group.aliases.join('、')})` : '';
+      ctx.output.narrative([
+        { text: '「' },
+        { text: name, style: { tag: 'entity' }, entityRef: id },
+        { text: `」(${id})${alias}${group.pose}。` },
+      ]);
+    }
   }
 }
 

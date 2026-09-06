@@ -50,6 +50,10 @@ export function displayName(q: WorldQuery, id: EntityId): string {
 function matchRank(q: WorldQuery, id: EntityId, name: string): number {
   const nc = q.getComponent(id, Name);
   if (!nc) return -1;
+  // 实体 id 直指（0.19 北侠 ID 机制）：id 全等最高优先——name 展示、id 指向
+  const norm = name.toLowerCase().replace(/[-_]/g, '');
+  if (norm === id.toLowerCase().replace(/[-_]/g, '')) return 5;
+  if (id.toLowerCase().replace(/[-_]/g, '').startsWith(norm) && norm.length >= 2) return 2;
   if (nc.text === name) return 3;
   if (nc.aliases?.includes(name)) return 2;
   if (nc.text.includes(name)) return 1;

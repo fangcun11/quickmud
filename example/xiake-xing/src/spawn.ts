@@ -63,6 +63,7 @@ export const WolfSpawnSystem = defineSystem({
         alive.filter((id) => ctx.getComponent(id, Position)?.roomId === b.roomId).length,
     )[0]!;
     spawnCounter++;
-    ctx.spawn(wolfBlueprint(zone.roomId, spawnCounter)) as EntityId;
+    // 唯一可敲 id（0.19 ID 机制）：wolf-4、wolf-5……与 name「野狼」分离
+    ctx.spawn(wolfBlueprint(zone.roomId, spawnCounter), { id: `wolf-${spawnCounter}` }) as EntityId;
   },
 });
