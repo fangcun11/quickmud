@@ -166,7 +166,7 @@ describe('V5 任务进度（v0.6-A2）', () => {
     await w.execute('take 狗肉', player);
 
     expect(w.getComponent(player, QuestLog)!.active['meat-errand']).toBeUndefined();
-    expect(textOf(w.output.getAll(), 'error')).toContain('你拿不动「狗肉」。');
+    expect(textOf(w.output.getAll(), 'error')).toContain('「狗肉」纹丝不动——那不是你能拿走的东西。');
   });
 
   it('quests 命令列出当前房间 NPC 的任务与进度', async () => {

@@ -55,6 +55,11 @@ export interface WorldConfig {
   tickInterval?: number;
   /** 单条命令最大事件数 */
   maxEventsPerCommand?: number;
+  /**
+   * 未识别动词的文案钩子（可选，游戏层注入口味）：
+   * 入参 = 最近似动词（可能为 undefined）。缺省保持引擎通用文案。
+   */
+  unknownCommandMessage?: (hint?: string) => string;
 }
 
 /**
@@ -76,6 +81,8 @@ export class World {
   private tickCount = 0;
   /** 世界时间（毫秒），仅由 tick() 推进 —— 确定性时钟 */
   private timeMs = 0;
+  /** 未识别动词文案钩子（游戏层注入；undefined = 引擎默认文案） */
+  private unknownCommandMessage?: (hint?: string) => string;
   private tickInterval: number;
   /** every 系统的 skip/degrade 错误写入泵日志（复用同一份记录） */
   private systemErrorSink: SystemErrorRecord[] = [];
@@ -309,7 +316,10 @@ export class World {
         }
       }
       // 兜底近似匹配（F2）：有相近动词就递一句「你是想…？」，没有保持原文案
+      // 文案可由游戏层注入（0.18 沉浸感方案：拒绝也是文案）
       const hint = this.suggestVerb(verb);
+      const custom = this.unknownCommandMessage;
+      if (custom) return custom(hint);
       return hint ? `我不明白你的意思。你是想「${hint}」吗？` : '我不明白你的意思。';
     }
 

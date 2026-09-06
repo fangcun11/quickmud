@@ -406,7 +406,7 @@ export const MovementSystem = defineSystem({
         const here = exitDirectionList(ctx, from);
         ctx.output.narrative(
           here
-            ? `你不能往${directionLabel(to)}走。这里的出口：${here}。`
+            ? `${directionLabel(to)}边没有路。这里的出口：${here}。`
             : `你不能往${directionLabel(to)}走。`,
         );
         return;
@@ -606,7 +606,7 @@ function handleTake(ctx: SystemContext, { player, item }: TakeDrop): void {
     return;
   }
   if (ctx.getComponent(item, Portable) === undefined) {
-    ctx.output.error(`你拿不动「${displayName(ctx, item)}」。`);
+    ctx.output.error(`「${displayName(ctx, item)}」纹丝不动——那不是你能拿走的东西。`);
     return;
   }
 

@@ -132,6 +132,11 @@ export function bootstrap(): BootstrapResult {
   const world = new World({
     tickInterval: 1000,
     maxEventsPerCommand: 1000,
+    // 沉浸感方案 B1：拒绝也是文案——未知命令给武侠腔（含近似建议）
+    unknownCommandMessage: (hint?: string) =>
+      hint
+        ? `你想做什么？江湖没有这条路。你是想「${hint}」吗？`
+        : '你想做什么？江湖没有这条路。（敲 help 看看能做什么）',
   });
 
   // 基础件 + 死亡管线（掉落/清场），战斗内核换成武侠版（不用 prefabs CombatSystem）

@@ -82,6 +82,8 @@ function main() {
 
   // 回到上次的位置后看一眼周围——不然刷新回来只知道“进度在”，不知道人在哪
   if (renderer.restored) {
+    // 重连叙事（沉浸感方案 B1）：断线回来不是干巴巴的 look
+    world.output.narrative('你拍了拍身上的尘土——回来了。江湖还在原地等你。');
     void renderer.runCommand('look');
   }
 }

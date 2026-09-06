@@ -62,7 +62,7 @@ export const BuyCommand = defineCommand({
     }
     const purse = world.getComponent(player, Purse);
     if (!purse || purse.silver < sale.price) {
-      output.error(`碎银不够——「${args.item}」要 ${sale.price} 碎银。`);
+      output.error(`你摸了摸钱袋——还差 ${sale.price - (purse?.silver ?? 0)} 碎银。「${args.item}」的价钱挂在那儿呢。`);
       return null;
     }
     world.emit(Bought, { entity: player, item: itemId, price: sale.price });

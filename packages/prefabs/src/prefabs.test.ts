@@ -145,7 +145,7 @@ describe('prefabs 移动', () => {
     // 文案说人话：方向 id（east）不该原样拼进中文句子；
     // v0.11 起撞墙还附上当前可用出口，玩家不用回 look 查
     expect(textOf(w.output.getAll(), 'narrative')[0]).toBe(
-      '你不能往东走。这里的出口：北。',
+      '东边没有路。这里的出口：北。',
     );
   });
 });
@@ -218,7 +218,7 @@ describe('prefabs 查看与物品', () => {
   it('take 不可携带物（无 Portable）→ 拿不动', async () => {
     const { w, player, statue } = buildWorld();
     await w.execute('take 石像', player);
-    expect(textOf(w.output.getAll(), 'error')).toContain('你拿不动「石像」。');
+    expect(textOf(w.output.getAll(), 'error')).toContain('「石像」纹丝不动——那不是你能拿走的东西。');
     expect(w.getRelations(statue, Located)[0]).toBe('town_square');
   });
 

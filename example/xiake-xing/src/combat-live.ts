@@ -151,7 +151,7 @@ export const AttackCommand = defineCommand({
     }
     const resolved = resolveOccupantIn(world, pos.roomId, args.target);
     if (!resolved) {
-      output.error(`这里没有「${args.target}」。`);
+      output.error(`这里没有「${args.target}」的踪影。`);
       return null;
     }
     if (resolved === player) {

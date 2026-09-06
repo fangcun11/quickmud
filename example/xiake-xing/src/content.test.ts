@@ -428,9 +428,9 @@ describe('侠客行 M2 · 武学与秘籍', () => {
   it('氛围：进房/look 后有时辰与天气行（派生只读，确定性）', async () => {
     fresh();
     const out = await run('look');
-    const areaId = world.getRelations('inn', Area)[0] ?? 'inn';
-    const expected = `时值${shichenOf(0, { dayLengthMs: 240_000 })}，${weatherLabel(weatherOf(areaId, 0, { segmentMs: 60_000 }))}。`;
-    expect(out).toContain(expected); // time=0 → 子时；天气按区域+时段哈希
+    const shichen = shichenOf(0, { dayLengthMs: 240_000 });
+    expect(out).toContain(`【${shichen}】`); // B1：文学化环境行，时辰标签保留
+    expect(out).not.toContain('时值');
   });
 
   it('场景门控：attack/use 不许指自己；战斗中无法学武', async () => {
@@ -576,7 +576,7 @@ describe('侠客行 M3 · 装备与买卖', () => {
     expect(pos()).toBe('smithy');
     expect(await run('look')).toContain('铁剑');
     expect(world.getComponent(player, Purse)!.silver).toBe(10);
-    expect(await run('buy 铁剑')).toContain('碎银不够'); // 10 < 15
+    expect(await run('buy 铁剑')).toContain('摸了摸钱袋'); // 10 < 15（B1 文案）
     world.getComponent(player, Purse)!.silver = 20;
     expect(await run('buy 铁剑')).toContain('付了 15 碎银');
     expect(world.getComponent(player, Purse)!.silver).toBe(5);

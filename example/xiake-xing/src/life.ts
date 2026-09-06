@@ -38,11 +38,14 @@ export const PresenceSystem = defineSystem({
     const name = displayName(ctx, entity);
 
     const dir = direction ?? '';
+    // 进出场姿态池（B1 文案规范）：确定性轮换，禁止单句永久复读
+    const postures = ['', '一路小跑，', '踩着碎步，'];
+    const posture = postures[Math.abs((event.timestamp + entity.length * 31) % postures.length)]!;
     if (to === pos.roomId) {
       const side = OPPOSITE[dir] ?? '黑暗中';
-      ctx.output.narrative(`${name}从${side}走了进来。`);
+      ctx.output.narrative(`${name}${posture}从${side}走了进来。`);
     } else if (from === pos.roomId && dir !== 'back') {
-      ctx.output.narrative(`${name}往${directionLabel(dir)}离开了。`);
+      ctx.output.narrative(`${name}${posture}往${directionLabel(dir)}离开了。`);
     }
   },
 });

@@ -13,6 +13,7 @@ import {
   Area, Look, Moved, Position, isNight, shichenOf, weatherLabel, weatherOf,
 } from '@mud/prefabs';
 import { PlayerTag } from './traits';
+import { atmosphereLine } from './atmosphere-text';
 
 /** 狼林区域（夜嚎只在狼林听得到） */
 const WOODS_ROOMS = new Set(['woodsgate', 'thicket', 'den']);
@@ -39,7 +40,8 @@ export const AtmosphereSystem = defineSystem({
     const areaId = ctx.getRelations(pos.roomId, Area)[0] ?? pos.roomId;
     const shichen = shichenOf(event.timestamp, { dayLengthMs: DAY_LENGTH_MS });
     const kind = weatherOf(areaId, event.timestamp, { segmentMs: WEATHER_SEGMENT_MS });
-    ctx.output.system(`时值${shichen}，${weatherLabel(kind)}。`);
+    // 文案池轮换（B1）：文学化环境行，段内确定、跨段轮换
+    ctx.output.system(atmosphereLine(shichen, kind, weatherLabel(kind), String(pos.roomId), event.timestamp, WEATHER_SEGMENT_MS));
 
     // 夜狼嚎（0.14 沉浸钩子）：狼林 + 夜间三时辰 → 远处线索
     if (WOODS_ROOMS.has(pos.roomId) && isNight(event.timestamp, { dayLengthMs: DAY_LENGTH_MS })) {
