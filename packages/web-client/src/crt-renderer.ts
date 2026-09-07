@@ -84,9 +84,10 @@ export class CrtRenderer {
     this.playerId = config.playerId;
     this.persistence = config.persistence;
     this.clickPolicy = config.click;
+    if (new URLSearchParams(location.search).get('debug')) (window as unknown as Record<string, unknown>).__crtSrc = () => this.src;
     const params = new URLSearchParams(location.search);
     const fxParam = parseFloat(params.get('fx') ?? '');
-    this.fx = Number.isFinite(fxParam) ? Math.min(1, Math.max(0, fxParam)) : 0.7;
+    this.fx = Number.isFinite(fxParam) ? Math.min(1, Math.max(0, fxParam)) : 0.45; // 默认降到保证可读（?fx=1 是浓烈展示档）
     // 动画默认关（可读优先）：闪烁/噪点/亮带是"静帧截图看不到、肉眼最糊"的元凶
     this.motion = params.get('motion') === '1' ? 1 : 0;
     if (config.title) document.title = config.title;
