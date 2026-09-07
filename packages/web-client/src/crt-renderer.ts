@@ -159,12 +159,19 @@ export class CrtRenderer {
     });
 
     const t0 = performance.now();
+    let lastPresent = 0;
     const loop = () => {
+      const now = performance.now();
       if (this.dirty) {
-        this.renderText();
+        this.renderText(); // 仅新输出/滚动时重绘文字层
         this.dirty = false;
+        this.present(now / 1000);
+        lastPresent = now;
+      } else if (now - lastPresent > 80) {
+        // 静态时 12fps 维持时间型动画（扫描线滚动/闪烁），省电且可截屏
+        this.present(now / 1000);
+        lastPresent = now;
       }
-      this.present((performance.now() - t0) / 1000);
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
