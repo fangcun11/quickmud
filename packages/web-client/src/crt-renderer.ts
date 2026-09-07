@@ -86,6 +86,7 @@ export class CrtRenderer {
     this.fx = Number.isFinite(fxParam) ? Math.min(1, Math.max(0, fxParam)) : 0.7;
     if (config.title) document.title = config.title;
     document.documentElement.dataset.theme = config.theme ?? 'phosphor';
+    document.body.classList.add('crt-mode'); // 关闭 DOM 时代的 CSS 扫描线/暗角（shader 已有）
 
     config.container.innerHTML = '';
     config.container.classList.add('mud-root');
@@ -347,9 +348,9 @@ export class CrtRenderer {
       for (const seg of line.segs) {
         ctx.fillStyle = seg.color;
         ctx.font = `${seg.italic ? 'italic ' : ''}${seg.bold ? 'bold ' : ''}${FONT}`;
-        // 磷光辉光（对标 typed-crt 每行辉光）：同色 shadow 双次绘制
+        // 磷光辉光（对标 typed-crt 每行辉光）：同色轻 shadow + 实心重绘保笔画
         ctx.shadowColor = seg.color;
-        ctx.shadowBlur = 9;
+        ctx.shadowBlur = 4;
         ctx.fillText(seg.text, PAD + seg.x, y);
         ctx.shadowBlur = 0;
         ctx.fillText(seg.text, PAD + seg.x, y);

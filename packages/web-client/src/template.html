@@ -73,6 +73,10 @@
         transparent 55%, rgba(0, 0, 0, 0.42) 100%);
     }
 
+    /* CRT 渲染器模式：CSS 质感层关闭（shader 已有同款效果，叠加=糊） */
+    body.crt-mode::before, body.crt-mode::after { display: none; }
+    body.crt-mode .mud-root { text-shadow: none; }
+
     .mud-root {
       height: 100dvh;
       display: flex; flex-direction: column;
