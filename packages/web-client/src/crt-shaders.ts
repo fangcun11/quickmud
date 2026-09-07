@@ -76,10 +76,10 @@ void main() {
   col *= mix(0.42, 1.0, vig);
 
   // 闪烁：2.8% 幅度
-  col *= 1.0 - 0.014 * uEffect * uMotion * sin(uTime * 8.0);
+  col *= 1.0 - 0.014 * uEffect * uMotion * sin(uTime * 8.0); // uMotion=0 时静止
 
   // 动态噪点：±1.1%
-  col += (hash(uv * fract(uTime * 0.37) * 100.0) - 0.5) * 0.011 * uEffect;
+  col += (hash(uv * 100.0 + fract(uTime * 0.37 * uMotion) * 13.7) - 0.5) * 0.011 * uEffect; // uMotion=0 时噪点定格
 
   // 磷光底色：永不纯黑，暗部带微绿
   col = max(col, vec3(0.004, 0.010, 0.008));

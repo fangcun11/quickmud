@@ -57,6 +57,7 @@ export class CrtRenderer {
   private uRes: WebGLUniformLocation | null = null;
   private uTime: WebGLUniformLocation | null = null;
   private uEffect: WebGLUniformLocation | null = null;
+  private uMotion: WebGLUniformLocation | null = null;
 
   private buffer: TermBuffer;
   private scrollLines = 0;
@@ -67,6 +68,7 @@ export class CrtRenderer {
   private historyIndex = -1;
   /** 效果总强度（?fx=0..1，默认 0.7——密集小字的可读性旋钮） */
   private fx: number;
+  private motion = 0;
   private inputEl: HTMLInputElement;
 
   constructor(config: {
@@ -82,8 +84,11 @@ export class CrtRenderer {
     this.playerId = config.playerId;
     this.persistence = config.persistence;
     this.clickPolicy = config.click;
-    const fxParam = parseFloat(new URLSearchParams(location.search).get('fx') ?? '');
+    const params = new URLSearchParams(location.search);
+    const fxParam = parseFloat(params.get('fx') ?? '');
     this.fx = Number.isFinite(fxParam) ? Math.min(1, Math.max(0, fxParam)) : 0.7;
+    // 动画默认关（可读优先）：闪烁/噪点/亮带是"静帧截图看不到、肉眼最糊"的元凶
+    this.motion = params.get('motion') === '1' ? 1 : 0;
     if (config.title) document.title = config.title;
     document.documentElement.dataset.theme = config.theme ?? 'phosphor';
     document.body.classList.add('crt-mode'); // 关闭 DOM 时代的 CSS 扫描线/暗角（shader 已有）
@@ -413,6 +418,7 @@ export class CrtRenderer {
       gl.uniform2f(this.uRes, w, h);
       gl.uniform1f(this.uTime, timeSec);
       gl.uniform1f(this.uEffect, this.fx);
+      gl.uniform1f(this.uMotion, this.motion);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     } else if (this.viewCtx) {
       this.viewCtx.clearRect(0, 0, w, h);
