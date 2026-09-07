@@ -24,3 +24,5 @@ Thumbs.db
 *.log
 npm-debug.log*
 pnpm-debug.log*
+tools/mud_log*.txt
+tools/mud_in.txt

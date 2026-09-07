@@ -1,4 +1,0 @@
-look
-hp
-sk
-jq
